@@ -3,13 +3,14 @@ name: Deploy to Production
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Deploy to Server
         uses: appleboy/ssh-action@v1.0.3
@@ -18,21 +19,4 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.SERVER_DEPLOY_KEY }}
           script: |
-            echo "🚀 开始自动部署..."
-            cd /home/ubuntu/quxueban
-            git pull origin main
-            
-            echo "📦 安装后端依赖..."
-            cd backend
-            npm install
-            
-            echo "🔨 构建前端..."
-            cd ../frontend
-            npm install
-            npm run build
-            
-            echo "🔄 重启服务..."
-            cd ..
-            pm2 restart all
-            
-            echo "✅ 部署完成！"
+            /home/ubuntu/deploy.sh
