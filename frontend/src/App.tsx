@@ -18,6 +18,7 @@ import ChildReports from "./pages/child/Reports";
 import ParentLayout from "./components/parent/Layout";
 import ParentDashboard from "./pages/parent/Dashboard";
 import ParentTasks from "./pages/parent/Tasks";
+import ParentTaskTemplates from "./pages/parent/TaskTemplates";
 import ParentPlans from "./pages/parent/Plans";
 import ParentChildren from "./pages/parent/Children";
 import ParentLibrary from "./pages/parent/Library";
@@ -77,6 +78,7 @@ function App() {
               <Route path="/parent" element={<ParentLayout />}>
                 <Route index data-genie-title="Parent Dashboard" data-genie-key="ParentDashboard" element={<PageTransition transition="slide-up"><ParentDashboard /></PageTransition>} />
                 <Route path="tasks" data-genie-title="Tasks" data-genie-key="ParentTasks" element={<PageTransition transition="slide-up"><ParentTasks /></PageTransition>} />
+                <Route path="task-templates" data-genie-title="Task Templates" data-genie-key="ParentTaskTemplates" element={<PageTransition transition="slide-up"><ParentTaskTemplates /></PageTransition>} />
                 <Route path="plans" data-genie-title="Plans" data-genie-key="ParentPlans" element={<PageTransition transition="slide-up"><ParentPlans /></PageTransition>} />
                 <Route path="library" data-genie-title="Library" data-genie-key="ParentLibrary" element={<PageTransition transition="slide-up"><ParentLibrary /></PageTransition>} />
                 <Route path="library/:id" data-genie-title="Book Detail" data-genie-key="BookDetail" element={<BookDetail />} />

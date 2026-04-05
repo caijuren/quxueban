@@ -1,0 +1,286 @@
+import { Router, Response } from 'express'
+import { prisma } from '../config/database'
+import { AppError } from '../middleware/errorHandler'
+import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
+
+export const taskTemplatesRouter: Router = Router()
+
+taskTemplatesRouter.use(authMiddleware)
+taskTemplatesRouter.use(requireRole('parent'))
+
+// ============================================
+// 任务模板 CRUD
+// ============================================
+
+// 获取所有任务模板
+taskTemplatesRouter.get('/templates', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const { type, subject } = req.query
+
+  const where: any = { familyId, isActive: true }
+  if (type) where.type = type
+  if (subject) where.subject = subject
+
+  const templates = await prisma.$queryRaw`
+    SELECT * FROM task_templates 
+    WHERE family_id = ${familyId} AND is_active = true
+    ${type ? prisma.$queryRawUnsafe(`AND type = '${type}'`) : prisma.$queryRawUnsafe('')}
+    ORDER BY sort_order, created_at DESC
+  `
+
+  res.json({ status: 'success', data: templates })
+})
+
+// 创建任务模板
+taskTemplatesRouter.post('/templates', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const {
+    name, type, subject, singleDuration, difficulty,
+    description, coverUrl, scheduleRule, defaultWeeklyTarget
+  } = req.body
+
+  if (!name || !type) {
+    throw new AppError(400, '缺少必填字段：name, type')
+  }
+
+  const template = await prisma.$executeRawUnsafe(`
+    INSERT INTO task_templates (name, type, subject, single_duration, difficulty, description, cover_url, schedule_rule, default_weekly_target, family_id)
+    VALUES ('${name.replace(/'/g, "''")}', '${type}', ${subject ? `'${subject}'` : 'NULL'}, ${singleDuration || 30}, ${difficulty ? `'${difficulty}'` : "'basic'"}, ${description ? `'${description.replace(/'/g, "''")}'` : 'NULL'}, ${coverUrl ? `'${coverUrl}'` : 'NULL'}, '${scheduleRule || 'daily'}', ${defaultWeeklyTarget || 'NULL'}, ${familyId})
+    RETURNING *
+  `)
+
+  res.status(201).json({ status: 'success', message: '模板创建成功', data: template })
+})
+
+// 更新任务模板
+taskTemplatesRouter.put('/templates/:id', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const id = parseInt(req.params.id as string)
+  const updates = req.body
+
+  const existing = await prisma.$queryRawUnsafe(
+    `SELECT id FROM task_templates WHERE id = ${id} AND family_id = ${familyId}`
+  ) as any[]
+
+  if (!existing?.length) {
+    throw new AppError(404, '模板不存在')
+  }
+
+  const setClauses: string[] = []
+  if (updates.name) setClauses.push(`name = '${updates.name.replace(/'/g, "''")}'`)
+  if (updates.type) setClauses.push(`type = '${updates.type}'`)
+  if (updates.subject !== undefined) setClauses.push(`subject = ${updates.subject ? `'${updates.subject}'` : 'NULL'}`)
+  if (updates.singleDuration) setClauses.push(`single_duration = ${updates.singleDuration}`)
+  if (updates.difficulty) setClauses.push(`difficulty = '${updates.difficulty}'`)
+  if (updates.description !== undefined) setClauses.push(`description = '${updates.description.replace(/'/g, "''")}'`)
+  if (updates.scheduleRule) setClauses.push(`schedule_rule = '${updates.scheduleRule}'`)
+  if (updates.defaultWeeklyTarget !== undefined) setClauses.push(`default_weekly_target = ${updates.defaultWeeklyTarget}`)
+  setClauses.push(`updated_at = NOW()`)
+
+  if (setClauses.length > 0) {
+    await prisma.$executeRawUnsafe(`UPDATE task_templates SET ${setClauses.join(', ')} WHERE id = ${id}`)
+  }
+
+  const updated = await prisma.$queryRawUnsafe(`SELECT * FROM task_templates WHERE id = ${id}`) as any[]
+  res.json({ status: 'success', message: '模板更新成功', data: updated[0] })
+})
+
+// 删除任务模板
+taskTemplatesRouter.delete('/templates/:id', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const id = parseInt(req.params.id as string)
+
+  const existing = await prisma.$queryRawUnsafe(
+    `SELECT id FROM task_templates WHERE id = ${id} AND family_id = ${familyId}`
+  ) as any[]
+
+  if (!existing?.length) {
+    throw new AppError(404, '模板不存在')
+  }
+
+  await prisma.$executeRawUnsafe(`UPDATE task_templates SET is_active = false WHERE id = ${id}`)
+  res.json({ status: 'success', message: '模板已删除' })
+})
+
+// ============================================
+// 孩子任务实例管理
+// ============================================
+
+// 获取孩子的所有任务实例
+taskTemplatesRouter.get('/children/:childId/tasks', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+
+  // 验证孩子属于该家庭
+  const child = await prisma.$queryRawUnsafe(
+    `SELECT id FROM users WHERE id = ${childId} AND family_id = ${familyId} AND role = 'child'`
+  ) as any[]
+
+  if (!child?.length) {
+    throw new AppError(404, '孩子不存在或不属于该家庭')
+  }
+
+  const tasks = await prisma.$queryRaw`
+    SELECT ct.*, tt.name as template_name, tt.type as template_type, tt.subject, tt.single_duration as template_duration
+    FROM child_tasks ct
+    JOIN task_templates tt ON ct.task_template_id = tt.id
+    WHERE ct.child_id = ${childId} AND ct.family_id = ${familyId}
+    ORDER BY ct.created_at DESC
+  `
+
+  res.json({ status: 'success', data: tasks })
+})
+
+// 为孩子分配任务（从模板创建实例）
+taskTemplatesRouter.post('/children/:childId/tasks', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+  const {
+    taskTemplateId, customName, customDuration, customScheduleRule,
+    weeklyTarget, skipHolidays, excludeDays, startDate, endDate
+  } = req.body
+
+  if (!taskTemplateId) {
+    throw new AppError(400, '缺少任务模板ID')
+  }
+
+  // 验证模板和孩子
+  const template = await prisma.$queryRawUnsafe(
+    `SELECT * FROM task_templates WHERE id = ${taskTemplateId} AND family_id = ${familyId} AND is_active = true`
+  ) as any[]
+
+  if (!template?.length) {
+    throw new AppError(404, '任务模板不存在')
+  }
+
+  const child = await prisma.$queryRawUnsafe(
+    `SELECT id FROM users WHERE id = ${childId} AND family_id = ${familyId} AND role = 'child'`
+  ) as any[]
+
+  if (!child?.length) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  // 检查是否已分配
+  const existing = await prisma.$queryRawUnsafe(
+    `SELECT id FROM child_tasks WHERE child_id = ${childId} AND task_template_id = ${taskTemplateId}`
+  ) as any[]
+
+  if (existing?.length) {
+    throw new AppError(400, '该任务已分配给此孩子')
+  }
+
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO child_tasks (child_id, task_template_id, custom_name, custom_duration, custom_schedule_rule, weekly_target, skip_holidays, exclude_days, start_date, end_date, family_id)
+    VALUES (${childId}, ${taskTemplateId}, ${customName ? `'${customName.replace(/'/g, "''")}'` : 'NULL'}, ${customDuration || 'NULL'}, ${customScheduleRule ? `'${customScheduleRule}'` : 'NULL'}, ${weeklyTarget || 'NULL'}, ${skipHolidays !== false ? 'true' : 'false'}, ${excludeDays ? `'${excludeDays}'` : 'NULL'}, ${startDate ? `'${startDate}'` : 'NULL'}, ${endDate ? `'${endDate}'` : 'NULL'}, ${familyId})
+  `)
+
+  const newTask = await prisma.$queryRawUnsafe(
+    `SELECT * FROM child_tasks WHERE child_id = ${childId} AND task_template_id = ${taskTemplateId}`
+  ) as any[]
+
+  res.status(201).json({ status: 'success', message: '任务分配成功', data: newTask[0] })
+})
+
+// 更新孩子任务实例
+taskTemplatesRouter.put('/children/:childId/tasks/:taskId', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+  const taskId = parseInt(req.params.taskId as string)
+  const updates = req.body
+
+  const existing = await prisma.$queryRawUnsafe(
+    `SELECT * FROM child_tasks WHERE id = ${taskId} AND child_id = ${childId} AND family_id = ${familyId}`
+  ) as any[]
+
+  if (!existing?.length) {
+    throw new AppError(404, '任务实例不存在')
+  }
+
+  const setClauses: string[] = []
+  if (updates.customName !== undefined) setClauses.push(`custom_name = ${updates.customName ? `'${updates.customName.replace(/'/g, "''")}'` : 'NULL'}`)
+  if (updates.customDuration !== undefined) setClauses.push(`custom_duration = ${updates.customDuration || 'NULL'}`)
+  if (updates.customScheduleRule !== undefined) setClauses.push(`custom_schedule_rule = ${updates.customScheduleRule ? `'${updates.customScheduleRule}'` : 'NULL'}`)
+  if (updates.weeklyTarget !== undefined) setClauses.push(`weekly_target = ${updates.weeklyTarget || 'NULL'}`)
+  if (updates.status !== undefined) setClauses.push(`status = '${updates.status}'`)
+  if (updates.skipHolidays !== undefined) setClauses.push(`skip_holidays = ${updates.skipHolidays}`)
+  if (updates.excludeDays !== undefined) setClauses.push(`exclude_days = ${updates.excludeDays ? `'${updates.excludeDays}'` : 'NULL'}`)
+  setClauses.push(`updated_at = NOW()`)
+
+  if (setClauses.length > 0) {
+    await prisma.$executeRawUnsafe(`UPDATE child_tasks SET ${setClauses.join(', ')} WHERE id = ${taskId}`)
+  }
+
+  const updated = await prisma.$queryRawUnsafe(`SELECT * FROM child_tasks WHERE id = ${taskId}`) as any[]
+  res.json({ status: 'success', message: '任务更新成功', data: updated[0] })
+})
+
+// 删除孩子任务实例
+taskTemplatesRouter.delete('/children/:childId/tasks/:taskId', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+  const taskId = parseInt(req.params.taskId as string)
+
+  const existing = await prisma.$queryRawUnsafe(
+    `SELECT id FROM child_tasks WHERE id = ${taskId} AND child_id = ${childId} AND family_id = ${familyId}`
+  ) as any[]
+
+  if (!existing?.length) {
+    throw new AppError(404, '任务实例不存在')
+  }
+
+  await prisma.$executeRawUnsafe(`DELETE FROM child_tasks WHERE id = ${taskId}`)
+  res.json({ status: 'success', message: '任务已移除' })
+})
+
+// 批量分配任务给多个孩子
+taskTemplatesRouter.post('/templates/:templateId/assign', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const templateId = parseInt(req.params.templateId as string)
+  const { childIds } = req.body
+
+  if (!childIds || !Array.isArray(childIds) || childIds.length === 0) {
+    throw new AppError(400, '请选择要分配的孩子')
+  }
+
+  // 验证模板
+  const template = await prisma.$queryRawUnsafe(
+    `SELECT * FROM task_templates WHERE id = ${templateId} AND family_id = ${familyId} AND is_active = true`
+  ) as any[]
+
+  if (!template?.length) {
+    throw new AppError(404, '任务模板不存在')
+  }
+
+  // 验证孩子
+  const children = await prisma.$queryRawUnsafe(
+    `SELECT id FROM users WHERE id IN (${childIds.join(',')}) AND family_id = ${familyId} AND role = 'child'`
+  ) as any[]
+
+  if (children.length !== childIds.length) {
+    throw new AppError(400, '部分孩子不存在或不属于该家庭')
+  }
+
+  // 批量创建
+  const results: any[] = []
+  for (const child of children) {
+    // 检查是否已分配
+    const existing = await prisma.$queryRawUnsafe(
+      `SELECT id FROM child_tasks WHERE child_id = ${child.id} AND task_template_id = ${templateId}`
+    ) as any[]
+
+    if (!existing?.length) {
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO child_tasks (child_id, task_template_id, family_id)
+        VALUES (${child.id}, ${templateId}, ${familyId})
+      `)
+      results.push({ childId: child.id, status: 'created' })
+    } else {
+      results.push({ childId: child.id, status: 'already_exists' })
+    }
+  }
+
+  res.json({ status: 'success', message: '批量分配完成', data: results })
+})
+
+export default taskTemplatesRouter

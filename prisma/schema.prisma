@@ -18,6 +18,7 @@ model Family {
   activeReadings ActiveReading[]
   books          Book[]
   tasks          Task[]
+  taskTemplates  TaskTemplate[]
   users          User[]
   weeklyPlans    WeeklyPlan[]
   bookReadStates BookReadState[]
@@ -39,6 +40,7 @@ model User {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   achievementLogs   AchievementLog[]
   activeReadings    ActiveReading[]
+  childTasks        ChildTask[]
   dailyCheckins     DailyCheckin[]
   readingLogs       ReadingLog[]
   family            Family           @relation(fields: [familyId], references: [id])
@@ -48,6 +50,69 @@ model User {
   @@map("users")
 }
 
+// ============================================
+// 任务模板表 - 通用任务定义
+// ============================================
+model TaskTemplate {
+  id                  Int       @id @default(autoincrement())
+  name                String    @db.VarChar(100)
+  type                String    @db.VarChar(30) // 校内任务/阅读任务/体育运动/课外课程
+  subject             String?   @db.VarChar(30) // chinese/math/english/sports/null
+  singleDuration      Int       @default(30) @map("single_duration")
+  difficulty          String?   @default("basic") @db.VarChar(20) // basic/advanced/challenge
+  description         String?   @db.Text
+  coverUrl            String?   @map("cover_url") @db.VarChar(500)
+  scheduleRule        String    @default("daily") @map("schedule_rule") @db.VarChar(20) // daily/school_day/flexible/weekend
+  defaultWeeklyTarget Int?      @map("default_weekly_target")
+  
+  familyId            Int       @map("family_id")
+  isActive            Boolean   @default(true) @map("is_active")
+  sortOrder           Int       @default(0) @map("sort_order")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  family              Family    @relation(fields: [familyId], references: [id])
+  childTasks          ChildTask[]
+  
+  @@map("task_templates")
+}
+
+// ============================================
+// 孩子任务实例表 - 个性化任务配置
+// ============================================
+model ChildTask {
+  id                  Int       @id @default(autoincrement())
+  childId             Int       @map("child_id")
+  taskTemplateId      Int       @map("task_template_id")
+  
+  // 个性化覆盖字段
+  customName          String?   @map("custom_name") @db.VarChar(100)
+  customDuration      Int?      @map("custom_duration")
+  customScheduleRule  String?   @map("custom_schedule_rule") @db.VarChar(20)
+  weeklyTarget        Int?      @map("weekly_target")
+  
+  // 状态与时间
+  status              String    @default("active") @db.VarChar(20) // active/paused
+  startDate           DateTime? @map("start_date")
+  endDate             DateTime? @map("end_date")
+  
+  // 高级设置
+  skipHolidays        Boolean   @default(true) @map("skip_holidays")
+  excludeDays         String?   @map("exclude_days") @db.VarChar(50)
+  
+  familyId            Int       @map("family_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  child               User      @relation(fields: [childId], references: [id])
+  taskTemplate        TaskTemplate @relation(fields: [taskTemplateId], references: [id])
+  family              Family    @relation(fields: [familyId], references: [id])
+  
+  @@unique([childId, taskTemplateId])
+  @@map("child_tasks")
+}
+
+// 保留原有Task表以兼容现有功能
 model Task {
   id               Int          @id @default(autoincrement())
   familyId         Int          @map("family_id")
@@ -186,7 +251,6 @@ model ReadingLog {
 
   @@map("reading_logs")
 }
-
 
 model BookReadState {
   id         Int       @id @default(autoincrement())
