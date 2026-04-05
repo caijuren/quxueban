@@ -19,6 +19,7 @@ import { reportsRouter } from './modules/reports'
 import { statisticsRouter } from './modules/statistics'
 import { dashboardRouter } from './modules/dashboard'
 import { taskTemplatesRouter } from './modules/task-templates'
+import { childrenRouter } from './modules/children'
 
 export const createApp = (): Application => {
   const app = express()
@@ -53,6 +54,7 @@ export const createApp = (): Application => {
   app.use(`${env.API_PREFIX}/reports`, reportsRouter)
   app.use(`${env.API_PREFIX}/statistics`, statisticsRouter)
   app.use(`${env.API_PREFIX}/dashboard`, dashboardRouter)
+app.use(`${env.API_PREFIX}/children`, childrenRouter)
   app.use(`${env.API_PREFIX}/task-templates`, taskTemplatesRouter)
 
   // Error handling
