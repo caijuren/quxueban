@@ -477,13 +477,7 @@ export default function PlansPage() {
         setIsExporting(false);
         return;
       }
-      const canvas = await html2canvas(element, {
-        backgroundColor: '#f9fafb',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-      });
+      const canvas = await html2canvas(element);
       const link = document.createElement('a');
       link.download = `周计划_${format(currentWeekStart, 'yyyy-MM-dd')}.png`;
       link.href = canvas.toDataURL('image/png');
