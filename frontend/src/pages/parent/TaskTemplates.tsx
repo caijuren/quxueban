@@ -34,7 +34,7 @@ interface TaskTemplate {
   type: TaskType;
   subject: Subject;
   singleDuration: number;
-  difficulty: string;
+  difficulty: string | null;
   description: string | null;
   scheduleRule: ScheduleRule;
   defaultWeeklyTarget: number | null;
@@ -164,6 +164,7 @@ export default function TaskTemplatesPage() {
     type: '校内任务' as TaskType,
     subject: null as Subject,
     singleDuration: 30,
+    difficulty: 'basic' as string,
     scheduleRule: 'daily' as ScheduleRule,
     defaultWeeklyTarget: null as number | null,
     description: '',
@@ -273,6 +274,7 @@ export default function TaskTemplatesPage() {
       type: '校内任务',
       subject: null,
       singleDuration: 30,
+      difficulty: 'basic',
       scheduleRule: 'daily',
       defaultWeeklyTarget: null,
       description: '',
@@ -287,6 +289,7 @@ export default function TaskTemplatesPage() {
       type: template.type,
       subject: template.subject,
       singleDuration: template.singleDuration,
+      difficulty: template.difficulty || 'basic',
       scheduleRule: template.scheduleRule,
       defaultWeeklyTarget: template.defaultWeeklyTarget,
       description: template.description || '',
@@ -344,15 +347,14 @@ export default function TaskTemplatesPage() {
   const selectedChild = children.find(c => c.id === selectedChildId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">任务管理中心</h1>
-            <p className="text-gray-500 mt-1">智能任务模板库 + 多孩子实例化管理</p>
-          </div>
+    <div className="space-y-6" id="task-templates-page">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">任务管理中心</h1>
+          <p className="text-gray-500 mt-1">智能任务模板库 + 多孩子实例化管理</p>
         </div>
+      </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
@@ -622,7 +624,6 @@ export default function TaskTemplatesPage() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
 
       {/* ============================================ */}
       {/* 创建/编辑模板对话框 */}
@@ -661,6 +662,32 @@ export default function TaskTemplatesPage() {
                   value={templateForm.singleDuration}
                   onChange={e => setTemplateForm({ ...templateForm, singleDuration: parseInt(e.target.value) || 30 })}
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>学科</Label>
+                <Select value={templateForm.subject || ""} onValueChange={v => setTemplateForm({ ...templateForm, subject: (v || null) as Subject })}>
+                  <SelectTrigger><SelectValue placeholder="可选" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">不限</SelectItem>
+                    <SelectItem value="chinese">语文</SelectItem>
+                    <SelectItem value="math">数学</SelectItem>
+                    <SelectItem value="english">英语</SelectItem>
+                    <SelectItem value="sports">体育</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>难度</Label>
+                <Select value={templateForm.difficulty || "basic"} onValueChange={v => setTemplateForm({ ...templateForm, difficulty: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="basic">基础</SelectItem>
+                    <SelectItem value="advanced">进阶</SelectItem>
+                    <SelectItem value="challenge">挑战</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2">
