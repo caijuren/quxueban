@@ -501,20 +501,91 @@ export default function PlansPage() {
   const handleExportPNG = async () => {
     setIsExporting(true);
     try {
+      // 确保 html2canvas 已正确安装
       const html2canvas = (await import('html2canvas')).default;
-      const element = document.getElementById('weekly-plan-view');
-      if (!element) {
-        toast.error('未找到导出内容');
-        setIsExporting(false);
-        return;
+      
+      // 创建一个简化的临时容器，只包含基本内容
+      const tempContainer = document.createElement('div');
+      tempContainer.style.width = '100%';
+      tempContainer.style.backgroundColor = '#ffffff';
+      tempContainer.style.padding = '20px';
+      tempContainer.style.fontFamily = 'Arial, sans-serif';
+      tempContainer.style.fontSize = '14px';
+      tempContainer.style.color = '#333333';
+      
+      // 添加标题
+      const title = document.createElement('h1');
+      title.style.textAlign = 'center';
+      title.style.marginBottom = '20px';
+      title.textContent = `周计划 - ${weekLabel}`;
+      tempContainer.appendChild(title);
+      
+      // 添加计划内容
+      if (weeklyPlans && weeklyPlans.length > 0) {
+        weeklyPlans.forEach(plan => {
+          const planTitle = document.createElement('h2');
+          planTitle.style.marginTop = '20px';
+          planTitle.style.marginBottom = '10px';
+          planTitle.textContent = `${plan.childName}的学习计划`;
+          tempContainer.appendChild(planTitle);
+          
+          // 添加任务列表
+          if (plan.allocations.length > 0) {
+            const taskList = document.createElement('ul');
+            taskList.style.listStyle = 'none';
+            taskList.style.padding = '0';
+            
+            plan.allocations.forEach(task => {
+              const taskItem = document.createElement('li');
+              taskItem.style.padding = '8px 0';
+              taskItem.style.borderBottom = '1px solid #eeeeee';
+              taskItem.textContent = `${task.taskName} - ${task.category || '其他'}`;
+              taskList.appendChild(taskItem);
+            });
+            
+            tempContainer.appendChild(taskList);
+          } else {
+            const noTask = document.createElement('p');
+            noTask.style.color = '#999999';
+            noTask.textContent = '该周暂无任务安排';
+            tempContainer.appendChild(noTask);
+          }
+        });
+      } else {
+        const noPlan = document.createElement('p');
+        noPlan.style.color = '#999999';
+        noPlan.style.textAlign = 'center';
+        noPlan.textContent = '暂无计划数据';
+        tempContainer.appendChild(noPlan);
       }
-      const canvas = await html2canvas(element);
+      
+      // 将临时容器添加到页面
+      document.body.appendChild(tempContainer);
+      
+      // 使用最基本的配置进行渲染
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      
+      // 移除临时容器
+      document.body.removeChild(tempContainer);
+      
+      // 创建下载链接
       const link = document.createElement('a');
       link.download = `周计划_${format(currentWeekStart, 'yyyy-MM-dd')}.png`;
       link.href = canvas.toDataURL('image/png');
+      
+      // 触发下载
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      
+      // 清理
+      setTimeout(() => {
+        document.body.removeChild(link);
+      }, 100);
+      
       toast.success('导出成功');
     } catch (error) {
       console.error('导出失败:', error);
@@ -661,7 +732,7 @@ export default function PlansPage() {
                         }, {} as { [key: string]: any[] });
 
                         // 学科排序顺序
-                        const categoryOrder = {
+                        const categoryOrder: { [key: string]: number } = {
                           'school': 0,    // 校内作业
                           'advanced': 1,  // 拔高
                           'extra': 2,     // 课外
@@ -672,7 +743,7 @@ export default function PlansPage() {
                         };
 
                         // 学科中文名称
-                        const categoryNames = {
+                        const categoryNames: { [key: string]: string } = {
                           'school': '校内作业',
                           'advanced': '拔高训练',
                           'extra': '课外课程',
