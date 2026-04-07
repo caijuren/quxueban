@@ -138,6 +138,7 @@ tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
  * Body: { childIds, weekNo, taskRules?, skipHolidays?, holidayDates? }
  */
 tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
+  try {
   const { childIds, weekNo, taskRules, skipHolidays, holidayDates } = req.body
   const { familyId } = req.user!
 
@@ -334,6 +335,14 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
       },
     },
   })
+  } catch (error) {
+    console.error('[PUBLISH] ERROR:', error)
+    if (error instanceof Error) {
+      console.error('[PUBLISH] Error message:', error.message)
+      console.error('[PUBLISH] Error stack:', error.stack)
+    }
+    throw error
+  }
 })
 
 /**
