@@ -225,26 +225,38 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
 
         let allowedDays: number[] = []
 
-        // 根据任务类别和规则确定允许的日期
-        if (task.category === 'school') {
-          if (task.name.includes('培优') || task.name.includes('高思') || task.name.includes('全新英语')) {
-            allowedDays = [0, 6] // 周末
-          } else {
-            allowedDays = [1, 2, 4, 5] // 周一/二/四/五（避开周三）
-          }
+        // 根据任务的 scheduleRule 确定允许的日期
+        let scheduleRule = task.scheduleRule
+        
+        // 如果 customRule 是字符串，使用它作为 scheduleRule
+        if (typeof customRule === 'string') {
+          scheduleRule = customRule
+        }
+
+        if (scheduleRule === 'daily') {
+          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
+        } else if (scheduleRule === 'school') {
+          allowedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（不包含周三）
+        } else if (scheduleRule === 'weekend') {
+          allowedDays = [5, 6] // 周六和周日
+        } else if (scheduleRule === 'flexible') {
+          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 周一到周日
         } else {
+          // 默认：每天
           allowedDays = [0, 1, 2, 3, 4, 5, 6]
         }
 
-        // 应用自定义规则
-        if (taskRule.onlyWeekend) {
-          allowedDays = allowedDays.filter(d => d === 0 || d === 6)
-        }
-        if (taskRule.excludeDays?.length > 0) {
-          allowedDays = allowedDays.filter(d => !taskRule.excludeDays.includes(d))
-        }
-        if (taskRule.days?.length > 0) {
-          allowedDays = taskRule.days
+        // 应用自定义规则（只有当 taskRule 是对象时）
+        if (typeof taskRule === 'object' && taskRule !== null) {
+          if (taskRule.onlyWeekend) {
+            allowedDays = allowedDays.filter(d => d === 0 || d === 6)
+          }
+          if (taskRule.excludeDays?.length > 0) {
+            allowedDays = allowedDays.filter(d => !taskRule.excludeDays.includes(d))
+          }
+          if (taskRule.days?.length > 0) {
+            allowedDays = taskRule.days
+          }
         }
 
         // 关键：如果开启了避开节假日，过滤掉节假日
@@ -314,7 +326,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     data: {
       weekNo,
       children: results,
-  summary: {
+      summary: {
         totalTasks: tasks.length,
         totalChildren: children.length,
         dailyTimeLimit,
