@@ -379,7 +379,7 @@ libraryRouter.get('/fetch-by-isbn/:isbn', async (req: AuthRequest, res: Response
       throw new Error('Failed to fetch book info from Douban')
     }
 
-    const bookData = await response.json()
+    const bookData = await response.json() as any
 
     // Transform the data to match our Book model
     const transformedData = {
@@ -412,7 +412,7 @@ libraryRouter.get('/search-by-title/:title', async (req: AuthRequest, res: Respo
       throw new Error('Failed to search books from Douban')
     }
 
-    const searchData = await response.json()
+    const searchData = await response.json() as any
 
     // Transform the data to match our expected format
     const transformedResults = (searchData.books || []).map((book: any) => ({

@@ -227,7 +227,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         let allowedDays: number[] = []
 
         // 根据任务的 scheduleRule 确定允许的日期
-        let scheduleRule = task.scheduleRule
+        let scheduleRule = (task.tags as any)?.scheduleRule || 'daily'
         
         // 如果 customRule 是字符串，使用它作为 scheduleRule
         if (typeof customRule === 'string') {

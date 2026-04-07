@@ -692,7 +692,7 @@ authRouter.post('/config', authMiddleware, requireRole('parent'), async (req: Au
     status: 'success',
     message: '配置更新成功',
     data: {
-      publishSettings: updatedFamily.settings.publishSettings,
+      publishSettings: (updatedFamily.settings as any).publishSettings,
     },
   })
 })

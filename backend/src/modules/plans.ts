@@ -374,7 +374,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         // 获取任务的 scheduleRule
         const taskTags = p.task.tags as any || {}
         const taskWeeklyRule = p.task.weeklyRule as any || {}
-        const scheduleRule = p.task.scheduleRule || taskTags.scheduleRule || taskWeeklyRule.scheduleRule
+        const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
         
         // 优先使用数据库中存储的 daysAllocated
         if (p.daysAllocated) {
@@ -405,8 +405,6 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         let subject = 'other'
         if (p.task.tags && typeof p.task.tags === 'object') {
           subject = (p.task.tags as any).subject || 'other'
-        } else if (p.task.subject) {
-          subject = p.task.subject
         }
         
         return {
@@ -416,9 +414,9 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           timePerUnit: p.task.timePerUnit,
           assignedDays: assignedDays,
           subject: subject,
-          difficulty: (p.task.tags as any)?.difficulty || p.task.difficulty,
+          difficulty: (p.task.tags as any)?.difficulty || 'basic',
           isTemporary: (p.task.tags as any)?.isTemporary || false,
-          scheduleRule: p.task.scheduleRule,
+          scheduleRule: scheduleRule,
           target: p.target,
           progress: p.progress,
         }

@@ -67,6 +67,9 @@ dingtalkRouter.post('/push-weekly-plan', async (req: AuthRequest, res: Response)
     console.log('Sending to DingTalk webhook:', webhookUrl)
     console.log('Message:', message)
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+    
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
@@ -79,8 +82,10 @@ dingtalkRouter.post('/push-weekly-plan', async (req: AuthRequest, res: Response)
           text: message,
         },
       }),
-      timeout: 10000, // 10秒超时
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId);
 
     console.log('DingTalk response status:', response.status)
     console.log('DingTalk response text:', await response.text())
@@ -120,7 +125,7 @@ function generateWeeklyPlanMessage(childName: string, plans: any[], weekStart: D
 
   // Group tasks by day
   const tasksByDay: any = {}
-  weekDays.forEach((day, index) => {
+  weekDays.forEach((_, index) => {
     tasksByDay[index] = []
   })
 
