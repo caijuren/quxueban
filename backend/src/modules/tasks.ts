@@ -293,7 +293,8 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
             target,
             progress: 0,
             weekNo,
-            status: target > 0 ? 'active' : 'inactive'
+            status: target > 0 ? 'active' : 'inactive',
+            assignedDays: daysAllocated, // 保存实际分配的天数数组
           }
         })
 

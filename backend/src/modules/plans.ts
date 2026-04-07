@@ -376,19 +376,24 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         const taskWeeklyRule = p.task.weeklyRule as any || {}
         const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
         
-        // 使用任务的 weeklyRule 或 scheduleRule 来确定分配的天数
-        if (weeklyRule?.days && weeklyRule.days.length > 0) {
-          assignedDays = weeklyRule.days
-        } else if (scheduleRule === 'daily') {
-          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
-        } else if (scheduleRule === 'school') {
-          assignedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（不包含周三）
-        } else if (scheduleRule === 'weekend') {
-          assignedDays = [5, 6] // 周六和周日
-        } else if (scheduleRule === 'flexible') {
-          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 周一到周日
+        // 优先从数据库读取实际分配的天数
+        if (p.assignedDays && Array.isArray(p.assignedDays)) {
+          assignedDays = p.assignedDays as number[]
         } else {
-          assignedDays = [0, 1, 2, 3, 4, 5, 6]
+          // 如果没有保存的数据，则根据 scheduleRule 推算（兼容旧数据）
+          if (weeklyRule?.days && weeklyRule.days.length > 0) {
+            assignedDays = weeklyRule.days
+          } else if (scheduleRule === 'daily') {
+            assignedDays = [0, 1, 2, 3, 4, 5, 6]
+          } else if (scheduleRule === 'school') {
+            assignedDays = [0, 1, 3, 4]
+          } else if (scheduleRule === 'weekend') {
+            assignedDays = [5, 6]
+          } else if (scheduleRule === 'flexible') {
+            assignedDays = [0, 1, 2, 3, 4, 5, 6]
+          } else {
+            assignedDays = [0, 1, 2, 3, 4, 5, 6]
+          }
         }
         
         // 确保 subject 是字符串类型

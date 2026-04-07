@@ -136,20 +136,21 @@ model Task {
 }
 
 model WeeklyPlan {
-  id        Int            @id @default(autoincrement())
-  familyId  Int            @map("family_id")
-  childId   Int            @map("child_id")
-  taskId    Int            @map("task_id")
-  target    Int            @default(1)
-  progress  Int            @default(0)
-  weekNo    String         @map("week_no") @db.VarChar(10)
-  status    String         @default("active") @db.VarChar(20)
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
-  checkins  DailyCheckin[]
-  child     User           @relation(fields: [childId], references: [id])
-  family    Family         @relation(fields: [familyId], references: [id])
-  task      Task           @relation(fields: [taskId], references: [id])
+  id            Int            @id @default(autoincrement())
+  familyId      Int            @map("family_id")
+  childId       Int            @map("child_id")
+  taskId        Int            @map("task_id")
+  target        Int            @default(1)
+  progress      Int            @default(0)
+  weekNo        String         @map("week_no") @db.VarChar(10)
+  status        String         @default("active") @db.VarChar(20)
+  assignedDays  Json?          @map("assigned_days") // 存储实际分配的天数数组，例如 [1, 2, 5, 6]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  checkins      DailyCheckin[]
+  child         User           @relation(fields: [childId], references: [id])
+  family        Family         @relation(fields: [familyId], references: [id])
+  task          Task           @relation(fields: [taskId], references: [id])
 
   @@map("weekly_plans")
 }
