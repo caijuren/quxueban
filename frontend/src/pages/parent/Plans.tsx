@@ -628,7 +628,7 @@ export default function PlansPage() {
                       </div>
                       {/* 任务排序 */}
                       {plan.allocations.sort((a, b) => {
-                        const categoryOrder = {
+                        const categoryOrder: { [key: string]: number } = {
                           '校内巩固': 0,
                           '课外课程': 1,
                           '中文阅读': 2,
