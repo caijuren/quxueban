@@ -226,7 +226,7 @@ export default function TasksPage() {
       category: task.category,
       type: task.type,
       timePerUnit: task.timePerUnit,
-      scheduleRule: (task.scheduleRule as ScheduleRule) || 'daily',
+      scheduleRule: (task.tags?.scheduleRule as ScheduleRule) || (task.scheduleRule as ScheduleRule) || 'daily', // 优先从 tags 读取
       weeklyFrequency: task.weeklyFrequency || 5,
       subject: subject,
       parentRole: parentRole,
