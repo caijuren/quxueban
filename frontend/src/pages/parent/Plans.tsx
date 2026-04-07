@@ -507,7 +507,7 @@ export default function PlansPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">计划管理 <span className="text-xs font-normal text-purple-500">v2.0415</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900">计划管理</h1>
           <p className="text-gray-500 mt-1">查看和管理每周学习计划</p>
         </div>
         <div className="flex gap-2">
@@ -659,21 +659,24 @@ export default function PlansPage() {
                         
                         return (
                           <div key={taskItem.taskId} className="grid grid-cols-8 gap-1 group/row">
-                            <div className="p-2 flex items-center text-xs font-medium text-gray-700 truncate pr-2" title={taskItem.taskName}>
-                              <span className="truncate">{taskItem.taskName}</span>
+                            <div className="p-2 flex items-center text-xs font-medium truncate pr-2" title={taskItem.taskName}>
+                              <span className={cn('truncate', taskItem.isTemporary && 'text-amber-500 font-bold')}>
+                                {taskItem.isTemporary && <span className="mr-1">⚡</span>}
+                                {taskItem.taskName}
+                              </span>
                             </div>
                             {weekDays.map((_, i) => {
                               const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(i);
                               const dayProgress = plan.dailyProgress.find(d => d.day === i);
                               const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
                               const dotColor = getDotColor(i);
-                              
+                               
                               return (
                                 <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px]', isToday(weekDates[i]) && 'bg-purple-50/50')}>
                                   <div className="relative">
                                     {isAssigned ? (
                                       taskItem.isTemporary ? (
-                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', 'bg-amber-500')} title={`${taskItem.taskName}`}>
+                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm bg-amber-500')} title={`${taskItem.taskName} - 临时任务`}>
                                           <span className="text-white text-xs">⚡</span>
                                         </button>
                                       ) : (
@@ -753,11 +756,40 @@ export default function PlansPage() {
             </div>
             <div className='px-6 py-3.5 bg-gray-50/80 border-t border-gray-100 flex justify-end gap-2.5'>
               <button onClick={() => setTempDialogOpen(false)} className='rounded-xl px-5 h-10 text-sm font-medium border border-gray-200 hover:bg-gray-100'>取消</button>
-              <button onClick={() => {
+              <button onClick={async () => {
                 const name = (document.getElementById('temp-task-name') as HTMLInputElement)?.value?.trim();
+                const subject = (document.getElementById('temp-task-subject') as HTMLSelectElement)?.value;
+                const due = (document.getElementById('temp-task-due') as HTMLSelectElement)?.value;
+                
                 if (!name) { toast.error('请输入任务名称'); return; }
-                toast.success('临时任务已创建！');
-                setTempDialogOpen(false);
+                
+                try {
+                  // 确保获取到有效的孩子ID
+                  if (!weeklyPlans || weeklyPlans.length === 0) {
+                    toast.error('请先创建孩子账号');
+                    return;
+                  }
+                  
+                  const childId = weeklyPlans[0].childId;
+                  console.log('Creating temporary task with childId:', childId);
+                  
+                  const response = await apiClient.post('/plans/temp-task', {
+                    name,
+                    subject,
+                    due,
+                    urgency: tempUrgency,
+                    childId: parseInt(childId)
+                  });
+                  
+                  console.log('Temporary task created:', response);
+                  toast.success('临时任务已创建！');
+                  setTempDialogOpen(false);
+                  refetchPlans(); // 刷新计划数据
+                } catch (error: unknown) {
+                  console.error('Error creating temporary task:', error);
+                  const err = error as { response?: { data?: { message?: string } } };
+                  toast.error(err.response?.data?.message || '创建临时任务失败，请重试');
+                }
               }} className='bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl px-6 h-10 text-sm font-medium shadow-lg shadow-amber-500/20'>创建任务</button>
             </div>
           </motion.div>

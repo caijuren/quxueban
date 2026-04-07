@@ -9,7 +9,7 @@ const getBaseUrl = () => {
   if (import.meta.env.PROD) {
     return import.meta.env.VITE_API_BASE_URL || '/api';
   }
-  return 'http://localhost:3000/api';
+  return '/api';
 };
 
 /**
