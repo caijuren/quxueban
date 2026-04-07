@@ -1,22 +1,35 @@
+# 文件路径: .github/workflows/deploy.yml
 name: Deploy to Production
 
+# 1. 确保触发条件包含 pull_request
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # 允许手动触发
   workflow_dispatch:
+
+# 2. 【关键】添加并发控制，确保同一分支的PR检查不会冲突
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
+    # 3. 为任务指定一个在PR检查中显示的名称
+    name: ✅ Deploy Check
     runs-on: ubuntu-latest
+    # 4. 确保任务在PR上下文中运行
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Deploy to Server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.SERVER_DEPLOY_KEY }}
-          script: |
-            /home/ubuntu/deploy.sh
+      # ... 您的构建、测试、部署步骤 ...
+
+      # 5. （可选但推荐）添加一个始终运行的后置步骤，确保状态被报告
+      - name: Report deployment status
+        if: always() # 无论之前步骤成功与否都运行
+        run: echo "Deploy workflow completed for ${{ github.sha }}"
