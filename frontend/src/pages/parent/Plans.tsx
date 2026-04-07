@@ -501,54 +501,79 @@ export default function PlansPage() {
   const handleExportPNG = async () => {
     setIsExporting(true);
     try {
-      // 确保 html2canvas 已正确安装
-      const html2canvas = (await import('html2canvas')).default;
-      
-      // 创建一个简化的计划视图，只包含必要的结构和样式
-      const tempContainer = document.createElement('div');
-      tempContainer.style.width = '100%';
-      tempContainer.style.backgroundColor = '#ffffff';
-      tempContainer.style.padding = '20px';
-      tempContainer.style.fontFamily = 'Arial, sans-serif';
-      tempContainer.style.fontSize = '14px';
-      tempContainer.style.color = '#333333';
-      
-      // 添加标题
-      const title = document.createElement('h1');
-      title.style.textAlign = 'center';
-      title.style.marginBottom = '20px';
-      title.textContent = `周计划 - ${weekLabel}`;
-      tempContainer.appendChild(title);
-      
-      // 添加计划内容
+      // 计算实际高度
+      let estimatedHeight = 200;
       if (weeklyPlans && weeklyPlans.length > 0) {
         weeklyPlans.forEach(plan => {
-          const planTitle = document.createElement('h2');
-          planTitle.style.marginTop = '20px';
-          planTitle.style.marginBottom = '10px';
-          planTitle.textContent = `${plan.childName}的学习计划`;
-          tempContainer.appendChild(planTitle);
+          estimatedHeight += 100; // 计划标题和日期表头
+          const tasksByCategory = plan.allocations.reduce((acc, task) => {
+            const category = task.category || '其他';
+            if (!acc[category]) {
+              acc[category] = [];
+            }
+            acc[category].push(task);
+            return acc;
+          }, {} as { [key: string]: any[] });
+          Object.values(tasksByCategory).forEach(tasks => {
+            estimatedHeight += 30 + tasks.length * 25;
+          });
+        });
+      }
+      
+      // 创建一个独立的 canvas 元素
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('无法创建 canvas 上下文');
+      }
+      
+      // 设置 canvas 尺寸
+      const width = 800;
+      const height = Math.max(800, estimatedHeight);
+      canvas.width = width;
+      canvas.height = height;
+      
+      // 填充背景
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      
+      // 绘制标题
+      ctx.font = '24px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#333333';
+      ctx.fillText(`周计划 - ${weekLabel}`, width / 2, 50);
+      
+      let yPosition = 100;
+      
+      // 绘制计划内容
+      if (weeklyPlans && weeklyPlans.length > 0) {
+        weeklyPlans.forEach(plan => {
+          // 绘制计划标题
+          ctx.font = '18px Arial, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#333333';
+          ctx.fillText(`${plan.childName}的学习计划`, 50, yPosition);
+          yPosition += 40;
           
-          // 添加日期表头
-          const dateHeader = document.createElement('div');
-          dateHeader.style.display = 'grid';
-          dateHeader.style.gridTemplateColumns = '1fr repeat(7, 1fr)';
-          dateHeader.style.gap = '10px';
-          dateHeader.style.marginBottom = '10px';
+          // 绘制日期表头
+          const headerStartX = 180;
+          const cellWidth = (width - 180) / 7;
           
-          const emptyCell = document.createElement('div');
-          dateHeader.appendChild(emptyCell);
+          // 绘制表头背景
+          ctx.fillStyle = '#f9fafb';
+          ctx.fillRect(180, yPosition - 5, width - 180, 40);
           
           weekDays.forEach((day, i) => {
-            const dateCell = document.createElement('div');
-            dateCell.style.textAlign = 'center';
-            dateCell.style.padding = '5px';
-            dateCell.style.border = '1px solid #e5e7eb';
-            dateCell.style.borderRadius = '4px';
-            dateCell.innerHTML = `<div style="font-size: 12px; color: #6b7280;">${day}</div><div style="font-weight: bold;">${format(weekDates[i], 'M/d')}</div>`;
-            dateHeader.appendChild(dateCell);
+            const x = headerStartX + i * cellWidth;
+            ctx.font = '12px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#6b7280';
+            ctx.fillText(day, x, yPosition + 12);
+            ctx.font = '14px Arial, sans-serif';
+            ctx.fillStyle = '#333333';
+            ctx.fillText(format(weekDates[i], 'M/d'), x, yPosition + 28);
           });
-          tempContainer.appendChild(dateHeader);
+          yPosition += 45;
           
           // 按学科分组
           const tasksByCategory = plan.allocations.reduce((acc, task) => {
@@ -590,110 +615,96 @@ export default function PlansPage() {
           sortedCategories.forEach(([category, tasks]) => {
             const sortedTasks = tasks.sort((a, b) => a.taskName.localeCompare(b.taskName));
             
-            const categoryTitle = document.createElement('div');
-            categoryTitle.style.marginTop = '15px';
-            categoryTitle.style.marginBottom = '10px';
-            categoryTitle.style.fontWeight = 'bold';
-            categoryTitle.textContent = categoryNames[category as keyof typeof categoryNames] || category;
-            tempContainer.appendChild(categoryTitle);
+            // 绘制分类标题
+            ctx.font = '16px Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#4b5563';
+            ctx.fillText(categoryNames[category as keyof typeof categoryNames] || category, 50, yPosition + 15);
+            yPosition += 30;
             
-            sortedTasks.forEach(taskItem => {
-              const taskRow = document.createElement('div');
-              taskRow.style.display = 'grid';
-              taskRow.style.gridTemplateColumns = '1fr repeat(7, 1fr)';
-              taskRow.style.gap = '10px';
-              taskRow.style.alignItems = 'center';
-              taskRow.style.padding = '8px 0';
-              taskRow.style.borderBottom = '1px solid #e5e7eb';
+            // 转换后端索引到前端索引
+            const getFrontendDayIndex = (backendIndex: number) => {
+              if (backendIndex === 0) return 6; // 周日
+              return backendIndex - 1; // 其他日期
+            };
+            
+            // 转换前端索引到后端索引
+            const getBackendDayIndex = (frontendIndex: number) => {
+              if (frontendIndex === 6) return 0; // 周日
+              return frontendIndex + 1; // 其他日期
+            };
+            
+            // 根据assignedDays判断任务是否在指定日期分配
+            const isTaskAssignedOnDay = (frontendDayIndex: number, taskItem: any) => {
+              const backendIndex = getBackendDayIndex(frontendDayIndex);
+              return taskItem.assignedDays && taskItem.assignedDays.includes(backendIndex);
+            };
+            
+            // 获取颜色
+            const getDotColor = (frontendIndex: number, taskItem: any) => {
+              const isAssigned = isTaskAssignedOnDay(frontendIndex, taskItem);
+              if (!isAssigned) return '#e5e7eb';
               
-              const taskNameCell = document.createElement('div');
-              taskNameCell.style.padding = '0 5px';
-              taskNameCell.textContent = taskItem.taskName;
-              taskRow.appendChild(taskNameCell);
+              // 根据 category 分配颜色
+              const category = taskItem.category || 'other';
+              const categoryStr = typeof category === 'string' ? category.toLowerCase() : 'other';
               
-              // 转换后端索引到前端索引
-              const getFrontendDayIndex = (backendIndex: number) => {
-                if (backendIndex === 0) return 6; // 周日
-                return backendIndex - 1; // 其他日期
-              };
+              switch (categoryStr) {
+                case 'chinese': return '#10b981';
+                case 'english': return '#f97316';
+                case 'sports': return '#eab308';
+                case 'school': return '#3b82f6';
+                case 'advanced': return '#6366f1';
+                case 'extra': return '#8b5cf6';
+                default: return '#6b7280';
+              }
+            };
+            
+            sortedTasks.forEach((taskItem, taskIndex) => {
+              // 绘制任务行背景
+              if (taskIndex % 2 === 0) {
+                ctx.fillStyle = '#f9fafb';
+                ctx.fillRect(0, yPosition - 10, width, 25);
+              }
               
-              // 转换前端索引到后端索引
-              const getBackendDayIndex = (frontendIndex: number) => {
-                if (frontendIndex === 6) return 0; // 周日
-                return frontendIndex + 1; // 其他日期
-              };
+              // 绘制任务名称
+              ctx.font = '14px Arial, sans-serif';
+              ctx.textAlign = 'left';
+              ctx.fillStyle = '#333333';
+              ctx.fillText(taskItem.taskName, 50, yPosition + 10);
               
-              // 根据assignedDays判断任务是否在指定日期分配
-              const isTaskAssignedOnDay = (frontendDayIndex: number) => {
-                const backendIndex = getBackendDayIndex(frontendDayIndex);
-                return taskItem.assignedDays && taskItem.assignedDays.includes(backendIndex);
-              };
-              
-              // 获取颜色
-              const getDotColor = (frontendIndex: number) => {
-                const isAssigned = isTaskAssignedOnDay(frontendIndex);
-                if (!isAssigned) return '#e5e7eb';
-                
-                // 根据 category 分配颜色
-                const category = taskItem.category || 'other';
-                const categoryStr = typeof category === 'string' ? category.toLowerCase() : 'other';
-                
-                switch (categoryStr) {
-                  case 'chinese': return '#10b981';
-                  case 'english': return '#f97316';
-                  case 'sports': return '#eab308';
-                  case 'school': return '#3b82f6';
-                  case 'advanced': return '#6366f1';
-                  case 'extra': return '#8b5cf6';
-                  default: return '#6b7280';
-                }
-              };
-              
+              // 绘制小圆点
               weekDays.forEach((_, i) => {
-                const dayCell = document.createElement('div');
-                dayCell.style.display = 'flex';
-                dayCell.style.justifyContent = 'center';
-                dayCell.style.alignItems = 'center';
-                dayCell.style.height = '30px';
+                const x = headerStartX + i * cellWidth;
+                const dotColor = getDotColor(i, taskItem);
                 
-                const dot = document.createElement('div');
-                dot.style.width = '12px';
-                dot.style.height = '12px';
-                dot.style.borderRadius = '50%';
-                dot.style.backgroundColor = getDotColor(i);
-                dot.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+                ctx.fillStyle = dotColor;
+                ctx.beginPath();
+                ctx.arc(x, yPosition + 10, 5, 0, Math.PI * 2);
+                ctx.fill();
                 
-                dayCell.appendChild(dot);
-                taskRow.appendChild(dayCell);
+                // 添加边框
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(x, yPosition + 10, 5, 0, Math.PI * 2);
+                ctx.stroke();
               });
               
-              tempContainer.appendChild(taskRow);
+              yPosition += 25;
             });
+            
+            // 添加分类间距
+            yPosition += 15;
           });
         });
       } else {
-        const noPlan = document.createElement('p');
-        noPlan.style.color = '#6b7280';
-        noPlan.style.textAlign = 'center';
-        noPlan.textContent = '暂无计划数据';
-        tempContainer.appendChild(noPlan);
+        // 绘制无计划数据提示
+        ctx.font = '16px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#6b7280';
+        ctx.fillText('暂无计划数据', width / 2, yPosition);
       }
-      
-      // 将临时容器添加到页面
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '-9999px';
-      tempContainer.style.top = '-9999px';
-      document.body.appendChild(tempContainer);
-      
-      // 使用基本配置进行渲染
-      const canvas = await html2canvas(tempContainer, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false
-      });
-      
-      // 移除临时容器
-      document.body.removeChild(tempContainer);
       
       // 创建下载链接
       const link = document.createElement('a');
@@ -878,7 +889,7 @@ export default function PlansPage() {
 
                         // 转换为排序后的数组
                         const sortedCategories = Object.entries(tasksByCategory)
-                          .sort(([catA], [catB]) => (categoryOrder[catA] || 999) - (categoryOrder[catB] || 999));
+                          .sort(([catA], [catB]) => ((categoryOrder as any)[catA] || 999) - ((categoryOrder as any)[catB] || 999));
 
                         // 渲染分组和任务
                         return sortedCategories.map(([category, tasks]) => {
