@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PublishPlanDialog } from '@/components/PublishPlanDialog';
 import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -44,7 +44,7 @@ interface TaskDetailProps {
   onRefresh: () => void;
 }
 
-const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const subjectLabel = (s: string | null) => s === 'chinese' ? '语文' : s === 'math' ? '数学' : s === 'english' ? '英语' : s === 'sports' ? '体育' : s || '其他';
 const subjectColor = (s: string | null) => s === 'chinese' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : s === 'math' ? 'bg-blue-100 text-blue-700 border-blue-200' : s === 'english' ? 'bg-purple-100 text-purple-700 border-purple-200' : s === 'sports' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-600 border-gray-200';
 const diffLabel = (d: string | null) => d === 'basic' ? '基础' : d === 'advanced' ? '提升' : d === 'challenge' ? '挑战' : '';
@@ -57,13 +57,27 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
   const [selectedMoveDay, setSelectedMoveDay] = useState<number | null>(null);
   const [selectedDayForAction, setSelectedDayForAction] = useState<number | null>(null);
 
+  // 转换后端索引到前端索引
+  // 后端: 0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
+  // 前端: 0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
+  const getFrontendDayIndex = (backendIndex: number) => {
+    if (backendIndex === 0) return 6; // 周日
+    return backendIndex - 1; // 其他日期
+  };
+  
+  // 转换前端索引到后端索引
+  const getBackendDayIndex = (frontendIndex: number) => {
+    if (frontendIndex === 6) return 0; // 周日
+    return frontendIndex + 1; // 其他日期
+  };
+  
   const assignedDays = useMemo(() => {
     switch (task.scheduleRule) {
       case 'daily': return [0, 1, 2, 3, 4, 5, 6];
       case 'school': return [0, 1, 2, 3, 4];
       case 'flexible': return [0, 1, 2, 3, 4];
       case 'weekend': return [5, 6];
-      default: return task.assignedDays.length > 0 ? task.assignedDays : [0, 1, 2, 3, 4, 5, 6];
+      default: return task.assignedDays.length > 0 ? task.assignedDays.map(getFrontendDayIndex) : [0, 1, 2, 3, 4, 5, 6];
     }
   }, [task.scheduleRule, task.assignedDays]);
 
@@ -374,7 +388,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
                       <button
                         key={d}
                         onClick={() => !isFromDay && setSelectedMoveDay(i)}
-          disabled={isFromDay}
+                        disabled={isFromDay}
                         className={cn(
                           'aspect-square rounded-xl flex flex-col items-center justify-center transition-all',
                           isFromDay 
@@ -442,6 +456,14 @@ export default function PlansPage() {
   const [tempDialogOpen, setTempDialogOpen] = useState(false);
   const [tempUrgency, setTempUrgency] = useState('normal');
   const [isExporting, setIsExporting] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<{[key: string]: boolean}>({});
+  
+  const toggleCategory = (category: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
 
   const { data: planTasks = [] } = useQuery({
     queryKey: ['tasks'],
@@ -455,22 +477,22 @@ export default function PlansPage() {
   const isCurrentWeek = isSameDay(currentWeekStart, startOfWeek(new Date(), { weekStartsOn: 1 }));
   const isNextWeek = isSameDay(currentWeekStart, startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }));
 
-  const { data: weeklyPlans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
+  const { data: weeklyPlans, isLoading: plansLoading, error, refetch: refetchPlans } = useQuery({
     queryKey: ['weekly-plan', format(currentWeekStart, 'yyyy-MM-dd')],
     queryFn: () => fetchWeeklyPlan(format(currentWeekStart, 'yyyy-MM-dd')),
     staleTime: 5 * 60 * 1000
   });
 
+  if (error) {
+    console.error('Error fetching weekly plans:', error);
+  }
+
   const goToCurrentWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
   const weekDates = useMemo(() => {
-    // 调整日期，使其与 weekDays 数组顺序一致（周日开始）
+    // 调整日期，使其与 weekDays 数组顺序一致（周一开始）
     return weekDays.map((_, index) => {
-      // currentWeekStart 是周一开始，所以周日需要减 1 天
-      if (index === 0) {
-        return addDays(currentWeekStart, -1);
-      }
-      return addDays(currentWeekStart, index - 1);
+      return addDays(currentWeekStart, index);
     });
   }, [currentWeekStart]);
   const weekLabel = `${format(currentWeekStart, 'M月d日', { locale: zhCN })} - ${format(addDays(currentWeekStart, 6), 'M月d日', { locale: zhCN })}`;
@@ -627,77 +649,152 @@ export default function PlansPage() {
                         })}
                       </div>
                       {/* 任务排序 */}
-                      {plan.allocations.sort((a, b) => {
-                        const categoryOrder: { [key: string]: number } = {
-                          '校内巩固': 0,
-                          '课外课程': 1,
-                          '中文阅读': 2,
-                          '英文阅读': 3,
-                          '体育任务': 4,
-                          '校内拔高': 5
-                        };
-                        return (categoryOrder[a.category] || 999) - (categoryOrder[b.category] || 999);
-                      }).map((taskItem) => {
-                        // 调试：打印 taskItem 结构
-                        console.log('Task item:', taskItem);
-                        const getDotColor = (dayIndex: number) => {
-                          const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(dayIndex);
-                          if (!isAssigned) return 'bg-gray-300';
-                          
-                          // 根据 category 分配颜色
-                          const category = taskItem.category || 'other';
-                          const categoryStr = typeof category === 'string' ? category.toLowerCase() : 'other';
-                          
-                          switch (categoryStr) {
-                            case 'chinese': return 'bg-emerald-500';
-                            case 'english': return 'bg-orange-500';
-                            case 'sports': return 'bg-yellow-500';
-                            case 'school': return 'bg-blue-500';
-                            case 'advanced': return 'bg-indigo-500';
-                            case 'extra': return 'bg-purple-500';
-                            default: return 'bg-gray-500';
+                      {(() => {
+                        // 按学科分组
+                        const tasksByCategory = plan.allocations.reduce((acc, task) => {
+                          const category = task.category || '其他';
+                          if (!acc[category]) {
+                            acc[category] = [];
                           }
+                          acc[category].push(task);
+                          return acc;
+                        }, {} as { [key: string]: any[] });
+
+                        // 学科排序顺序
+                        const categoryOrder = {
+                          'school': 0,    // 校内作业
+                          'advanced': 1,  // 拔高
+                          'extra': 2,     // 课外
+                          'chinese': 3,   // 语文
+                          'english': 4,   // 英语
+                          'sports': 5,    // 体育
+                          '其他': 6
                         };
+
+                        // 学科中文名称
+                        const categoryNames = {
+                          'school': '校内作业',
+                          'advanced': '拔高训练',
+                          'extra': '课外课程',
+                          'chinese': '语文阅读',
+                          'english': '英语学习',
+                          'sports': '体育任务',
+                          '其他': '其他任务'
+                        };
+
+                        // 转换为排序后的数组
+                        const sortedCategories = Object.entries(tasksByCategory)
+                          .sort(([catA], [catB]) => (categoryOrder[catA] || 999) - (categoryOrder[catB] || 999));
+
+                        // 渲染分组和任务
+                        return sortedCategories.map(([category, tasks]) => {
+                          const sortedTasks = tasks.sort((a, b) => a.taskName.localeCompare(b.taskName));
+                          return (
+                            <React.Fragment key={category}>
+                              <div 
+                                className="flex items-center gap-2 mb-2 mt-3 cursor-pointer"
+                                onClick={() => toggleCategory(category)}
+                              >
+                                <div className="w-2 h-5 rounded-full bg-gray-400"></div>
+                                <h3 className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                                  {collapsedCategories[category] ? '▶' : '▼'}
+                                  {categoryNames[category as keyof typeof categoryNames] || category}
+                                </h3>
+                                <div className="flex-1 h-px bg-gray-200"></div>
+                              </div>
+                              {!collapsedCategories[category] && sortedTasks.map((taskItem) => {
+                                // 检查任务是否有分配的天数
+                const hasAssignedDays = taskItem.assignedDays && taskItem.assignedDays.length > 0;
+                
+                // 转换后端索引到前端索引
+                // 后端: 0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
+                // 前端: 0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
+                const getFrontendDayIndex = (backendIndex: number) => {
+                  if (backendIndex === 0) return 6; // 周日
+                  return backendIndex - 1; // 其他日期
+                };
+                
+                // 转换前端索引到后端索引
+                const getBackendDayIndex = (frontendIndex: number) => {
+                  if (frontendIndex === 6) return 0; // 周日
+                  return frontendIndex + 1; // 其他日期
+                };
+                
+                // 根据assignedDays判断任务是否在指定日期分配
+                const isTaskAssignedOnDay = (frontendDayIndex: number) => {
+                  const backendIndex = getBackendDayIndex(frontendDayIndex);
+                  return taskItem.assignedDays && taskItem.assignedDays.includes(backendIndex);
+                };
+                
+                // 调试：打印 taskItem 结构
+                console.log('Task item:', taskItem);
+                const getDotColor = (frontendIndex: number) => {
+                  const isAssigned = isTaskAssignedOnDay(frontendIndex);
+                  if (!isAssigned) return 'bg-gray-300';
+                  
+                  // 根据 category 分配颜色
+                  const category = taskItem.category || 'other';
+                  const categoryStr = typeof category === 'string' ? category.toLowerCase() : 'other';
+                  
+                  switch (categoryStr) {
+                    case 'chinese': return 'bg-emerald-500';
+                    case 'english': return 'bg-orange-500';
+                    case 'sports': return 'bg-yellow-500';
+                    case 'school': return 'bg-blue-500';
+                    case 'advanced': return 'bg-indigo-500';
+                    case 'extra': return 'bg-purple-500';
+                    default: return 'bg-gray-500';
+                  }
+                };
+                
+                return (
+                  <div key={taskItem.taskId} className="grid grid-cols-8 gap-1 group/row">
+                    <div className="p-1.5 flex items-center text-[12px] font-medium truncate pr-2" title={taskItem.taskName}>
+                      <span className={cn('truncate', taskItem.isTemporary && 'text-amber-500 font-bold', !hasAssignedDays && 'text-gray-400')}>
+                        {taskItem.isTemporary && <span className="mr-1">⚡</span>}
+                        {taskItem.taskName}
+                        {!hasAssignedDays && <span className="ml-1 text-[10px]">(未分配)</span>}
+                      </span>
+                    </div>
+                    {weekDays.map((_, i) => {
+                      const backendIndex = getBackendDayIndex(i);
+                      const isAssigned = isTaskAssignedOnDay(i);
+                      const dayProgress = plan.dailyProgress.find(d => d.day === i);
+                      const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
                         
-                        return (
-                          <div key={taskItem.taskId} className="grid grid-cols-8 gap-1 group/row">
-                            <div className="p-2 flex items-center text-xs font-medium truncate pr-2" title={taskItem.taskName}>
-                              <span className={cn('truncate', taskItem.isTemporary && 'text-amber-500 font-bold')}>
-                                {taskItem.isTemporary && <span className="mr-1">⚡</span>}
-                                {taskItem.taskName}
-                              </span>
-                            </div>
-                            {weekDays.map((_, i) => {
-                              const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(i);
-                              const dayProgress = plan.dailyProgress.find(d => d.day === i);
-                              const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
-                                
-                              return (
-                                <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px]', isToday(weekDates[i]) && 'bg-purple-50/50')}>
-                                  <div className="relative">
-                                    {isAssigned ? (
-                                      taskItem.isTemporary ? (
-                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm bg-amber-500')} title={`${taskItem.taskName} - 临时任务`}>
-                                          <span className="text-white text-xs">⚡</span>
-                                        </button>
-                                      ) : (
-                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor(i))} title={`${taskItem.taskName} - 点击查看详情`}>
-                                          {isCompleted && <span className="text-white text-xs">✓</span>}
-                                          {taskItem.difficulty === 'challenge' && !isCompleted && (
-                                            <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
-                                          )}
-                                        </button>
-                                      )
-                                    ) : (
-                                      <div className="w-6 h-6 rounded-full bg-gray-200 shadow-sm"></div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                      return (
+                        <div key={i} className={cn('p-1.5 flex items-center justify-center rounded-lg min-h-[32px]', isToday(weekDates[i]) && 'bg-purple-50/50')}>
+                          <div className="relative">
+                            {isAssigned ? (
+                              taskItem.isTemporary ? (
+                                <button onClick={() => setSelectedTask(taskItem)} className={cn('w-5 h-5 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm bg-amber-500')} title={`${taskItem.taskName} - 临时任务`}>
+                                  <span className="text-white text-xs">⚡</span>
+                                </button>
+                              ) : (
+                                <button onClick={() => setSelectedTask(taskItem)} className={cn('w-5 h-5 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor(i))} title={`${taskItem.taskName} - 点击查看详情`}>
+                                  {isCompleted && <span className="text-white text-xs">✓</span>}
+                                  {taskItem.difficulty === 'challenge' && !isCompleted && (
+                                    <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
+                                  )}
+                                </button>
+                              )
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-gray-300 shadow-sm"></div>
+                            )}
                           </div>
-                        );
-                      })}
+                        </div>
+                      );
+                    })}
+                                  </div>
+                                );
+                              })}
+                              {collapsedCategories[category] && (
+                                <div className="py-1 text-center text-gray-400 text-xs">点击展开</div>
+                              )}
+                            </React.Fragment>
+                          );
+                        });
+                      })()}
                       {plan.allocations.length === 0 && (
                         <div className="py-8 text-center text-gray-400 text-sm">该周暂无任务安排</div>
                       )}
