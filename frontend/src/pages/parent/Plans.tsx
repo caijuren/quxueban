@@ -504,7 +504,7 @@ export default function PlansPage() {
       // 确保 html2canvas 已正确安装
       const html2canvas = (await import('html2canvas')).default;
       
-      // 创建一个简化的临时容器，只包含基本内容
+      // 创建一个简化的计划视图，只包含必要的结构和样式
       const tempContainer = document.createElement('div');
       tempContainer.style.width = '100%';
       tempContainer.style.backgroundColor = '#ffffff';
@@ -529,40 +529,163 @@ export default function PlansPage() {
           planTitle.textContent = `${plan.childName}的学习计划`;
           tempContainer.appendChild(planTitle);
           
-          // 添加任务列表
-          if (plan.allocations.length > 0) {
-            const taskList = document.createElement('ul');
-            taskList.style.listStyle = 'none';
-            taskList.style.padding = '0';
+          // 添加日期表头
+          const dateHeader = document.createElement('div');
+          dateHeader.style.display = 'grid';
+          dateHeader.style.gridTemplateColumns = '1fr repeat(7, 1fr)';
+          dateHeader.style.gap = '10px';
+          dateHeader.style.marginBottom = '10px';
+          
+          const emptyCell = document.createElement('div');
+          dateHeader.appendChild(emptyCell);
+          
+          weekDays.forEach((day, i) => {
+            const dateCell = document.createElement('div');
+            dateCell.style.textAlign = 'center';
+            dateCell.style.padding = '5px';
+            dateCell.style.border = '1px solid #e5e7eb';
+            dateCell.style.borderRadius = '4px';
+            dateCell.innerHTML = `<div style="font-size: 12px; color: #6b7280;">${day}</div><div style="font-weight: bold;">${format(weekDates[i], 'M/d')}</div>`;
+            dateHeader.appendChild(dateCell);
+          });
+          tempContainer.appendChild(dateHeader);
+          
+          // 按学科分组
+          const tasksByCategory = plan.allocations.reduce((acc, task) => {
+            const category = task.category || '其他';
+            if (!acc[category]) {
+              acc[category] = [];
+            }
+            acc[category].push(task);
+            return acc;
+          }, {} as { [key: string]: any[] });
+          
+          // 学科排序顺序
+          const categoryOrder: { [key: string]: number } = {
+            'school': 0,    // 校内作业
+            'advanced': 1,  // 拔高
+            'extra': 2,     // 课外
+            'chinese': 3,   // 语文
+            'english': 4,   // 英语
+            'sports': 5,    // 体育
+            '其他': 6
+          };
+          
+          // 学科中文名称
+          const categoryNames: { [key: string]: string } = {
+            'school': '校内作业',
+            'advanced': '拔高训练',
+            'extra': '课外课程',
+            'chinese': '语文阅读',
+            'english': '英语学习',
+            'sports': '体育任务',
+            '其他': '其他任务'
+          };
+          
+          // 转换为排序后的数组
+          const sortedCategories = Object.entries(tasksByCategory)
+            .sort(([catA], [catB]) => (categoryOrder[catA] || 999) - (categoryOrder[catB] || 999));
+          
+          // 渲染分组和任务
+          sortedCategories.forEach(([category, tasks]) => {
+            const sortedTasks = tasks.sort((a, b) => a.taskName.localeCompare(b.taskName));
             
-            plan.allocations.forEach(task => {
-              const taskItem = document.createElement('li');
-              taskItem.style.padding = '8px 0';
-              taskItem.style.borderBottom = '1px solid #eeeeee';
-              taskItem.textContent = `${task.taskName} - ${task.category || '其他'}`;
-              taskList.appendChild(taskItem);
+            const categoryTitle = document.createElement('div');
+            categoryTitle.style.marginTop = '15px';
+            categoryTitle.style.marginBottom = '10px';
+            categoryTitle.style.fontWeight = 'bold';
+            categoryTitle.textContent = categoryNames[category as keyof typeof categoryNames] || category;
+            tempContainer.appendChild(categoryTitle);
+            
+            sortedTasks.forEach(taskItem => {
+              const taskRow = document.createElement('div');
+              taskRow.style.display = 'grid';
+              taskRow.style.gridTemplateColumns = '1fr repeat(7, 1fr)';
+              taskRow.style.gap = '10px';
+              taskRow.style.alignItems = 'center';
+              taskRow.style.padding = '8px 0';
+              taskRow.style.borderBottom = '1px solid #e5e7eb';
+              
+              const taskNameCell = document.createElement('div');
+              taskNameCell.style.padding = '0 5px';
+              taskNameCell.textContent = taskItem.taskName;
+              taskRow.appendChild(taskNameCell);
+              
+              // 转换后端索引到前端索引
+              const getFrontendDayIndex = (backendIndex: number) => {
+                if (backendIndex === 0) return 6; // 周日
+                return backendIndex - 1; // 其他日期
+              };
+              
+              // 转换前端索引到后端索引
+              const getBackendDayIndex = (frontendIndex: number) => {
+                if (frontendIndex === 6) return 0; // 周日
+                return frontendIndex + 1; // 其他日期
+              };
+              
+              // 根据assignedDays判断任务是否在指定日期分配
+              const isTaskAssignedOnDay = (frontendDayIndex: number) => {
+                const backendIndex = getBackendDayIndex(frontendDayIndex);
+                return taskItem.assignedDays && taskItem.assignedDays.includes(backendIndex);
+              };
+              
+              // 获取颜色
+              const getDotColor = (frontendIndex: number) => {
+                const isAssigned = isTaskAssignedOnDay(frontendIndex);
+                if (!isAssigned) return '#e5e7eb';
+                
+                // 根据 category 分配颜色
+                const category = taskItem.category || 'other';
+                const categoryStr = typeof category === 'string' ? category.toLowerCase() : 'other';
+                
+                switch (categoryStr) {
+                  case 'chinese': return '#10b981';
+                  case 'english': return '#f97316';
+                  case 'sports': return '#eab308';
+                  case 'school': return '#3b82f6';
+                  case 'advanced': return '#6366f1';
+                  case 'extra': return '#8b5cf6';
+                  default: return '#6b7280';
+                }
+              };
+              
+              weekDays.forEach((_, i) => {
+                const dayCell = document.createElement('div');
+                dayCell.style.display = 'flex';
+                dayCell.style.justifyContent = 'center';
+                dayCell.style.alignItems = 'center';
+                dayCell.style.height = '30px';
+                
+                const dot = document.createElement('div');
+                dot.style.width = '12px';
+                dot.style.height = '12px';
+                dot.style.borderRadius = '50%';
+                dot.style.backgroundColor = getDotColor(i);
+                dot.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+                
+                dayCell.appendChild(dot);
+                taskRow.appendChild(dayCell);
+              });
+              
+              tempContainer.appendChild(taskRow);
             });
-            
-            tempContainer.appendChild(taskList);
-          } else {
-            const noTask = document.createElement('p');
-            noTask.style.color = '#999999';
-            noTask.textContent = '该周暂无任务安排';
-            tempContainer.appendChild(noTask);
-          }
+          });
         });
       } else {
         const noPlan = document.createElement('p');
-        noPlan.style.color = '#999999';
+        noPlan.style.color = '#6b7280';
         noPlan.style.textAlign = 'center';
         noPlan.textContent = '暂无计划数据';
         tempContainer.appendChild(noPlan);
       }
       
       // 将临时容器添加到页面
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '-9999px';
       document.body.appendChild(tempContainer);
       
-      // 使用最基本的配置进行渲染
+      // 使用基本配置进行渲染
       const canvas = await html2canvas(tempContainer, {
         scale: 2,
         backgroundColor: '#ffffff',
