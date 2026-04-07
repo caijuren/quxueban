@@ -43,7 +43,7 @@ interface PublishPlanDialogProps {
 const RULE_OPTIONS = [
   { id: 'daily', label: '每日任务', desc: '每天1次，周一至周日（7天）', frequency: 7 },
   { id: 'school', label: '在校日任务', desc: '每周4次，周一/二/四/五（避开周三）', frequency: 4 },
-  { id: 'flexible', label: '灵活周任务', desc: '智能分配3次，周一至周五均匀分散', frequency: 3 },
+  { id: 'flexible', label: '智能分配', desc: '智能分配3次，周一至周五均匀分散', frequency: 3 },
   { id: 'weekend', label: '周末任务', desc: '每周2次，周六和周日', frequency: 2 },
 ];
 
@@ -114,15 +114,81 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
     tasks.forEach(t => { initial[t.id] = t.scheduleRule || 'daily'; });
     return initial;
   });
-  const [batchRule, setBatchRule] = useState<string>(() => {
-    const counts: Record<string, number> = {};
-    tasks.forEach(t => { const r = t.scheduleRule || 'daily'; counts[r] = (counts[r] || 0) + 1; });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'daily';
-  });
+  const [batchRule, setBatchRule] = useState<string>('daily');
   const [shuffleSeed, setShuffleSeed] = useState(0);
   const [skipHolidays, setSkipHolidays] = useState(true);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
+  const [selectedWeek, setSelectedWeek] = useState<string>('next'); // 'this', 'next', 'custom'
+  const [customWeekStart, setCustomWeekStart] = useState<Date>(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }));
+
+  // Fetch user configuration
+  const { data: configData, isLoading: configLoading } = useQuery({
+    queryKey: ['user-config'],
+    queryFn: async () => {
+      const response = await apiClient.get('/auth/config');
+      return response.data.data;
+    },
+    enabled: open,
+  });
+
+  // Save user configuration
+  const saveConfigMutation = useMutation({
+    mutationFn: async (config: any) => {
+      const response = await apiClient.post('/auth/config', config);
+      return response.data;
+    },
+  });
+
+  // Load configuration when dialog opens
+  useEffect(() => {
+    if (open && configData?.publishSettings) {
+      const settings = configData.publishSettings;
+      if (settings.batchRule) {
+        setBatchRule(settings.batchRule);
+      }
+      if (settings.taskRules) {
+        setTaskRules(settings.taskRules);
+      }
+      if (settings.skipHolidays !== undefined) {
+        setSkipHolidays(settings.skipHolidays);
+      }
+    } else if (open) {
+      // Default values
+      const initialRules: Record<number, string> = {};
+      tasks.forEach(t => { initialRules[t.id] = t.scheduleRule || 'daily'; });
+      setTaskRules(initialRules);
+      
+      const counts: Record<string, number> = {};
+      tasks.forEach(t => { const r = t.scheduleRule || 'daily'; counts[r] = (counts[r] || 0) + 1; });
+      const mostCommonRule = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'daily';
+      setBatchRule(mostCommonRule);
+    }
+  }, [open, configData, tasks]);
+
+  // Save configuration when it changes (debounced)
+  useEffect(() => {
+    // 只在对话框打开且配置加载完成后保存一次
+    if (open && !configLoading && configData) {
+      const configToSave = {
+        publishSettings: {
+          batchRule,
+          taskRules,
+          skipHolidays,
+        },
+      };
+      
+      // 防止无限循环：只有当配置确实发生变化时才保存
+      if (JSON.stringify(configToSave) !== JSON.stringify(configData?.publishSettings)) {
+        // 使用 setTimeout 避免立即触发状态更新
+        const timer = setTimeout(() => {
+          saveConfigMutation.mutate(configToSave);
+        }, 500);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [open, configLoading, configData]); // 移除状态依赖，避免无限循环
 
   const queryClient = useQueryClient();
 
@@ -134,25 +200,36 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
     },
   });
 
-  // 获取下周的节假日
+  // 获取当前选中周的开始日期
+  const getSelectedWeekStart = () => {
+    if (selectedWeek === 'this') {
+      return startOfWeek(new Date(), { weekStartsOn: 1 });
+    } else if (selectedWeek === 'next') {
+      return startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
+    } else {
+      return customWeekStart;
+    }
+  };
+
+  // 获取选中周的节假日
   useEffect(() => {
     if (open && step === 3 && skipHolidays) {
-      const nextWeekStart = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
-      const nextWeekEnd = new Date(nextWeekStart);
-      nextWeekEnd.setDate(nextWeekEnd.getDate() + 6);
+      const weekStart = getSelectedWeekStart();
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
       
-      fetchHolidays(nextWeekStart, nextWeekEnd).then(data => {
+      fetchHolidays(weekStart, weekEnd).then(data => {
         setHolidays(data);
         const holidaySet = new Set(data.filter(h => h.isHoliday).map(h => h.date));
         setHolidayDates(holidaySet);
       });
     }
-  }, [open, step, skipHolidays]);
+  }, [open, step, skipHolidays, selectedWeek, customWeekStart]);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
-      const nextWeek = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
-      const weekNo = format(nextWeek, 'yyyy-ww');
+      const selectedWeekStart = getSelectedWeekStart();
+      const weekNo = format(selectedWeekStart, 'yyyy-ww');
       
       const rules: Record<number, string> = {};
       selectedTasks.forEach(taskId => {
@@ -231,12 +308,12 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
     const schedule: { day: string; date: string; tasks: string[]; overloaded: boolean; isHoliday: boolean; holidayName?: string }[] = [];
     const dayMinutes = [0, 0, 0, 0, 0, 0, 0];
 
-    const nextWeekStart = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
+    const selectedWeekStart = getSelectedWeekStart();
 
     // 计算每天的可用状态
     const dayAvailable: boolean[] = [];
     for (let i = 0; i < 7; i++) {
-      const currentDate = new Date(nextWeekStart);
+      const currentDate = new Date(selectedWeekStart);
       currentDate.setDate(currentDate.getDate() + i);
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       
@@ -266,7 +343,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
         });
       }
       else if (rule === 'school') {
-        [1,2,4,5].forEach(d => {
+        [0,1,3,4].forEach(d => {
           if (dayAvailable[d]) dayMinutes[d] += task.timePerUnit;
         });
       }
@@ -292,7 +369,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
 
     // 生成预览
     for (let i = 0; i < 7; i++) {
-      const currentDate = new Date(nextWeekStart);
+      const currentDate = new Date(selectedWeekStart);
       currentDate.setDate(currentDate.getDate() + i);
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       
@@ -385,64 +462,110 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
           <AnimatePresence mode='wait'>
             {/* Step 1: Select Tasks */}
             {step === 1 && (
-              <motion.div key='step1' initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className='flex gap-6'>
-                <div className='flex-1'>
-                  <div className='flex items-center justify-between mb-3'>
-                    <h3 className='font-medium text-gray-700'>任务库（{tasks.length}个）</h3>
-                    <div className='flex gap-2'>
-                      <Button size='sm' variant='outline' onClick={selectAllTasks}>全选</Button>
-                      <Button size='sm' variant='outline' onClick={clearTasks}>清空</Button>
+              <motion.div key='step1' initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                {/* 周次选择 */}
+                <div className='mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200'>
+                  <h3 className='font-medium text-gray-700 mb-3'>选择发布时间</h3>
+                  <div className='grid grid-cols-3 gap-3 mb-4'>
+                    <button 
+                      onClick={() => setSelectedWeek('this')} 
+                      className={cn('p-3 rounded-lg border-2 transition-all', 
+                        selectedWeek === 'this' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                      )}
+                    >
+                      <div className='font-medium text-gray-900'>本周</div>
+                      <div className='text-sm text-gray-500 mt-1'>{format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'MM/dd', { locale: zhCN })} - {format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'MM/dd', { locale: zhCN })}</div>
+                    </button>
+                    <button 
+                      onClick={() => setSelectedWeek('next')} 
+                      className={cn('p-3 rounded-lg border-2 transition-all', 
+                        selectedWeek === 'next' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                      )}
+                    >
+                      <div className='font-medium text-gray-900'>下周</div>
+                      <div className='text-sm text-gray-500 mt-1'>{format(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }), 'MM/dd', { locale: zhCN })} - {format(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }), 'MM/dd', { locale: zhCN })}</div>
+                    </button>
+                    <button 
+                      onClick={() => setSelectedWeek('custom')} 
+                      className={cn('p-3 rounded-lg border-2 transition-all', 
+                        selectedWeek === 'custom' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                      )}
+                    >
+                      <div className='font-medium text-gray-900'>自定义</div>
+                      <div className='text-sm text-gray-500 mt-1'>选择日期</div>
+                    </button>
+                  </div>
+                  {selectedWeek === 'custom' && (
+                    <div className='mt-3'>
+                      <label className='block text-sm font-medium text-gray-700 mb-1'>选择周一开始日期</label>
+                      <input 
+                        type='date' 
+                        value={format(customWeekStart, 'yyyy-MM-dd')} 
+                        onChange={(e) => setCustomWeekStart(startOfWeek(new Date(e.target.value), { weekStartsOn: 1 }))} 
+                        className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 outline-none'
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className='flex gap-6'>
+                  <div className='flex-1'>
+                    <div className='flex items-center justify-between mb-3'>
+                      <h3 className='font-medium text-gray-700'>任务库（{tasks.length}个）</h3>
+                      <div className='flex gap-2'>
+                        <Button size='sm' variant='outline' onClick={selectAllTasks}>全选</Button>
+                        <Button size='sm' variant='outline' onClick={clearTasks}>清空</Button>
+                      </div>
+                    </div>
+                    <div className='space-y-2 max-h-[300px] overflow-y-auto'>
+                      {tasks.map(task => (
+                        <label key={task.id} className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                          selectedTasks.includes(task.id) ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                        )}>
+                          <Checkbox checked={selectedTasks.includes(task.id)} onCheckedChange={() => toggleTask(task.id)} />
+                          <div className='flex-1'>
+                            <span className='font-medium text-gray-900'>{task.name}</span>
+                            <div className='flex gap-1 mt-1'>
+                              <Badge variant='secondary' className='text-xs'>{task.category}</Badge>
+                              {task.tags?.subject && <Badge variant='outline' className='text-xs'>{Array.isArray(task.tags.subject) ? task.tags.subject[0] : task.tags.subject}</Badge>}
+                            </div>
+                          </div>
+                          <span className='text-sm text-gray-500'>{task.timePerUnit}分钟</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
-                  <div className='space-y-2 max-h-[300px] overflow-y-auto'>
-                    {tasks.map(task => (
-                      <label key={task.id} className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
-                        selectedTasks.includes(task.id) ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
-                      )}>
-                        <Checkbox checked={selectedTasks.includes(task.id)} onCheckedChange={() => toggleTask(task.id)} />
-                        <div className='flex-1'>
-                          <span className='font-medium text-gray-900'>{task.name}</span>
-                          <div className='flex gap-1 mt-1'>
-                            <Badge variant='secondary' className='text-xs'>{task.category}</Badge>
-                            {task.tags?.subject && <Badge variant='outline' className='text-xs'>{Array.isArray(task.tags.subject) ? task.tags.subject[0] : task.tags.subject}</Badge>}
-                          </div>
-                        </div>
-                        <span className='text-sm text-gray-500'>{task.timePerUnit}分钟</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className='w-64 border-l pl-6'>
-                  <h3 className='font-medium text-gray-700 mb-3'>已选任务（{selectedTasks.length}个）</h3>
-                  <div className='space-y-2 max-h-[300px] overflow-y-auto'>
-                    {selectedTasks.length === 0 ? (
-                      <p className='text-sm text-gray-400 text-center py-8'>请选择任务</p>
-                    ) : (
-                      selectedTasks.map(taskId => {
-                        const task = tasks.find(t => t.id === taskId);
-                        if (!task) return null;
-                        return (
-                          <div key={taskId} className='flex items-center justify-between p-2 bg-gray-50 rounded-lg group'>
-                            <span className='text-sm text-gray-700 truncate flex-1'>{task.name}</span>
-                            {/* 任务一：删除按钮 */}
-                            <Button 
-                              size='sm' 
-                              variant='ghost' 
-                              className='h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity' 
-                              onClick={() => removeTask(taskId)}
-                              title='移除任务'
-                            >
-                              <Trash2 className='w-3.5 h-3.5' />
-                            </Button>
-                          </div>
-                        );
-                      })
+                  <div className='w-64 border-l pl-6'>
+                    <h3 className='font-medium text-gray-700 mb-3'>已选任务（{selectedTasks.length}个）</h3>
+                    <div className='space-y-2 max-h-[300px] overflow-y-auto'>
+                      {selectedTasks.length === 0 ? (
+                        <p className='text-sm text-gray-400 text-center py-8'>请选择任务</p>
+                      ) : (
+                        selectedTasks.map(taskId => {
+                          const task = tasks.find(t => t.id === taskId);
+                          if (!task) return null;
+                          return (
+                            <div key={taskId} className='flex items-center justify-between p-2 bg-gray-50 rounded-lg group'>
+                              <span className='text-sm text-gray-700 truncate flex-1'>{task.name}</span>
+                              {/* 任务一：删除按钮 */}
+                              <Button 
+                                size='sm' 
+                                variant='ghost' 
+                                className='h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity' 
+                                onClick={() => removeTask(taskId)}
+                                title='移除任务'
+                              >
+                                <Trash2 className='w-3.5 h-3.5' />
+                              </Button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    {selectedTasks.length > 0 && (
+                      <p className='text-xs text-gray-400 mt-2 text-center'>共 {stats.totalMinutes} 分钟/周</p>
                     )}
                   </div>
-                  {selectedTasks.length > 0 && (
-                    <p className='text-xs text-gray-400 mt-2 text-center'>共 {stats.totalMinutes} 分钟/周</p>
-                  )}
                 </div>
               </motion.div>
             )}
@@ -534,7 +657,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
             {step === 3 && (
               <motion.div key='step3' initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                 <div className='flex items-center justify-between mb-3'>
-                  <h3 className='font-medium text-gray-700'>下周预览（{format(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }), 'MM月dd日', { locale: zhCN })} 起）</h3>
+                  <h3 className='font-medium text-gray-700'>{selectedWeek === 'this' ? '本周' : selectedWeek === 'next' ? '下周' : '自定义周'}预览（{format(getSelectedWeekStart(), 'MM月dd日', { locale: zhCN })} 起）</h3>
                   <button onClick={() => setShuffleSeed(s => s + 1)} className='flex items-center gap-1.5 text-sm text-purple-600 hover:text-purple-700 font-medium px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors'>
                     <RefreshCw className='w-4 h-4' />
                     重新生成排期

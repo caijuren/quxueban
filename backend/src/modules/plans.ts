@@ -345,7 +345,6 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
     where: {
       familyId,
       weekNo,
-      status: 'active',
     },
     include: {
       task: true,
@@ -370,12 +369,58 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
       weekStartDate: weekStart,
       allocations: childPlans.map(p => {
         const weeklyRule = p.task.weeklyRule as { days?: number[] } | null
+        let assignedDays: number[] = []
+        
+        // 获取任务的 scheduleRule
+        const taskTags = p.task.tags as any || {}
+        const taskWeeklyRule = p.task.weeklyRule as any || {}
+        const scheduleRule = p.task.scheduleRule || taskTags.scheduleRule || taskWeeklyRule.scheduleRule
+        
+        // 优先使用数据库中存储的 daysAllocated
+        if (p.daysAllocated) {
+          try {
+            // 尝试解析 JSON 字符串
+            const parsedDays = typeof p.daysAllocated === 'string' ? JSON.parse(p.daysAllocated) : p.daysAllocated;
+            if (Array.isArray(parsedDays)) {
+              assignedDays = parsedDays;
+            }
+          } catch (e) {
+            console.error('Failed to parse daysAllocated:', e);
+          }
+        } else if (weeklyRule?.days && weeklyRule.days.length > 0) {
+          assignedDays = weeklyRule.days
+        } else if (scheduleRule === 'daily') {
+          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
+        } else if (scheduleRule === 'school') {
+          assignedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（不包含周三）
+        } else if (scheduleRule === 'weekend') {
+          assignedDays = [5, 6] // 周六和周日
+        } else if (scheduleRule === 'flexible') {
+          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 周一到周日
+        } else {
+          assignedDays = [0, 1, 2, 3, 4, 5, 6]
+        }
+        
+        // 确保 subject 是字符串类型
+        let subject = 'other'
+        if (p.task.tags && typeof p.task.tags === 'object') {
+          subject = (p.task.tags as any).subject || 'other'
+        } else if (p.task.subject) {
+          subject = p.task.subject
+        }
+        
         return {
           taskId: String(p.taskId),
           taskName: p.task.name,
           category: p.task.category,
           timePerUnit: p.task.timePerUnit,
-          assignedDays: weeklyRule?.days || [0, 1, 2, 3, 4, 5, 6],
+          assignedDays: assignedDays,
+          subject: subject,
+          difficulty: (p.task.tags as any)?.difficulty || p.task.difficulty,
+          isTemporary: false,
+          scheduleRule: p.task.scheduleRule,
+          target: p.target,
+          progress: p.progress,
         }
       }),
       dailyProgress: Array.from({ length: 7 }, (_, i) => ({
@@ -384,7 +429,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         total: childPlans.length,
       })),
     }
-  }).filter(plan => plan.allocations.length > 0)
+  })
 
   res.json({
     status: 'success',

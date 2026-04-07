@@ -18,10 +18,6 @@ export default defineConfig({
     port: 5173,
     allowedHosts: true,
     cors: true,
-    hmr: {
-        protocol: 'wss',
-        host: `5173-${process.env.X_IDE_SPACE_KEY}.e2b.${process.env.X_IDE_SPACE_REGION}.${process.env.X_IDE_SPACE_HOST}`
-    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

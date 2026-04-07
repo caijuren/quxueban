@@ -95,6 +95,7 @@ export default function ChildrenPage() {
   const [customAvatar, setCustomAvatar] = useState<string | null>(null);
   const [avatarMode, setAvatarMode] = useState<'preset' | 'custom'>('preset');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentChildId, setCurrentChildId] = useState<number | null>(null);
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -164,13 +165,16 @@ export default function ChildrenPage() {
 
   const openEditDialog = (child: Child) => {
     setEditingChild(child);
+    setCurrentChildId(child.id);
     const avatar = child.avatar || '🦊';
     const isCustom = avatar.startsWith('data:') || avatar.startsWith('http');
     setAvatarMode(isCustom ? 'custom' : 'preset');
     if (isCustom) {
       setCustomAvatar(avatar);
+      setSelectedAvatar('🦊');
     } else {
       setSelectedAvatar(avatar);
+      setCustomAvatar(null);
     }
     reset({ name: child.name, avatar: avatar, pin: child.pin });
     setDialogOpen(true);
@@ -180,6 +184,7 @@ export default function ChildrenPage() {
     setDialogOpen(false);
     setEditingChild(null);
     setCustomAvatar(null);
+    setCurrentChildId(null);
     reset();
   };
 
@@ -215,14 +220,19 @@ export default function ChildrenPage() {
   };
 
   const onSubmit = (data: ChildFormData) => {
+    const currentChild = editingChild;
+    if (!currentChild || currentChild.id !== currentChildId) {
+      console.error('Child ID mismatch, aborting update');
+      return;
+    }
+    
     const avatar = avatarMode === 'custom' ? customAvatar : selectedAvatar;
     const submitData = { ...data, avatar: avatar || '🦊' };
     
-    if (editingChild) {
-      updateMutation.mutate({ id: editingChild.id, data: submitData });
-    } else {
-      createMutation.mutate(submitData);
-    }
+    console.log('Updating child:', currentChild.id, currentChild.name);
+    console.log('Submit data:', submitData);
+    
+    updateMutation.mutate({ id: currentChild.id, data: submitData });
   };
 
   const handleDelete = () => childToDelete && deleteMutation.mutate(childToDelete.id);

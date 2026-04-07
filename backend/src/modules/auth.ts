@@ -251,6 +251,7 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
       where: {
         familyId,
         name,
+        role: 'child',
         status: 'active',
       },
     })
@@ -427,6 +428,9 @@ authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: A
       name: true,
       avatar: true,
       createdAt: true,
+    },
+    orderBy: {
+      createdAt: 'asc',
     },
   })
   
@@ -628,4 +632,67 @@ authRouter.delete('/children/:id', authMiddleware, requireRole('parent'), async 
     console.error('Delete child error:', error)
     throw new AppError(500, `删除失败: ${error.message}`)
   }
+})
+
+/**
+ * GET /config - Get user configuration
+ * Auth required, parent only
+ */
+authRouter.get('/config', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const config = family.settings as any || {}
+
+  res.json({
+    status: 'success',
+    data: {
+      publishSettings: config.publishSettings || {},
+    },
+  })
+})
+
+/**
+ * POST /config - Update user configuration
+ * Auth required, parent only
+ */
+authRouter.post('/config', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const { publishSettings } = req.body
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = family.settings as any || {}
+  const updatedSettings = {
+    ...currentSettings,
+    publishSettings,
+  }
+
+  const updatedFamily = await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: updatedSettings,
+    },
+  })
+
+  res.json({
+    status: 'success',
+    message: '配置更新成功',
+    data: {
+      publishSettings: updatedFamily.settings.publishSettings,
+    },
+  })
 })

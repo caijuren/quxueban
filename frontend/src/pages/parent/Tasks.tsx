@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, X, Check, Calendar, Clock, Settings2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -17,9 +17,21 @@ import { cn } from '@/lib/utils';
 type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
 type TaskType = '固定' | '灵活' | '跟随学校';
 type ScheduleRule = 'daily' | 'school' | 'weekend' | 'flexible';
-type DisplayCategory = '校内任务' | '课外课程' | '阅读任务' | '体育运动';
 
-interface Task {
+// 映射对象
+const subjectReverseMap: Record<string, string> = {
+  'chinese': '语文',
+  'math': '数学',
+  'english': '英语',
+  'sports': '体育'
+};
+const parentRoleReverseMap: Record<string, string> = {
+  'independent': '独立完成',
+  'accompany': '家长陪伴',
+  'parent-led': '家长主导'
+};
+
+export interface Task {
   id: number;
   name: string;
   category: TaskCategory;
@@ -35,29 +47,20 @@ interface Task {
   appliesTo?: number[];
 }
 
-const displayCategories: DisplayCategory[] = ['校内任务', '课外课程', '阅读任务', '体育运动'];
-
-const schoolSubCategories: Record<string, { label: string; icon: any; gradient: string }> = {
-  '校内巩固': { label: '巩固', icon: BookOpen, gradient: 'from-rose-400 to-orange-400' },
-  '校内拔高': { label: '拔高', icon: Calculator, gradient: 'from-blue-400 to-cyan-400' },
-};
-
-const readingSubCategories: Record<string, { label: string; icon: any; gradient: string }> = {
-  '英语阅读': { label: '英语', icon: Languages, gradient: 'from-violet-400 to-purple-400' },
-  '中文阅读': { label: '中文', icon: BookMarked, gradient: 'from-pink-400 to-rose-400' },
-};
-
-const typeConfig: Record<TaskType, { label: string; gradient: string }> = {
-  '固定': { label: '固定任务', gradient: 'from-orange-400 to-amber-400' },
-  '灵活': { label: '灵活任务', gradient: 'from-blue-400 to-cyan-400' },
-  '跟随学校': { label: '跟随学校', gradient: 'from-emerald-400 to-teal-400' }
-};
-
-const scheduleRuleConfig: Record<ScheduleRule, { label: string; description: string }> = {
-  'daily': { label: '每天', description: '周一至周日' },
-  'school': { label: '在校日', description: '周一至周五' },
-  'weekend': { label: '周末', description: '周六、周日' },
-  'flexible': { label: '灵活', description: '自定义次数' },
+const tagConfig: Record<string, { icon: any; color: string }> = {
+  '校内巩固': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
+  '校内拔高': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
+  '课外课程': { icon: Star, color: 'bg-orange-100 text-orange-600' },
+  '英语阅读': { icon: BookMarked, color: 'bg-purple-100 text-purple-600' },
+  '中文阅读': { icon: BookMarked, color: 'bg-pink-100 text-pink-600' },
+  '体育运动': { icon: Dumbbell, color: 'bg-green-100 text-green-600' },
+  '语文': { icon: Languages, color: 'bg-red-100 text-red-600' },
+  '数学': { icon: Calculator, color: 'bg-blue-100 text-blue-600' },
+  '英语': { icon: Languages, color: 'bg-purple-100 text-purple-600' },
+  '体育': { icon: Dumbbell, color: 'bg-green-100 text-green-600' },
+  '独立完成': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
+  '家长陪伴': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
+  '家长主导': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
 };
 
 async function fetchTasks(): Promise<Task[]> {
@@ -81,7 +84,24 @@ export default function TasksPage() {
     timePerUnit: 30,
     scheduleRule: 'daily' as ScheduleRule,
     weeklyFrequency: 5,
+    subject: '语文' as string,
+    parentRole: '独立完成' as string,
+    difficulty: '基础' as string,
+    totalUnits: 0,
+    completedUnits: 0,
+    totalPages: 0,
+    completedPages: 0,
   });
+  // 使用localStorage存储当前选中的选项卡
+  const [activeTab, setActiveTab] = useState<'all' | 'subject' | 'type' | 'completion'>(() => {
+    const savedTab = localStorage.getItem('tasksActiveTab');
+    return (savedTab as 'all' | 'subject' | 'type' | 'completion') || 'all';
+  });
+
+  // 当选项卡变化时，保存到localStorage
+  useEffect(() => {
+    localStorage.setItem('tasksActiveTab', activeTab);
+  }, [activeTab]);
 
   const queryClient = useQueryClient();
   const { data: tasks = [], isLoading } = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks });
@@ -98,7 +118,30 @@ export default function TasksPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const r = await apiClient.post('/tasks', data);
+      const subjectMap: Record<string, string> = {
+        '语文': 'chinese',
+        '数学': 'math',
+        '英语': 'english',
+        '体育': 'sports'
+      };
+      const parentRoleMap: Record<string, string> = {
+        '独立完成': 'independent',
+        '家长陪伴': 'accompany',
+        '家长主导': 'parent-led'
+      };
+      const difficultyMap: Record<string, string> = {
+        '基础': 'basic',
+        '提高': 'advanced',
+        '挑战': 'challenge'
+      };
+      const r = await apiClient.post('/tasks', {
+        ...data,
+        tags: {
+          subject: subjectMap[data.subject],
+          parentRole: parentRoleMap[data.parentRole],
+          difficulty: difficultyMap[data.difficulty],
+        },
+      });
       return r.data;
     },
     onSuccess: () => {
@@ -112,7 +155,30 @@ export default function TasksPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: number; updates: Partial<Task> }) => {
-      const r = await apiClient.put('/tasks/' + data.id, data.updates);
+      const subjectMap: Record<string, string> = {
+        '语文': 'chinese',
+        '数学': 'math',
+        '英语': 'english',
+        '体育': 'sports'
+      };
+      const parentRoleMap: Record<string, string> = {
+        '独立完成': 'independent',
+        '家长陪伴': 'accompany',
+        '家长主导': 'parent-led'
+      };
+      const difficultyMap: Record<string, string> = {
+        '基础': 'basic',
+        '提高': 'advanced',
+        '挑战': 'challenge'
+      };
+      const r = await apiClient.put('/tasks/' + data.id, {
+        ...data.updates,
+        tags: {
+          subject: subjectMap[data.updates.tags?.subject as string] || data.updates.tags?.subject,
+          parentRole: parentRoleMap[data.updates.tags?.parentRole as string] || data.updates.tags?.parentRole,
+          difficulty: difficultyMap[data.updates.tags?.difficulty as string] || data.updates.tags?.difficulty,
+        },
+      });
       return r.data;
     },
     onSuccess: () => {
@@ -131,6 +197,13 @@ export default function TasksPage() {
       timePerUnit: 30,
       scheduleRule: 'daily',
       weeklyFrequency: 5,
+      subject: '语文',
+      parentRole: '独立完成',
+      difficulty: '基础',
+      totalUnits: 0,
+      completedUnits: 0,
+      totalPages: 0,
+      completedPages: 0,
     });
   };
 
@@ -143,6 +216,13 @@ export default function TasksPage() {
       timePerUnit: task.timePerUnit,
       scheduleRule: (task.scheduleRule as ScheduleRule) || 'daily',
       weeklyFrequency: task.weeklyFrequency || 5,
+      subject: task.tags?.subject || '语文',
+      parentRole: task.tags?.parentRole || '独立完成',
+      difficulty: task.tags?.difficulty || '基础',
+      totalUnits: 0,
+      completedUnits: 0,
+      totalPages: 0,
+      completedPages: 0,
     });
     setEditDialogOpen(true);
   };
@@ -160,142 +240,460 @@ export default function TasksPage() {
       toast.error('请输入任务名称');
       return;
     }
-    updateMutation.mutate({ id: taskToEdit.id, updates: formData });
+    const subjectMap: Record<string, string> = {
+      '语文': 'chinese',
+      '数学': 'math',
+      '英语': 'english',
+      '体育': 'sports'
+    };
+    const parentRoleMap: Record<string, string> = {
+      '独立完成': 'independent',
+      '家长陪伴': 'accompany',
+      '家长主导': 'parent-led'
+    };
+    const difficultyMap: Record<string, string> = {
+      '基础': 'basic',
+      '提高': 'advanced',
+      '挑战': 'challenge'
+    };
+    updateMutation.mutate({ 
+      id: taskToEdit.id, 
+      updates: {
+        ...formData,
+        tags: {
+          subject: subjectMap[formData.subject],
+          parentRole: parentRoleMap[formData.parentRole],
+          difficulty: difficultyMap[formData.difficulty],
+        },
+      }
+    });
   };
 
-  const getCategoryTasks = (displayCat: DisplayCategory): Task[] => {
-    const mapping: Record<DisplayCategory, TaskCategory[]> = {
-      '校内任务': ['校内巩固', '校内拔高'],
-      '课外课程': ['课外课程'],
-      '阅读任务': ['英语阅读', '中文阅读'],
-      '体育运动': ['体育运动'],
+  const getSubjectGroups = () => {
+    const subjectReverseMap: Record<string, string> = {
+      'chinese': '语文',
+      'math': '数学',
+      'english': '英语',
+      'sports': '体育'
     };
-    return tasks.filter(t => mapping[displayCat].includes(t.category));
+    const subjects = ['语文', '数学', '英语', '体育'];
+    return subjects.map(subject => {
+      const subjectKey = Object.keys(subjectReverseMap).find(key => subjectReverseMap[key] === subject) || subject;
+      const subjectTasks = tasks.filter(task => {
+        const taskSubject = task.tags?.subject;
+        if (taskSubject) {
+          return taskSubject === subject || taskSubject === subjectKey;
+        }
+        return false;
+      });
+      return { subject, tasks: subjectTasks };
+    }).filter(group => group.tasks.length > 0);
   };
 
-  const getSubCategoryConfig = (cat: TaskCategory) => {
-    return schoolSubCategories[cat] || readingSubCategories[cat] || {
-      label: cat.replace('课程', ''),
-      icon: cat === '体育运动' ? Dumbbell : GraduationCap,
-      gradient: 'from-emerald-400 to-teal-400'
+  const getTypeGroups = () => {
+    const types = ['校内巩固', '校内拔高', '课外课程', '英语阅读', '中文阅读', '体育运动'];
+    return types.map(type => {
+      const typeTasks = tasks.filter(task => task.category === type);
+      return { type, tasks: typeTasks };
+    }).filter(group => group.tasks.length > 0);
+  };
+
+  const getCompletionGroups = () => {
+    const parentRoleReverseMap: Record<string, string> = {
+      'independent': '独立完成',
+      'accompany': '家长陪伴',
+      'parent-led': '家长主导'
     };
+    const completionTypes = ['独立完成', '家长陪伴', '家长主导'];
+    return completionTypes.map(type => {
+      const typeKey = Object.keys(parentRoleReverseMap).find(key => parentRoleReverseMap[key] === type) || type;
+      const typeTasks = tasks.filter(task => {
+        const taskRole = task.tags?.parentRole;
+        if (taskRole) {
+          return taskRole === type || taskRole === typeKey;
+        }
+        return false;
+      });
+      return { type, tasks: typeTasks };
+    }).filter(group => group.tasks.length > 0);
+  };
+
+  const renderTags = (task: Task) => {
+    const subjectReverseMap: Record<string, string> = {
+      'chinese': '语文',
+      'math': '数学',
+      'english': '英语',
+      'sports': '体育'
+    };
+    const parentRoleReverseMap: Record<string, string> = {
+      'independent': '独立完成',
+      'accompany': '家长陪伴',
+      'parent-led': '家长主导'
+    };
+    const tags: string[] = [task.category];
+    if (task.tags?.subject) {
+      const subject = subjectReverseMap[task.tags.subject as string] || task.tags.subject;
+      tags.push(subject);
+    }
+    if (task.tags?.parentRole) {
+      const parentRole = parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole;
+      tags.push(parentRole);
+    }
+    return tags.map(tag => {
+      const config = tagConfig[tag];
+      const Icon = config?.icon || BookOpen;
+      return (
+        <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+          <Icon className="w-3 h-3" />
+          {tag}
+        </span>
+      );
+    });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">任务配置</h1>
-            <p className="text-gray-500 mt-1">配置学习任务和计划规则</p>
-          </div>
-          <Button
-            onClick={() => { resetForm(); setCreateDialogOpen(true); }}
-            className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-lg"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            新建任务
-          </Button>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">任务配置</h1>
+          <p className="text-gray-500 mt-1">管理学习任务的模板和分类</p>
         </div>
+        <Button
+          onClick={() => { resetForm(); setCreateDialogOpen(true); }}
+          className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+        >
+          <Plus className="size-4 mr-2" />
+          新建任务
+        </Button>
+      </div>
 
-        {/* Task Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <Skeleton key={i} className="h-64 rounded-2xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {displayCategories.map(displayCat => {
-              const categoryTasks = getCategoryTasks(displayCat);
-              return (
+      {/* Tabs */}
+      <div className="flex gap-4 mb-6">
+        <Button
+          variant="default"
+          onClick={() => setActiveTab('all')}
+          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'all' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+        >
+          全部任务
+        </Button>
+        <Button
+          variant="default"
+          onClick={() => setActiveTab('subject')}
+          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'subject' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+        >
+          按学科
+        </Button>
+        <Button
+          variant="default"
+          onClick={() => setActiveTab('type')}
+          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'type' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+        >
+          按类型
+        </Button>
+        <Button
+          variant="default"
+          onClick={() => setActiveTab('completion')}
+          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'completion' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+        >
+          完成方式
+        </Button>
+      </div>
+      {/* Task Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <Skeleton key={i} className="h-40 rounded-2xl" />
+          ))}
+        </div>
+      ) : (
+        <div>
+          {/* All Tasks */}
+          {activeTab === 'all' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tasks.map(task => (
                 <motion.div
-                  key={displayCat}
+                  key={task.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden"
+                  className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
                 >
-                  <div className="bg-gradient-to-r from-indigo-500 to-purple-500 px-4 py-3">
-                    <h2 className="text-white font-semibold">{displayCat}</h2>
-                    <p className="text-white/70 text-sm">{categoryTasks.length} 个任务</p>
-                  </div>
-                  <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
-                    <AnimatePresence>
-                      {categoryTasks.length === 0 ? (
-                        <p className="text-gray-400 text-center py-4">暂无任务</p>
-                      ) : (
-                        categoryTasks.map(task => {
-                          const config = getSubCategoryConfig(task.category);
-                          const Icon = config.icon;
-                          return (
-                            <motion.div
-                              key={task.id}
-                              initial={{ opacity: 0, scale: 0.95 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.95 }}
-                              className={cn(
-                                "p-3 rounded-xl border border-gray-100 bg-gray-50/50",
-                                "hover:bg-gray-100/50 transition-colors group"
-                              )}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className={cn(
-                                    "w-8 h-8 rounded-lg flex items-center justify-center",
-                                    `bg-gradient-to-br ${config.gradient}`
-                                  )}>
-                                    <Icon className="w-4 h-4 text-white" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-gray-900 text-sm">{task.name}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <span className={cn(
-                                        "text-xs px-2 py-0.5 rounded-full",
-                                        `bg-gradient-to-r ${typeConfig[task.type].gradient} text-white`
-                                      )}>
-                                        {typeConfig[task.type].label}
-                                      </span>
-                                      <span className="text-xs text-gray-500 flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        {task.timePerUnit}分钟
-                                      </span>
-                                    </div>
-                                    {task.scheduleRule && (
-                                      <span className="text-xs text-gray-400 mt-1 block">
-                                        {scheduleRuleConfig[task.scheduleRule as ScheduleRule]?.label}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => handleEdit(task)}
-                                    className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                    className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            </motion.div>
-                          );
-                        })
-                      )}
-                    </AnimatePresence>
+                  <div className="p-4">
+                    <div className="flex items-start gap-4">
+                      {/* 左侧图标 */}
+                      <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
+                        {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                        {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                        {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                        {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                        {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                        {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                      </div>
+                      
+                      {/* 任务内容 */}
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {task.category && (
+                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                              {task.category}
+                            </span>
+                          )}
+                          {task.tags?.subject && (
+                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                              {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
+                            </span>
+                          )}
+                          {task.tags?.parentRole && (
+                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                              {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* 操作按钮 */}
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleEdit(task)}
+                          className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
+                          className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+
+          {/* By Subject */}
+          {activeTab === 'subject' && (
+            <div className="space-y-8">
+              {getSubjectGroups().map(group => (
+                <div key={group.subject}>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">{group.subject} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {group.tasks.map(task => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                      >
+                        <div className="p-4">
+                          <div className="flex items-start gap-4">
+                            {/* 左侧图标 */}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                            </div>
+                            
+                            {/* 任务内容 */}
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-2">
+                                {task.category && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                    {task.category}
+                                  </span>
+                                )}
+                                {task.tags?.subject && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
+                                  </span>
+                                )}
+                                {task.tags?.parentRole && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* 操作按钮 */}
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handleEdit(task)}
+                                className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
+                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* By Type */}
+          {activeTab === 'type' && (
+            <div className="space-y-8">
+              {getTypeGroups().map(group => (
+                <div key={group.type}>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">{group.type} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {group.tasks.map(task => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                      >
+                        <div className="p-4">
+                          <div className="flex items-start gap-4">
+                            {/* 左侧图标 */}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                            </div>
+                            
+                            {/* 任务内容 */}
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-2">
+                                {task.category && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                    {task.category}
+                                  </span>
+                                )}
+                                {task.tags?.subject && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
+                                  </span>
+                                )}
+                                {task.tags?.parentRole && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* 操作按钮 */}
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handleEdit(task)}
+                                className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
+                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* By Completion */}
+          {activeTab === 'completion' && (
+            <div className="space-y-8">
+              {getCompletionGroups().map(group => (
+                <div key={group.type}>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">{group.type} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {group.tasks.map(task => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                      >
+                        <div className="p-4">
+                          <div className="flex items-start gap-4">
+                            {/* 左侧图标 */}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                            </div>
+                            
+                            {/* 任务内容 */}
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-2">
+                                {task.category && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                    {task.category}
+                                  </span>
+                                )}
+                                {task.tags?.subject && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
+                                  </span>
+                                )}
+                                {task.tags?.parentRole && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* 操作按钮 */}
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handleEdit(task)}
+                                className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
+                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -320,82 +718,269 @@ export default function TasksPage() {
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>新建任务</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-gray-900">新建任务</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* 任务名称 */}
             <div className="space-y-2">
-              <Label>任务名称</Label>
+              <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
               <Input
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                placeholder="输入任务名称"
+                placeholder="请输入任务名称"
+                required
+                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>分类</Label>
-                <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v as TaskCategory })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="校内巩固">校内巩固</SelectItem>
-                    <SelectItem value="校内拔高">校内拔高</SelectItem>
-                    <SelectItem value="课外课程">课外课程</SelectItem>
-                    <SelectItem value="英语阅读">英语阅读</SelectItem>
-                    <SelectItem value="中文阅读">中文阅读</SelectItem>
-                    <SelectItem value="体育运动">体育运动</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            {/* 分配规则 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">分配规则</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  每周任务
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  在校日任务
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  周末任务
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  智能分配
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>类型</Label>
-                <Select value={formData.type} onValueChange={v => setFormData({ ...formData, type: v as TaskType })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="固定">固定</SelectItem>
-                    <SelectItem value="灵活">灵活</SelectItem>
-                    <SelectItem value="跟随学校">跟随学校</SelectItem>
-                  </SelectContent>
-                </Select>
+              {formData.scheduleRule === 'flexible' && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700">每周次数</Label>
+                  <Input
+                    type="number"
+                    value={formData.weeklyFrequency}
+                    onChange={e => setFormData({ ...formData, weeklyFrequency: parseInt(e.target.value) || 1 })}
+                    className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 任务分类 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">任务分类</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={formData.category === '校内巩固' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '校内巩固' })}
+                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  校内巩固
+                </Button>
+                <Button
+                  variant={formData.category === '校内拔高' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '校内拔高' })}
+                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  校内拔高
+                </Button>
+                <Button
+                  variant={formData.category === '课外课程' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '课外课程' })}
+                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  课外课程
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={formData.category === '中文阅读' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '中文阅读' })}
+                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  中文阅读
+                </Button>
+                <Button
+                  variant={formData.category === '英语阅读' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '英语阅读' })}
+                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  英文阅读
+                </Button>
+                <Button
+                  variant={formData.category === '体育运动' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '体育运动' })}
+                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  体育锻炼
+                </Button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>时长（分钟）</Label>
-                <Input
-                  type="number"
-                  value={formData.timePerUnit}
-                  onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>安排规则</Label>
-                <Select value={formData.scheduleRule} onValueChange={v => setFormData({ ...formData, scheduleRule: v as ScheduleRule })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">每天</SelectItem>
-                    <SelectItem value="school">在校日</SelectItem>
-                    <SelectItem value="weekend">周末</SelectItem>
-                    <SelectItem value="flexible">灵活</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            {/* 单项任务时长 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">单项任务时长（分钟）</Label>
+              <Input
+                type="number"
+                value={formData.timePerUnit}
+                onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
+                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* 学科 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">学科</Label>
+              <div className="grid grid-cols-4 gap-2">
+                <Button
+                  variant={formData.subject === '语文' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '语文' })}
+                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  语文
+                </Button>
+                <Button
+                  variant={formData.subject === '数学' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '数学' })}
+                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  数学
+                </Button>
+                <Button
+                  variant={formData.subject === '英语' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '英语' })}
+                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  英语
+                </Button>
+                <Button
+                  variant={formData.subject === '体育' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '体育' })}
+                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  体育
+                </Button>
               </div>
             </div>
-            {formData.scheduleRule === 'flexible' && (
-              <div className="space-y-2">
-                <Label>每周次数</Label>
+
+            {/* 完成方式 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">完成方式</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
+                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  自主完成
+                </Button>
+                <Button
+                  variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
+                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  家长陪伴
+                </Button>
+                <Button
+                  variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
+                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  家长主导
+                </Button>
+              </div>
+            </div>
+
+            {/* 任务难度 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">任务难度</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={formData.difficulty === '基础' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, difficulty: '基础' })}
+                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  基础
+                </Button>
+                <Button
+                  variant={formData.difficulty === '提高' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, difficulty: '提高' })}
+                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  提高
+                </Button>
+                <Button
+                  variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
+                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  挑战
+                </Button>
+              </div>
+            </div>
+
+            {/* 总单元数 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">总单元数</Label>
+              <div className="flex gap-4">
                 <Input
                   type="number"
-                  value={formData.weeklyFrequency}
-                  onChange={e => setFormData({ ...formData, weeklyFrequency: parseInt(e.target.value) || 1 })}
+                  value={formData.totalUnits}
+                  onChange={e => setFormData({ ...formData, totalUnits: parseInt(e.target.value) || 0 })}
+                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">已完成：</span>
+                  <Input
+                    type="number"
+                    value={formData.completedUnits}
+                    onChange={e => setFormData({ ...formData, completedUnits: parseInt(e.target.value) || 0 })}
+                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* 总页数 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">总页数</Label>
+              <div className="flex gap-4">
+                <Input
+                  type="number"
+                  value={formData.totalPages}
+                  onChange={e => setFormData({ ...formData, totalPages: parseInt(e.target.value) || 0 })}
+                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">已完成：</span>
+                  <Input
+                    type="number"
+                    value={formData.completedPages}
+                    onChange={e => setFormData({ ...formData, completedPages: parseInt(e.target.value) || 0 })}
+                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>取消</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending}>
+          <DialogFooter className="border-t border-gray-100 py-4">
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="rounded-xl border-gray-200 hover:bg-gray-50">取消</Button>
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
               {createMutation.isPending ? '创建中...' : '创建'}
             </Button>
           </DialogFooter>
@@ -404,71 +989,269 @@ export default function TasksPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>编辑任务</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-gray-900">编辑任务</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* 任务名称 */}
             <div className="space-y-2">
-              <Label>任务名称</Label>
+              <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
               <Input
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
+                placeholder="请输入任务名称"
+                required
+                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>分类</Label>
-                <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v as TaskCategory })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="校内巩固">校内巩固</SelectItem>
-                    <SelectItem value="校内拔高">校内拔高</SelectItem>
-                    <SelectItem value="课外课程">课外课程</SelectItem>
-                    <SelectItem value="英语阅读">英语阅读</SelectItem>
-                    <SelectItem value="中文阅读">中文阅读</SelectItem>
-                    <SelectItem value="体育运动">体育运动</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            {/* 分配规则 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">分配规则</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  每周任务
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  在校日任务
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  周末任务
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  智能分配
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>类型</Label>
-                <Select value={formData.type} onValueChange={v => setFormData({ ...formData, type: v as TaskType })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="固定">固定</SelectItem>
-                    <SelectItem value="灵活">灵活</SelectItem>
-                    <SelectItem value="跟随学校">跟随学校</SelectItem>
-                  </SelectContent>
-                </Select>
+              {formData.scheduleRule === 'flexible' && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700">每周次数</Label>
+                  <Input
+                    type="number"
+                    value={formData.weeklyFrequency}
+                    onChange={e => setFormData({ ...formData, weeklyFrequency: parseInt(e.target.value) || 1 })}
+                    className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 任务分类 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">任务分类</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={formData.category === '校内巩固' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '校内巩固' })}
+                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  校内巩固
+                </Button>
+                <Button
+                  variant={formData.category === '校内拔高' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '校内拔高' })}
+                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  校内拔高
+                </Button>
+                <Button
+                  variant={formData.category === '课外课程' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '课外课程' })}
+                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  课外课程
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={formData.category === '中文阅读' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '中文阅读' })}
+                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  中文阅读
+                </Button>
+                <Button
+                  variant={formData.category === '英语阅读' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '英语阅读' })}
+                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  英文阅读
+                </Button>
+                <Button
+                  variant={formData.category === '体育运动' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, category: '体育运动' })}
+                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  体育锻炼
+                </Button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>时长（分钟）</Label>
+
+            {/* 单项任务时长 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">单项任务时长（分钟）</Label>
+              <Input
+                type="number"
+                value={formData.timePerUnit}
+                onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
+                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* 学科 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">学科</Label>
+              <div className="grid grid-cols-4 gap-2">
+                <Button
+                  variant={formData.subject === '语文' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '语文' })}
+                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  语文
+                </Button>
+                <Button
+                  variant={formData.subject === '数学' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '数学' })}
+                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  数学
+                </Button>
+                <Button
+                  variant={formData.subject === '英语' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '英语' })}
+                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  英语
+                </Button>
+                <Button
+                  variant={formData.subject === '体育' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, subject: '体育' })}
+                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  体育
+                </Button>
+              </div>
+            </div>
+
+            {/* 完成方式 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">完成方式</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
+                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  自主完成
+                </Button>
+                <Button
+                  variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
+                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  家长陪伴
+                </Button>
+                <Button
+                  variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
+                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  家长主导
+                </Button>
+              </div>
+            </div>
+
+            {/* 任务难度 */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">任务难度</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={formData.difficulty === '基础' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, difficulty: '基础' })}
+                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  基础
+                </Button>
+                <Button
+                  variant={formData.difficulty === '提高' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, difficulty: '提高' })}
+                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  提高
+                </Button>
+                <Button
+                  variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
+                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  挑战
+                </Button>
+              </div>
+            </div>
+
+            {/* 总单元数 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">总单元数</Label>
+              <div className="flex gap-4">
                 <Input
                   type="number"
-                  value={formData.timePerUnit}
-                  onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
+                  value={formData.totalUnits}
+                  onChange={e => setFormData({ ...formData, totalUnits: parseInt(e.target.value) || 0 })}
+                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">已完成：</span>
+                  <Input
+                    type="number"
+                    value={formData.completedUnits}
+                    onChange={e => setFormData({ ...formData, completedUnits: parseInt(e.target.value) || 0 })}
+                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>安排规则</Label>
-                <Select value={formData.scheduleRule} onValueChange={v => setFormData({ ...formData, scheduleRule: v as ScheduleRule })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">每天</SelectItem>
-                    <SelectItem value="school">在校日</SelectItem>
-                    <SelectItem value="weekend">周末</SelectItem>
-                    <SelectItem value="flexible">灵活</SelectItem>
-                  </SelectContent>
-                </Select>
+            </div>
+
+            {/* 总页数 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">总页数</Label>
+              <div className="flex gap-4">
+                <Input
+                  type="number"
+                  value={formData.totalPages}
+                  onChange={e => setFormData({ ...formData, totalPages: parseInt(e.target.value) || 0 })}
+                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">已完成：</span>
+                  <Input
+                    type="number"
+                    value={formData.completedPages}
+                    onChange={e => setFormData({ ...formData, completedPages: parseInt(e.target.value) || 0 })}
+                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>取消</Button>
-            <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
+          <DialogFooter className="border-t border-gray-100 py-4">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl border-gray-200 hover:bg-gray-50">取消</Button>
+            <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
               {updateMutation.isPending ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>

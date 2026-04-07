@@ -44,7 +44,7 @@ interface TaskDetailProps {
   onRefresh: () => void;
 }
 
-const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const subjectLabel = (s: string | null) => s === 'chinese' ? '语文' : s === 'math' ? '数学' : s === 'english' ? '英语' : s === 'sports' ? '体育' : s || '其他';
 const subjectColor = (s: string | null) => s === 'chinese' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : s === 'math' ? 'bg-blue-100 text-blue-700 border-blue-200' : s === 'english' ? 'bg-purple-100 text-purple-700 border-purple-200' : s === 'sports' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-600 border-gray-200';
 const diffLabel = (d: string | null) => d === 'basic' ? '基础' : d === 'advanced' ? '提升' : d === 'challenge' ? '挑战' : '';
@@ -463,7 +463,16 @@ export default function PlansPage() {
 
   const goToCurrentWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
-  const weekDates = useMemo(() => weekDays.map((_, index) => addDays(currentWeekStart, index)), [currentWeekStart]);
+  const weekDates = useMemo(() => {
+    // 调整日期，使其与 weekDays 数组顺序一致（周日开始）
+    return weekDays.map((_, index) => {
+      // currentWeekStart 是周一开始，所以周日需要减 1 天
+      if (index === 0) {
+        return addDays(currentWeekStart, -1);
+      }
+      return addDays(currentWeekStart, index - 1);
+    });
+  }, [currentWeekStart]);
   const weekLabel = `${format(currentWeekStart, 'M月d日', { locale: zhCN })} - ${format(addDays(currentWeekStart, 6), 'M月d日', { locale: zhCN })}`;
 
   // 导出为 PNG
@@ -617,24 +626,56 @@ export default function PlansPage() {
                           );
                         })}
                       </div>
-                      {/* Task rows */}
-                      {plan.allocations.map((taskItem) => {
-                        const dotColor = taskItem.subject === 'chinese' ? 'bg-emerald-500' : taskItem.subject === 'math' ? 'bg-blue-500' : taskItem.subject === 'english' ? 'bg-orange-500' : taskItem.subject === 'sports' ? 'bg-yellow-500' : 'bg-gray-400';
+                      {/* 任务排序 */}
+                      {plan.allocations.sort((a, b) => {
+                        const categoryOrder = {
+                          '校内巩固': 0,
+                          '课外课程': 1,
+                          '中文阅读': 2,
+                          '英文阅读': 3,
+                          '体育任务': 4,
+                          '校内拔高': 5
+                        };
+                        return (categoryOrder[a.category] || 999) - (categoryOrder[b.category] || 999);
+                      }).map((taskItem) => {
+                        // 调试：打印 taskItem 结构
+                        console.log('Task item:', taskItem);
+                        const getDotColor = (dayIndex: number) => {
+                          const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(dayIndex);
+                          if (!isAssigned) return 'bg-gray-300';
+                          
+                          // 确保 subject 是字符串
+                          const subject = taskItem.subject || 'other';
+                          const subjectStr = typeof subject === 'string' ? subject.toLowerCase() : 'other';
+                          
+                          switch (subjectStr) {
+                            case 'chinese': return 'bg-emerald-500';
+                            case 'math': return 'bg-blue-500';
+                            case 'english': return 'bg-orange-500';
+                            case 'sports': return 'bg-yellow-500';
+                            default: return 'bg-purple-500';
+                          }
+                        };
+                        
                         return (
                           <div key={taskItem.taskId} className="grid grid-cols-8 gap-1 group/row">
                             <div className="p-2 flex items-center text-xs font-medium text-gray-700 truncate pr-2" title={taskItem.taskName}>
                               <span className="truncate">{taskItem.taskName}</span>
                             </div>
                             {weekDays.map((_, i) => {
-                              const isAssigned = taskItem.assignedDays.includes(i);
+                              const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(i);
                               const dayProgress = plan.dailyProgress.find(d => d.day === i);
                               const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
+                              const dotColor = getDotColor(i);
+                              
                               return (
                                 <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px]', isToday(weekDates[i]) && 'bg-purple-50/50')}>
-                                  {isAssigned && (
-                                    <div className="relative">
-                                      {taskItem.isTemporary ? (
-                                        <button onClick={() => setSelectedTask(taskItem)} className="text-lg hover:scale-125 transition-transform cursor-pointer" title={`${taskItem.taskName}`}>⚡</button>
+                                  <div className="relative">
+                                    {isAssigned ? (
+                                      taskItem.isTemporary ? (
+                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', 'bg-amber-500')} title={`${taskItem.taskName}`}>
+                                          <span className="text-white text-xs">⚡</span>
+                                        </button>
                                       ) : (
                                         <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : dotColor)} title={`${taskItem.taskName} - 点击查看详情`}>
                                           {isCompleted && <span className="text-white text-xs">✓</span>}
@@ -642,9 +683,11 @@ export default function PlansPage() {
                                             <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
                                           )}
                                         </button>
-                                      )}
-                                    </div>
-                                  )}
+                                      )
+                                    ) : (
+                                      <div className="w-6 h-6 rounded-full bg-gray-300 shadow-sm"></div>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}

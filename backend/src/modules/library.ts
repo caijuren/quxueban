@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
 import * as XLSX from 'xlsx'
+import fetch, { Response as FetchResponse } from 'node-fetch'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
@@ -362,5 +363,71 @@ libraryRouter.post('/import', upload.single('file'), async (req: AuthRequest, re
   } catch (error: any) {
     console.error('[IMPORT] Error:', error)
     throw new AppError(500, `导入失败: ${error.message}`)
+  }
+})
+
+/**
+ * GET /fetch-by-isbn/:isbn - Fetch book info by ISBN from Douban API
+ */
+libraryRouter.get('/fetch-by-isbn/:isbn', async (req: AuthRequest, res: Response) => {
+  const { isbn } = req.params
+
+  try {
+    // Call Douban API to get book info
+    const response = await fetch(`https://api.douban.com/v2/book/isbn/${isbn}`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch book info from Douban')
+    }
+
+    const bookData = await response.json()
+
+    // Transform the data to match our Book model
+    const transformedData = {
+      name: bookData.title || '',
+      author: bookData.author?.join(', ') || '',
+      coverUrl: bookData.image || '',
+      totalPages: bookData.pages ? parseInt(bookData.pages) : 0,
+    }
+
+    res.json({
+      status: 'success',
+      data: transformedData,
+    })
+  } catch (error: any) {
+    console.error('[ISBN Fetch] Error:', error)
+    throw new AppError(500, `ISBN查询失败: ${error.message}`)
+  }
+})
+
+/**
+ * GET /search-by-title/:title - Search books by title from Douban API
+ */
+libraryRouter.get('/search-by-title/:title', async (req: AuthRequest, res: Response) => {
+  const { title } = req.params
+
+  try {
+    // Call Douban API to search books
+    const response = await fetch(`https://api.douban.com/v2/book/search?q=${encodeURIComponent(title)}&count=10`)
+    if (!response.ok) {
+      throw new Error('Failed to search books from Douban')
+    }
+
+    const searchData = await response.json()
+
+    // Transform the data to match our expected format
+    const transformedResults = (searchData.books || []).map((book: any) => ({
+      name: book.title || '',
+      author: book.author?.join(', ') || '',
+      coverUrl: book.image || '',
+      totalPages: book.pages ? parseInt(book.pages) : 0,
+    }))
+
+    res.json({
+      status: 'success',
+      data: transformedResults,
+    })
+  } catch (error: any) {
+    console.error('[Title Search] Error:', error)
+    throw new AppError(500, `书名搜索失败: ${error.message}`)
   }
 })
