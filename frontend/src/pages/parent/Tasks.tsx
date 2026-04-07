@@ -209,6 +209,16 @@ export default function TasksPage() {
 
   const handleEdit = (task: Task) => {
     setTaskToEdit(task);
+    // 反向映射后端返回的英文值到前端显示的中文值
+    const subject = task.tags?.subject ? subjectReverseMap[task.tags.subject] || '语文' : '语文';
+    const parentRole = task.tags?.parentRole ? parentRoleReverseMap[task.tags.parentRole] || '独立完成' : '独立完成';
+    const difficultyMap: Record<string, string> = {
+      'basic': '基础',
+      'advanced': '提高',
+      'challenge': '挑战'
+    };
+    const difficulty = task.tags?.difficulty ? difficultyMap[task.tags.difficulty] || '基础' : '基础';
+    
     setFormData({
       name: task.name,
       category: task.category,
@@ -216,9 +226,9 @@ export default function TasksPage() {
       timePerUnit: task.timePerUnit,
       scheduleRule: (task.scheduleRule as ScheduleRule) || 'daily',
       weeklyFrequency: task.weeklyFrequency || 5,
-      subject: task.tags?.subject || '语文',
-      parentRole: task.tags?.parentRole || '独立完成',
-      difficulty: task.tags?.difficulty || '基础',
+      subject: subject,
+      parentRole: parentRole,
+      difficulty: difficulty,
       totalUnits: 0,
       completedUnits: 0,
       totalPages: 0,

@@ -644,16 +644,18 @@ export default function PlansPage() {
                           const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(dayIndex);
                           if (!isAssigned) return 'bg-gray-300';
                           
-                          // 确保 subject 是字符串
-                          const subject = taskItem.subject || 'other';
-                          const subjectStr = typeof subject === 'string' ? subject.toLowerCase() : 'other';
+                          // 根据 category 分配颜色
+                          const category = taskItem.category || 'other';
+                          const categoryStr = typeof category === 'string' ? category.toLowerCase() : 'other';
                           
-                          switch (subjectStr) {
+                          switch (categoryStr) {
                             case 'chinese': return 'bg-emerald-500';
-                            case 'math': return 'bg-blue-500';
                             case 'english': return 'bg-orange-500';
                             case 'sports': return 'bg-yellow-500';
-                            default: return 'bg-purple-500';
+                            case 'school': return 'bg-blue-500';
+                            case 'advanced': return 'bg-indigo-500';
+                            case 'extra': return 'bg-purple-500';
+                            default: return 'bg-gray-500';
                           }
                         };
                         
@@ -669,8 +671,7 @@ export default function PlansPage() {
                               const isAssigned = taskItem.assignedDays && taskItem.assignedDays.includes(i);
                               const dayProgress = plan.dailyProgress.find(d => d.day === i);
                               const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
-                              const dotColor = getDotColor(i);
-                               
+                                
                               return (
                                 <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px]', isToday(weekDates[i]) && 'bg-purple-50/50')}>
                                   <div className="relative">
@@ -680,7 +681,7 @@ export default function PlansPage() {
                                           <span className="text-white text-xs">⚡</span>
                                         </button>
                                       ) : (
-                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : dotColor)} title={`${taskItem.taskName} - 点击查看详情`}>
+                                        <button onClick={() => setSelectedTask(taskItem)} className={cn('w-6 h-6 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor(i))} title={`${taskItem.taskName} - 点击查看详情`}>
                                           {isCompleted && <span className="text-white text-xs">✓</span>}
                                           {taskItem.difficulty === 'challenge' && !isCompleted && (
                                             <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
@@ -688,7 +689,7 @@ export default function PlansPage() {
                                         </button>
                                       )
                                     ) : (
-                                      <div className="w-6 h-6 rounded-full bg-gray-300 shadow-sm"></div>
+                                      <div className="w-6 h-6 rounded-full bg-gray-200 shadow-sm"></div>
                                     )}
                                   </div>
                                 </div>

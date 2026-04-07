@@ -295,6 +295,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
               progress: 0,
               weekNo,
               status: 'active',
+              daysAllocated,
             },
           })
 
