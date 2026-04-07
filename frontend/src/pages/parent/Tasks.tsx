@@ -140,6 +140,7 @@ export default function TasksPage() {
           subject: subjectMap[data.subject],
           parentRole: parentRoleMap[data.parentRole],
           difficulty: difficultyMap[data.difficulty],
+          scheduleRule: data.scheduleRule, // 保存排期规则
         },
       });
       return r.data;
@@ -177,6 +178,7 @@ export default function TasksPage() {
           subject: subjectMap[data.updates.tags?.subject as string] || data.updates.tags?.subject,
           parentRole: parentRoleMap[data.updates.tags?.parentRole as string] || data.updates.tags?.parentRole,
           difficulty: difficultyMap[data.updates.tags?.difficulty as string] || data.updates.tags?.difficulty,
+          scheduleRule: data.updates.scheduleRule, // 保存排期规则
         },
       });
       return r.data;

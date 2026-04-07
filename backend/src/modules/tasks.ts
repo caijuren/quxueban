@@ -59,6 +59,7 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
     if (tags.parentRole && VALID_PARENT_ROLES.includes(tags.parentRole)) validatedTags.parentRole = tags.parentRole
     if (tags.difficulty && VALID_DIFFICULTIES.includes(tags.difficulty)) validatedTags.difficulty = tags.difficulty
     if (tags.totalAmount?.value > 0 && VALID_AMOUNT_UNITS.includes(tags.totalAmount.unit)) validatedTags.totalAmount = tags.totalAmount
+    if (tags.scheduleRule) validatedTags.scheduleRule = tags.scheduleRule // 保存排期规则
   }
 
   const task = await prisma.task.create({
