@@ -931,8 +931,18 @@ export default function PlansPage() {
                   return taskItem.assignedDays && taskItem.assignedDays.includes(backendIndex);
                 };
                 
-                // 调试：打印 taskItem 结构
-                console.log('Task item:', taskItem);
+                // 调试：打印关键数据
+                if (taskItem.taskName.includes('高思') || taskItem.taskName.includes('数学')) {
+                  console.log('=== 任务诊断 ===');
+                  console.log('任务名称:', taskItem.taskName);
+                  console.log('scheduleRule:', taskItem.scheduleRule);
+                  console.log('assignedDays (后端索引):', taskItem.assignedDays);
+                  console.log('assignedDays 含义:', taskItem.assignedDays?.map(d => {
+                    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+                    return `${d}=${dayNames[d]}`;
+                  }));
+                }
+
                 const getDotColor = (frontendIndex: number) => {
                   const isAssigned = isTaskAssignedOnDay(frontendIndex);
                   if (!isAssigned) return 'bg-gray-300';

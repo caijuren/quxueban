@@ -690,6 +690,54 @@ plansRouter.post('/temp-task', async (req: AuthRequest, res: Response) => {
 })
 
 // ============================================
+// Diagnostic Endpoint (临时诊断用)
+// ============================================
+
+/**
+ * GET /debug/plans - 诊断端点，查看数据库中的 assignedDays 数据
+ */
+plansRouter.get('/debug/plans', async (req: AuthRequest, res: Response) => {
+  try {
+    const plans = await prisma.weeklyPlan.findMany({
+      where: { status: 'active' },
+      include: { task: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    const diagnosticData = plans.map(plan => ({
+      taskName: plan.task.name,
+      taskId: plan.taskId,
+      target: plan.target,
+      assignedDays: plan.assignedDays,
+      assignedDaysMeaning: Array.isArray(plan.assignedDays) 
+        ? plan.assignedDays.map(d => {
+            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            return `${d}(${dayNames[d]})`;
+          })
+        : 'null',
+      scheduleRule: plan.task.scheduleRule,
+      weeklyRule: plan.task.weeklyRule,
+    }));
+
+    res.json({
+      status: 'success',
+      message: '诊断数据',
+      data: diagnosticData,
+      tips: {
+        'assignedDays为null': '说明数据未保存，需要重新发布计划',
+        'assignedDays有值': '检查索引是否正确：周末任务应该是 [0, 6] 或 [5, 6]',
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message,
+    });
+  }
+})
+
+// ============================================
 // Helper Functions
 // ============================================
 
