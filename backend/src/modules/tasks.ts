@@ -283,33 +283,30 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
           }
         }
 
-        // 创建周计划
+        // 创建周计划，即使没有分配到任何天数也创建
         const target = daysAllocated.length
-        if (target > 0) {
-          await tx.weeklyPlan.create({
-            data: {
-              familyId,
-              childId: child.id,
-              taskId: task.id,
-              target,
-              progress: 0,
-              weekNo,
-              status: 'active',
-              daysAllocated,
-            },
-          })
-
-          allocation.push({
+        await tx.weeklyPlan.create({
+          data: {
+            familyId,
+            childId: child.id,
             taskId: task.id,
-            taskName: task.name,
-            category: task.category,
-            type: task.type,
-            timePerUnit: task.timePerUnit,
             target,
-            weeklyRule: taskRule,
-            daysAllocated,
-          })
-        }
+            progress: 0,
+            weekNo,
+            status: target > 0 ? 'active' : 'inactive'
+          }
+        })
+
+        allocation.push({
+          taskId: task.id,
+          taskName: task.name,
+          category: task.category,
+          type: task.type,
+          timePerUnit: task.timePerUnit,
+          target,
+          weeklyRule: taskRule,
+          assignedDays: daysAllocated,
+        })
       }
 
       results.push({

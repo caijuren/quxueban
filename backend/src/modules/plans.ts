@@ -376,18 +376,8 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         const taskWeeklyRule = p.task.weeklyRule as any || {}
         const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
         
-        // 优先使用数据库中存储的 daysAllocated
-        if (p.daysAllocated) {
-          try {
-            // 尝试解析 JSON 字符串
-            const parsedDays = typeof p.daysAllocated === 'string' ? JSON.parse(p.daysAllocated) : p.daysAllocated;
-            if (Array.isArray(parsedDays)) {
-              assignedDays = parsedDays;
-            }
-          } catch (e) {
-            console.error('Failed to parse daysAllocated:', e);
-          }
-        } else if (weeklyRule?.days && weeklyRule.days.length > 0) {
+        // 使用任务的 weeklyRule 或 scheduleRule 来确定分配的天数
+        if (weeklyRule?.days && weeklyRule.days.length > 0) {
           assignedDays = weeklyRule.days
         } else if (scheduleRule === 'daily') {
           assignedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
@@ -664,7 +654,6 @@ plansRouter.post('/temp-task', async (req: AuthRequest, res: Response) => {
           progress: 0,
           weekNo,
           status: 'active',
-          daysAllocated: assignedDays,
         },
       })
 
