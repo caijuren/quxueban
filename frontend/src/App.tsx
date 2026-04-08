@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ChildLayout from "./components/child/Layout";
 import ChildDashboard from "./pages/child/Dashboard";
+import ChildTasks from "./pages/child/Tasks";
 import ChildLibrary from "./pages/child/Library";
 import ChildAchievements from "./pages/child/Achievements";
 import ChildReports from "./pages/child/Reports";
@@ -69,6 +70,7 @@ function App() {
               {/* Child Routes with Layout */}
               <Route path="/child" element={<ChildLayout />}>
                 <Route index data-genie-title="Child Dashboard" data-genie-key="ChildDashboard" element={<PageTransition transition="slide-up"><ChildDashboard /></PageTransition>} />
+                <Route path="tasks" data-genie-title="Tasks" data-genie-key="ChildTasks" element={<PageTransition transition="slide-up"><ChildTasks /></PageTransition>} />
                 <Route path="library" data-genie-title="Library" data-genie-key="Library" element={<PageTransition transition="slide-up"><ChildLibrary /></PageTransition>} />
                 <Route path="achievements" data-genie-title="Achievements" data-genie-key="Achievements" element={<PageTransition transition="slide-up"><ChildAchievements /></PageTransition>} />
                 <Route path="reports" data-genie-title="Reports" data-genie-key="Reports" element={<PageTransition transition="slide-up"><ChildReports /></PageTransition>} />

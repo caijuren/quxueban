@@ -43,6 +43,8 @@ export interface Task {
     subject?: string;
     difficulty?: string;
     parentRole?: string;
+    scheduleRule?: ScheduleRule;
+    weeklyFrequency?: number;
   };
   appliesTo?: number[];
 }
@@ -255,12 +257,12 @@ export default function TasksPage() {
         category: formData.category,
         type: formData.type,
         timePerUnit: formData.timePerUnit,
+        scheduleRule: formData.scheduleRule,
+        weeklyFrequency: formData.weeklyFrequency,
         tags: {
           subject: subjectMap[formData.subject],
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
-          scheduleRule: formData.scheduleRule,
-          weeklyFrequency: formData.weeklyFrequency,
         },
       }
     });
