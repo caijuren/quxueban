@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ interface ChildTask {
   template_type: string;
   subject: string | null;
   template_duration: number;
+  schedule_rule?: string;
   completedToday?: boolean;
   weeklyProgress?: number;
 }
@@ -54,6 +55,48 @@ export default function ChildTasks() {
     }
   }, [user]);
 
+  // 判断任务今天是否需要完成
+  const isTaskDueToday = (task: ChildTask): boolean => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0=周日, 1=周一, ..., 6=周六
+    
+    // 获取任务的 schedule_rule（优先使用自定义的，否则使用模板的）
+    const scheduleRule = task.customScheduleRule || task.schedule_rule || 'daily';
+    
+    // 检查是否在 excludeDays 中
+    if (task.excludeDays) {
+      const excludedDays = task.excludeDays.split(',').map(d => parseInt(d.trim()));
+      // 将 JS 的 dayOfWeek (0=周日) 转换为后端格式 (1=周一, ..., 7=周日)
+      const backendDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+      if (excludedDays.includes(backendDay)) {
+        return false;
+      }
+    }
+    
+    // 根据 schedule_rule 判断
+    switch (scheduleRule) {
+      case 'daily':
+        // 每日任务
+        return true;
+      
+      case 'school':
+        // 在校日任务（周一到周五，排除周末）
+        return dayOfWeek >= 1 && dayOfWeek <= 5;
+      
+      case 'weekend':
+        // 周末任务（周六、周日）
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      
+      case 'flexible':
+        // 智能分配（默认周一到周五）
+        return dayOfWeek >= 1 && dayOfWeek <= 5;
+      
+      default:
+        // 默认每日任务
+        return true;
+    }
+  };
+
   const fetchTasks = async () => {
     if (!user || user.role !== 'child') return;
     
@@ -64,12 +107,14 @@ export default function ChildTasks() {
       console.log('任务数据:', response.data);
       const tasksData = response.data.data;
       
-      // 模拟添加完成状态和进度数据
-      const tasksWithStatus = tasksData.map((task: ChildTask) => ({
-        ...task,
-        completedToday: Math.random() > 0.5,
-        weeklyProgress: Math.floor(Math.random() * 100),
-      }));
+      // 过滤出今天需要完成的任务，并添加完成状态和进度数据
+      const tasksWithStatus = tasksData
+        .filter((task: ChildTask) => isTaskDueToday(task))
+        .map((task: ChildTask) => ({
+          ...task,
+          completedToday: Math.random() > 0.5,
+          weeklyProgress: Math.floor(Math.random() * 100),
+        }));
       
       setTasks(tasksWithStatus);
     } catch (error) {
