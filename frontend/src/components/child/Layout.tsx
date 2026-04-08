@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, BookOpen, Trophy, BarChart3, CheckCircle2, CalendarDays, Menu, X, ChevronDown } from 'lucide-react';
+import { Home, BookOpen, Trophy, BarChart3, CheckCircle2, CalendarDays, Menu, X, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -250,6 +250,7 @@ function SidebarContent({ user, onLogout, onClose, currentPath }: SidebarContent
                 <p className="text-xs text-gray-500">在线</p>
               </div>
               <DropdownMenuItem className="cursor-pointer text-red-600" onClick={onLogout}>
+                <LogOut className="size-4 mr-2" />
                 <span>退出登录</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
