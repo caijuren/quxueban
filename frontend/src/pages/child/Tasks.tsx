@@ -1,40 +1,37 @@
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award, X, ArrowLeft, Camera, Image, Mic } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 interface ChildTask {
-  id: number;
-  childId: number;
-  taskTemplateId: number;
-  customName: string | null;
-  customDuration: number | null;
-  customScheduleRule: string | null;
-  weeklyTarget: number | null;
-  status: string;
-  startDate: string | null;
-  endDate: string | null;
-  skipHolidays: boolean;
-  excludeDays: string | null;
-  familyId: number;
-  createdAt: string;
-  updatedAt: string;
-  template_name: string;
-  template_type: string;
-  subject: string | null;
-  template_duration: number;
-  schedule_rule?: string;
+  planId: number;
+  taskId: number;
+  name: string;
+  category: string;
+  type: string;
+  timePerUnit: number;
+  target?: number;
+  progress?: number;
   completedToday?: boolean;
-  weeklyProgress?: number;
+  todayStatus?: string | null;
+  checkinId?: number;
+  originalStatus?: string;
+  currentProgress?: number;
+  // 精细化记录字段
+  trackingType?: 'simple' | 'numeric' | 'progress';
+  trackingUnit?: string | null;
+  targetValue?: number | null;
 }
-
-type TaskType = '校内任务' | '阅读任务' | '体育运动' | '课外课程';
 
 const typeConfig: Record<string, { icon: any; color: string }> = {
   '校内任务': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
@@ -48,6 +45,13 @@ export default function ChildTasks() {
   const [loading, setLoading] = useState(true);
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const { user } = useAuth();
+  
+  // 任务完成模态框状态
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState<ChildTask | null>(null);
+  const [completionStatus, setCompletionStatus] = useState<'completed' | 'partial' | 'postponed'>('completed');
+  const [completedValue, setCompletedValue] = useState<number>(0);
+  const [notes, setNotes] = useState<string>('');
 
   useEffect(() => {
     if (user && user.role === 'child') {
@@ -55,68 +59,26 @@ export default function ChildTasks() {
     }
   }, [user]);
 
-  // 判断任务今天是否需要完成
-  const isTaskDueToday = (task: ChildTask): boolean => {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0=周日, 1=周一, ..., 6=周六
-    
-    // 获取任务的 schedule_rule（优先使用自定义的，否则使用模板的）
-    const scheduleRule = task.customScheduleRule || task.schedule_rule || 'daily';
-    
-    // 检查是否在 excludeDays 中
-    if (task.excludeDays) {
-      const excludedDays = task.excludeDays.split(',').map(d => parseInt(d.trim()));
-      // 将 JS 的 dayOfWeek (0=周日) 转换为后端格式 (1=周一, ..., 7=周日)
-      const backendDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-      if (excludedDays.includes(backendDay)) {
-        return false;
-      }
-    }
-    
-    // 根据 schedule_rule 判断
-    switch (scheduleRule) {
-      case 'daily':
-        // 每日任务
-        return true;
-      
-      case 'school':
-        // 在校日任务（周一到周五，排除周末）
-        return dayOfWeek >= 1 && dayOfWeek <= 5;
-      
-      case 'weekend':
-        // 周末任务（周六、周日）
-        return dayOfWeek === 0 || dayOfWeek === 6;
-      
-      case 'flexible':
-        // 智能分配（默认周一到周五）
-        return dayOfWeek >= 1 && dayOfWeek <= 5;
-      
-      default:
-        // 默认每日任务
-        return true;
-    }
-  };
-
   const fetchTasks = async () => {
     if (!user || user.role !== 'child') return;
     
     try {
       console.log('当前用户信息:', user);
       setLoading(true);
-      const response = await apiClient.get(`/task-templates/children/${user.id}/tasks`);
+      const response = await apiClient.get('/plans/today');
       console.log('任务数据:', response.data);
-      const tasksData = response.data.data;
+      const { fixedTasks, flexibleTasks, makeupTasks, advanceTasks } = response.data.data;
       
-      // 过滤出今天需要完成的任务，并添加完成状态和进度数据
-      const tasksWithStatus = tasksData
-        .filter((task: ChildTask) => isTaskDueToday(task))
-        .map((task: ChildTask) => ({
-          ...task,
-          completedToday: Math.random() > 0.5,
-          weeklyProgress: Math.floor(Math.random() * 100),
-        }));
+      // 合并所有类型的任务
+      const allTasks = [
+        ...fixedTasks.map((task: any) => ({ ...task, type: 'fixed' })),
+        ...flexibleTasks.map((task: any) => ({ ...task, type: 'flexible' })),
+        ...makeupTasks.map((task: any) => ({ ...task, type: 'makeup' })),
+        ...advanceTasks.map((task: any) => ({ ...task, type: 'advance' })),
+      ];
       
-      setTasks(tasksWithStatus);
+      console.log('合并后的任务:', allTasks);
+      setTasks(allTasks);
     } catch (error) {
       console.error('获取任务失败:', error);
     } finally {
@@ -124,28 +86,55 @@ export default function ChildTasks() {
     }
   };
 
-  const toggleTaskCompletion = (taskId: number) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, completedToday: !task.completedToday }
-        : task
-    ));
+  const openCompletionModal = (task: ChildTask) => {
+    setCurrentTask(task);
+    setCompletionStatus('completed');
+    setCompletedValue(0);
+    setNotes('');
+    setCompletionModalOpen(true);
   };
 
-  const toggleExpandTask = (taskId: number) => {
-    setExpandedTask(expandedTask === taskId ? null : taskId);
+  const handleTaskCompletion = async () => {
+    if (!currentTask) return;
+
+    try {
+      // 调用后端API更新任务状态
+      await apiClient.post('/plans/checkin', {
+        taskId: currentTask.taskId,
+        planId: currentTask.planId,
+        status: completionStatus,
+        value: 1,
+        completedValue: completionStatus !== 'postponed' ? completedValue : null,
+        notes: notes || null
+      });
+
+      // 关闭模态框
+      setCompletionModalOpen(false);
+      
+      // 刷新任务列表
+      fetchTasks();
+      
+      toast.success('任务完成记录已提交');
+    } catch (error) {
+      console.error('更新任务状态失败:', error);
+      toast.error('提交失败，请重试');
+    }
+  };
+
+  const toggleExpandTask = (planId: number) => {
+    setExpandedTask(expandedTask === planId ? null : planId);
   };
 
   const getTaskName = (task: ChildTask) => {
-    return task.customName || task.template_name;
+    return task.name;
   };
 
   const getTaskDuration = (task: ChildTask) => {
-    return task.customDuration || task.template_duration;
+    return task.timePerUnit;
   };
 
-  const getTaskTypeConfig = (type: string) => {
-    return typeConfig[type] || { icon: BookOpen, color: 'bg-gray-100 text-gray-600' };
+  const getTaskTypeConfig = (category: string) => {
+    return typeConfig[category] || { icon: BookOpen, color: 'bg-gray-100 text-gray-600' };
   };
 
   const totalTasks = tasks.length;
@@ -164,7 +153,6 @@ export default function ChildTasks() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -187,7 +175,6 @@ export default function ChildTasks() {
         </Button>
       </motion.div>
 
-      {/* Progress Summary */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -216,7 +203,6 @@ export default function ChildTasks() {
         </Card>
       </motion.div>
 
-      {/* Tasks List */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -249,12 +235,12 @@ export default function ChildTasks() {
         ) : (
           <div className="space-y-3">
             {tasks.map(task => {
-              const TypeIcon = getTaskTypeConfig(task.template_type).icon;
-              const typeColor = getTaskTypeConfig(task.template_type).color;
+              const TypeIcon = getTaskTypeConfig(task.category).icon;
+              const typeColor = getTaskTypeConfig(task.category).color;
               
               return (
                 <motion.div
-                  key={task.id}
+                  key={task.planId}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
@@ -263,7 +249,7 @@ export default function ChildTasks() {
                     <CardContent className="p-0">
                       <div 
                         className="flex items-center justify-between p-4 cursor-pointer"
-                        onClick={() => toggleExpandTask(task.id)}
+                        onClick={() => toggleExpandTask(task.planId)}
                       >
                         <div className="flex items-center gap-4">
                           <div className={`w-10 h-10 rounded-full ${typeColor} flex items-center justify-center`}>
@@ -275,7 +261,7 @@ export default function ChildTasks() {
                               <Clock className="w-3.5 h-3.5" />
                               <span>{getTaskDuration(task)}分钟</span>
                               <Calendar className="w-3.5 h-3.5" />
-                              <span>{task.customScheduleRule || task.template_type}</span>
+                              <span>{task.type}</span>
                             </div>
                           </div>
                         </div>
@@ -286,19 +272,21 @@ export default function ChildTasks() {
                             className={`w-10 h-10 rounded-full ${task.completedToday ? 'bg-green-500 hover:bg-green-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleTaskCompletion(task.id);
+                              if (!task.completedToday) {
+                                openCompletionModal(task);
+                              }
                             }}
                           >
                             <CheckCircle2 className={`w-5 h-5 ${task.completedToday ? '' : 'text-gray-400'}`} />
                           </Button>
-                          {expandedTask === task.id ? (
+                          {expandedTask === task.planId ? (
                             <ChevronUp className="w-5 h-5 text-gray-400" />
                           ) : (
                             <ChevronDown className="w-5 h-5 text-gray-400" />
                           )}
                         </div>
                       </div>
-                      {expandedTask === task.id && (
+                      {expandedTask === task.planId && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
@@ -310,14 +298,14 @@ export default function ChildTasks() {
                             <div className="space-y-2">
                               <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">本周进度</span>
-                                <span className="font-medium text-purple-600">{task.weeklyProgress}%</span>
+                                <span className="font-medium text-purple-600">{task.progress || 0}/{task.target || 0}</span>
                               </div>
-                              <Progress value={task.weeklyProgress} className="h-1.5 bg-gray-200" />
+                              <Progress value={(task.progress || 0) / (task.target || 1) * 100} className="h-1.5 bg-gray-200" />
                             </div>
                             <div className="text-sm text-gray-600">
-                              <p><strong>任务类型：</strong>{task.template_type}</p>
-                              {task.subject && <p><strong>学科：</strong>{task.subject}</p>}
-                              <p><strong>目标：</strong>每周完成 {task.weeklyTarget || 5} 次</p>
+                              <p><strong>任务类型：</strong>{task.category}</p>
+                              <p><strong>目标：</strong>本周完成 {task.target || 1} 次</p>
+                              {task.todayStatus && <p><strong>今日状态：</strong>{task.todayStatus}</p>}
                             </div>
                           </div>
                         </motion.div>
@@ -330,6 +318,206 @@ export default function ChildTasks() {
           </div>
         )}
       </motion.div>
+
+      {/* 任务完成模态框 */}
+      <Dialog open={completionModalOpen} onOpenChange={setCompletionModalOpen}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-purple-500" />
+              {currentTask?.trackingType === 'numeric' ? '提交完成记录' : 
+               currentTask?.trackingType === 'progress' ? '更新进度' : 
+               '完成任务'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {currentTask && (
+            <div className="space-y-6 py-4">
+              {/* 任务信息 */}
+              <div className="bg-purple-50 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 mb-2">{currentTask.name}</h3>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{currentTask.timePerUnit}分钟</span>
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>{currentTask.type}</span>
+                </div>
+              </div>
+
+              {/* 状态选择 */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-700">完成状态</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={completionStatus === 'completed' ? 'default' : 'outline'}
+                    onClick={() => setCompletionStatus('completed')}
+                    className={`rounded-xl ${completionStatus === 'completed' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    全部完成
+                  </Button>
+                  <Button
+                    variant={completionStatus === 'partial' ? 'default' : 'outline'}
+                    onClick={() => setCompletionStatus('partial')}
+                    className={`rounded-xl ${completionStatus === 'partial' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    部分完成
+                  </Button>
+                  <Button
+                    variant={completionStatus === 'postponed' ? 'default' : 'outline'}
+                    onClick={() => setCompletionStatus('postponed')}
+                    className={`rounded-xl ${completionStatus === 'postponed' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    推迟
+                  </Button>
+                </div>
+              </div>
+
+              {/* 动态表单：根据 tracking_type 渲染不同的输入组件 */}
+              {completionStatus !== 'postponed' && (
+                <>
+                  {/* numeric 类型：显示引导问题 + 数字输入框 + 单位 + 进度提示 */}
+                  {currentTask.trackingType === 'numeric' && (
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium text-gray-700">
+                        本次完成了多少{currentTask.trackingUnit || '个'}？
+                      </Label>
+                      <div className="flex gap-3">
+                        <Input
+                          type="number"
+                          value={completedValue || ''}
+                          onChange={(e) => setCompletedValue(parseInt(e.target.value) || 0)}
+                          min={0}
+                          placeholder={`请输入数量`}
+                          className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        {currentTask.trackingUnit && (
+                          <div className="flex items-center px-4 bg-gray-100 rounded-xl text-gray-600">
+                            {currentTask.trackingUnit}
+                          </div>
+                        )}
+                      </div>
+                      {currentTask.targetValue && (
+                        <div className="text-sm text-purple-600">
+                          目标：{currentTask.targetValue}{currentTask.trackingUnit} · 已完成 {completedValue}{currentTask.trackingUnit}
+                          {completedValue > 0 && currentTask.targetValue > 0 && (
+                            <span className="ml-2">
+                              ({Math.round((completedValue / currentTask.targetValue) * 100)}%)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* progress 类型：显示进度滑块 + 进度提示 */}
+                  {currentTask.trackingType === 'progress' && (
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium text-gray-700">
+                        当前进度是多少？
+                      </Label>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={completedValue}
+                            onChange={(e) => setCompletedValue(parseInt(e.target.value))}
+                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                          />
+                          <span className="text-lg font-semibold text-purple-600 w-16 text-right">
+                            {completedValue}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-300"
+                            style={{ width: `${completedValue}%` }}
+                          />
+                        </div>
+                        {currentTask.targetValue && (
+                          <div className="text-sm text-gray-500">
+                            目标：{currentTask.targetValue}{currentTask.trackingUnit || '个'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* simple 类型：显示可选的文本输入框 */}
+                  {currentTask.trackingType === 'simple' && (
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium text-gray-700">有什么想分享的吗？（可选）</Label>
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="记录下你的学习心得、遇到的问题或有趣的想法..."
+                        rows={3}
+                        className="w-full rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent p-3"
+                      />
+                    </div>
+                  )}
+
+                  {/* numeric/progress 类型：显示可选的备注输入 */}
+                  {(currentTask.trackingType === 'numeric' || currentTask.trackingType === 'progress') && (
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium text-gray-700">备注（可选）</Label>
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="有什么想补充的吗？"
+                        rows={2}
+                        className="w-full rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent p-3"
+                      />
+                    </div>
+                  )}
+
+                  {/* 证据上传：以按钮形式展示 */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-gray-700">添加证据（可选）</Label>
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-xl border-dashed border-2 hover:border-purple-500 hover:bg-purple-50"
+                        onClick={() => toast.info('拍照功能开发中')}
+                      >
+                        <Camera className="w-4 h-4 mr-2" />
+                        拍照
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-xl border-dashed border-2 hover:border-purple-500 hover:bg-purple-50"
+                        onClick={() => toast.info('相册功能开发中')}
+                      >
+                        <Image className="w-4 h-4 mr-2" />
+                        相册
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-xl border-dashed border-2 hover:border-purple-500 hover:bg-purple-50"
+                        onClick={() => toast.info('录音功能开发中')}
+                      >
+                        <Mic className="w-4 h-4 mr-2" />
+                        录音
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* 提交按钮 */}
+              <Button
+                onClick={handleTaskCompletion}
+                className="w-full rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+              >
+                {currentTask.trackingType === 'numeric' ? '提交完成记录' : 
+                 currentTask.trackingType === 'progress' ? '更新进度' : 
+                 '提交完成状态'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

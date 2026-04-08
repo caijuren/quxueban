@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, BookOpen, Trophy, BarChart3, CheckCircle2, Menu, X, ChevronDown } from 'lucide-react';
+import { Home, BookOpen, Trophy, BarChart3, CheckCircle2, CalendarDays, Menu, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/child', label: '首页', icon: Home },
+  { path: '/child/weekly-plan', label: '周计划', icon: CalendarDays },
   { path: '/child/tasks', label: '任务', icon: CheckCircle2 },
   { path: '/child/library', label: '图书馆', icon: BookOpen },
   { path: '/child/achievements', label: '成就', icon: Trophy },

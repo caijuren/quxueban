@@ -8,6 +8,7 @@ import { FadeIn, Stagger, HoverLift } from '@/components/MotionPrimitives';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface Task {
   id: number;
@@ -40,15 +41,27 @@ const statusConfig = {
   school_done: { label: '学校已完成', color: 'info' },
 };
 
-function getGreeting(): string {
+function getDynamicGreeting(completionRate: number): string {
   const hour = new Date().getHours();
-  if (hour < 6) return '夜深了，早点休息~';
-  if (hour < 9) return '早上好，新的一天开始啦~';
-  if (hour < 12) return '上午好，今天学习顺利吗？';
-  if (hour < 14) return '中午好，记得休息一下~';
-  if (hour < 18) return '下午好，继续加油~';
-  if (hour < 22) return '晚上好，今天辛苦了~';
-  return '夜深了，早点休息~';
+  let timeGreeting = '';
+  
+  if (hour < 6) timeGreeting = '夜深了';
+  else if (hour < 9) timeGreeting = '早上好';
+  else if (hour < 12) timeGreeting = '上午好';
+  else if (hour < 14) timeGreeting = '中午好';
+  else if (hour < 18) timeGreeting = '下午好';
+  else if (hour < 22) timeGreeting = '晚上好';
+  else timeGreeting = '夜深了';
+  
+  if (completionRate >= 100) {
+    return `${timeGreeting}！太棒了，今天的任务都完成啦！🎉`;
+  } else if (completionRate >= 50) {
+    return `${timeGreeting}！已经完成了一半任务，继续加油！💪`;
+  } else if (completionRate > 0) {
+    return `${timeGreeting}！开始学习啦，坚持就是胜利！🌟`;
+  } else {
+    return `${timeGreeting}！今天的学习之旅开始啦！🚀`;
+  }
 }
 
 function formatDate(date: Date): string {
@@ -102,7 +115,7 @@ function ProgressCircle({ value, size = 120 }: { value: number; size?: number })
 export default function ChildDashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [greeting] = useState(getGreeting);
+  const navigate = useNavigate();
 
   const { data: todayPlan, isLoading } = useQuery({
     queryKey: ['plans', 'today'],
@@ -137,6 +150,12 @@ export default function ChildDashboard() {
 
   const completedCount = tasks.filter((t) => t.status === 'completed' || t.status === 'school_done').length;
   const pendingCount = tasks.filter((t) => t.status === 'pending').length;
+  
+  // Get pending tasks for action list
+  const pendingTasks = tasks.filter((t) => t.status === 'pending').slice(0, 3);
+  
+  // Get most important task for quick start
+  const mostImportantTask = pendingTasks[0];
 
   const renderTaskCard = (task: Task) => {
     const config = taskTypeConfig[task.type];
@@ -240,85 +259,205 @@ export default function ChildDashboard() {
     );
   }
 
+  const greeting = getDynamicGreeting(completionRate);
+
+  if (tasks.length === 0) {
+    return (
+      <div className="space-y-6">
+        {/* Header Section */}
+        <FadeIn>
+          <div className="flex items-center justify-between">
+            <div>
+              <motion.p
+                className="text-muted-foreground"
+                animate={{ opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                {greeting}
+              </motion.p>
+              <h1 className="text-2xl font-bold mt-1">
+                {user?.name || '小朋友'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">{formatDate(new Date())}</p>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+              <span className="text-2xl">{user?.avatar || '👶'}</span>
+            </div>
+          </div>
+        </FadeIn>
+
+        {/* Empty State */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-16 bg-card rounded-2xl border-2 border-dashed border-muted-foreground/20"
+        >
+          <span className="text-6xl">📭</span>
+          <h3 className="text-xl font-semibold mt-4">今天还没有任务哦~</h3>
+          <p className="text-muted-foreground mt-2">任务发布后，这里会亮起来！</p>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Section */}
       <FadeIn>
-        <div className="text-center">
-          <motion.p
-            className="text-muted-foreground"
-            animate={{ opacity: [0.7, 1, 0.7] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            {greeting}
-          </motion.p>
-          <h1 className="text-2xl font-bold mt-1">
-            {user?.name || '小朋友'}，加油哦~
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{formatDate(new Date())}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <motion.p
+              className="text-muted-foreground"
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              {greeting}
+            </motion.p>
+            <h1 className="text-2xl font-bold mt-1">
+              {user?.name || '小朋友'}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">{formatDate(new Date())}</p>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+            <span className="text-2xl">{user?.avatar || '👶'}</span>
+          </div>
         </div>
       </FadeIn>
 
-      {/* Progress Section */}
-      <FadeIn delay={0.1}>
-        <Card className="border-2 border-primary/20 rounded-2xl overflow-hidden">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-around">
-              <div className="text-center">
-                <ProgressCircle value={completionRate} />
-                <p className="text-sm text-muted-foreground mt-2">今日完成率</p>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center">
-                    <span className="text-lg">✓</span>
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Core Progress */}
+        <FadeIn delay={0.1}>
+          <Card className="lg:col-span-2 border-2 border-primary/20 rounded-2xl overflow-hidden">
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold mb-4">核心进度</h2>
+              <div className="flex items-center justify-around">
+                <div className="text-center">
+                  <ProgressCircle value={completionRate} size={140} />
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center">
+                      <span className="text-lg">✅</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">已完成</p>
+                      <p className="text-2xl font-bold">{completedCount}项</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{completedCount}</p>
-                    <p className="text-xs text-muted-foreground">已完成</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center">
+                      <span className="text-lg">⏱</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">总学习</p>
+                      <p className="text-2xl font-bold">{todayPlan?.studyTime || 0}分钟</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center">
-                    <span className="text-lg">⏱</span>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{todayPlan?.studyTime || 0}</p>
-                    <p className="text-xs text-muted-foreground">学习分钟</p>
-                  </div>
-                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </FadeIn>
+            </CardContent>
+          </Card>
+        </FadeIn>
 
-      {/* Quick Stats */}
-      <FadeIn delay={0.15}>
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="rounded-xl text-center p-3">
-            <span className="text-2xl">📝</span>
-            <p className="text-lg font-bold mt-1">{completedCount}</p>
-            <p className="text-xs text-muted-foreground">已完成</p>
+        {/* Right: Quick Access */}
+        <FadeIn delay={0.15}>
+          <div className="space-y-3">
+            {/* Weekly Plan */}
+            <HoverLift>
+              <Card className="rounded-xl overflow-hidden cursor-pointer" onClick={() => navigate('/child/weekly-plan')}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-2xl">📋</span>
+                      <h3 className="font-semibold mt-1">周计划</h3>
+                      <p className="text-sm text-muted-foreground">查看本周安排</p>
+                    </div>
+                    <span className="text-primary">→</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </HoverLift>
+
+            {/* Today's Tasks */}
+            <HoverLift>
+              <Card className="rounded-xl overflow-hidden cursor-pointer" onClick={() => navigate('/child/tasks')}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-2xl">✅</span>
+                      <h3 className="font-semibold mt-1">今日待办</h3>
+                      <p className="text-sm text-muted-foreground">{pendingCount}项</p>
+                    </div>
+                    <span className="text-primary">→</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </HoverLift>
+
+            {/* Quick Start */}
+            <HoverLift>
+              <Card className="rounded-xl overflow-hidden cursor-pointer" onClick={() => mostImportantTask && navigate('/child/tasks')}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-2xl">🚀</span>
+                      <h3 className="font-semibold mt-1">快速开始</h3>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {mostImportantTask ? mostImportantTask.name : '点击开始'}
+                      </p>
+                    </div>
+                    <span className="text-primary">→</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </HoverLift>
+          </div>
+        </FadeIn>
+      </div>
+
+      {/* Action List */}
+      {pendingTasks.length > 0 && (
+        <FadeIn delay={0.2}>
+          <Card className="border-2 border-primary/20 rounded-2xl overflow-hidden">
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>🎯</span> 接下来要做什么？
+              </h2>
+              <Stagger stagger={0.05} className="space-y-3">
+                {pendingTasks.map((task) => (
+                  <HoverLift key={task.id}>
+                    <div className="flex items-center justify-between p-3 bg-card rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{task.icon}</span>
+                        <div className="flex-1">
+                          <h3 className="font-semibold">{task.name}</h3>
+                          {task.duration && (
+                            <p className="text-xs text-muted-foreground">{task.duration}分钟</p>
+                          )}
+                        </div>
+                      </div>
+                      <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={() => navigate('/child/tasks')}
+                      >
+                        去完成
+                      </Button>
+                    </div>
+                  </HoverLift>
+                ))}
+              </Stagger>
+            </CardContent>
           </Card>
-          <Card className="rounded-xl text-center p-3">
-            <span className="text-2xl">⏳</span>
-            <p className="text-lg font-bold mt-1">{pendingCount}</p>
-            <p className="text-xs text-muted-foreground">待完成</p>
-          </Card>
-          <Card className="rounded-xl text-center p-3">
-            <span className="text-2xl">📚</span>
-            <p className="text-lg font-bold mt-1">{tasks.length}</p>
-            <p className="text-xs text-muted-foreground">总任务</p>
-          </Card>
-        </div>
-      </FadeIn>
+        </FadeIn>
+      )}
 
       {/* Task Sections */}
       <AnimatePresence>
         {/* Fixed Tasks */}
         {fixedTasks.length > 0 && (
-          <FadeIn delay={0.2}>
+          <FadeIn delay={0.25}>
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 <span>📌</span> 固定任务
@@ -332,7 +471,7 @@ export default function ChildDashboard() {
 
         {/* Flexible Tasks */}
         {flexibleTasks.length > 0 && (
-          <FadeIn delay={0.25}>
+          <FadeIn delay={0.3}>
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 <span>🔄</span> 灵活任务
@@ -346,7 +485,7 @@ export default function ChildDashboard() {
 
         {/* Makeup Tasks */}
         {makeupTasks.length > 0 && (
-          <FadeIn delay={0.3}>
+          <FadeIn delay={0.35}>
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 <span>📌</span> 待补任务
@@ -360,7 +499,7 @@ export default function ChildDashboard() {
 
         {/* Advance Tasks */}
         {advanceTasks.length > 0 && (
-          <FadeIn delay={0.35}>
+          <FadeIn delay={0.4}>
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 <span>⚡</span> 提前任务
@@ -370,19 +509,6 @@ export default function ChildDashboard() {
               </Stagger>
             </section>
           </FadeIn>
-        )}
-
-        {/* Empty State */}
-        {tasks.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center py-12"
-          >
-            <span className="text-6xl">🎉</span>
-            <h3 className="text-xl font-semibold mt-4">今天没有任务</h3>
-            <p className="text-muted-foreground mt-2">好好休息一下吧~</p>
-          </motion.div>
         )}
       </AnimatePresence>
     </div>
