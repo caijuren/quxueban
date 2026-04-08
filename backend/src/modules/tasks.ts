@@ -77,16 +77,28 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
       FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
     `
     
-    const formattedTasks = (tasks as any[]).map(task => ({
-      id: task.id, familyId: task.family_id, name: task.name,
-      category: CATEGORY_REVERSE_MAP[task.category] || task.category,
-      type: TYPE_REVERSE_MAP[task.type] || task.type,
-      timePerUnit: task.time_per_unit, weeklyRule: task.weekly_rule,
-      sortOrder: task.sort_order, isActive: task.is_active,
-      appliesTo: task.applies_to || [],
-      tags: task.tags || {},
-      createdAt: task.created_at, updatedAt: task.updated_at,
-    }))
+    const formattedTasks = (tasks as any[]).map(task => {
+      // 从 tags 中提取 scheduleRule
+      const taskTags = task.tags || {};
+      const scheduleRule = typeof taskTags === 'object' && taskTags !== null ? taskTags.scheduleRule : null;
+      
+      return {
+        id: task.id, 
+        familyId: task.family_id, 
+        name: task.name,
+        category: CATEGORY_REVERSE_MAP[task.category] || task.category,
+        type: TYPE_REVERSE_MAP[task.type] || task.type,
+        timePerUnit: task.time_per_unit, 
+        weeklyRule: task.weekly_rule,
+        sortOrder: task.sort_order, 
+        isActive: task.is_active,
+        appliesTo: task.applies_to || [],
+        tags: task.tags || {},
+        scheduleRule: scheduleRule || 'daily', // 添加 scheduleRule 字段
+        createdAt: task.created_at, 
+        updatedAt: task.updated_at,
+      };
+    })
     res.json({ status: 'success', data: formattedTasks })
   } catch (error: any) {
     console.error('[GET TASKS] Error:', error)
@@ -236,14 +248,15 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
           scheduleRule = customRule
         }
 
+        // JavaScript getDay(): 0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
         if (scheduleRule === 'daily') {
-          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
+          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天（周日到周六）
         } else if (scheduleRule === 'school') {
-          allowedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（不包含周三）
+          allowedDays = [1, 2, 4, 5] // 上学日：周一(1)、周二(2)、周四(4)、周五(5)，排除周三
         } else if (scheduleRule === 'weekend') {
-          allowedDays = [5, 6] // 周六和周日
+          allowedDays = [0, 6] // 周末：周日(0)和周六(6)
         } else if (scheduleRule === 'flexible') {
-          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 周一到周日
+          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 灵活：每天都可安排
         } else {
           // 默认：每天
           allowedDays = [0, 1, 2, 3, 4, 5, 6]

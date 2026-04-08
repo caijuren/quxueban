@@ -381,14 +381,15 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           assignedDays = p.assignedDays as number[]
         } else {
           // 如果没有保存的数据，则根据 scheduleRule 推算（兼容旧数据）
+          // JavaScript getDay(): 0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
           if (weeklyRule?.days && weeklyRule.days.length > 0) {
             assignedDays = weeklyRule.days
           } else if (scheduleRule === 'daily') {
             assignedDays = [0, 1, 2, 3, 4, 5, 6]
           } else if (scheduleRule === 'school') {
-            assignedDays = [0, 1, 3, 4]
+            assignedDays = [1, 2, 4, 5] // 上学日：周一(1)、周二(2)、周四(4)、周五(5)
           } else if (scheduleRule === 'weekend') {
-            assignedDays = [5, 6]
+            assignedDays = [0, 6] // 周末：周日(0)和周六(6)
           } else if (scheduleRule === 'flexible') {
             assignedDays = [0, 1, 2, 3, 4, 5, 6]
           } else {
