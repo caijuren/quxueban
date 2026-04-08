@@ -168,11 +168,20 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   console.log('[PUBLISH] Request:', { childIds, weekNo, taskRules, skipHolidays, holidayDates })
 
   if (!childIds || !Array.isArray(childIds) || childIds.length === 0) {
+    console.error('[PUBLISH] Invalid childIds:', childIds)
     throw new AppError(400, 'Missing or invalid childIds')
   }
 
   if (!weekNo) {
+    console.error('[PUBLISH] Missing weekNo')
     throw new AppError(400, 'Missing weekNo')
+  }
+
+  // 验证 weekNo 格式
+  const weekNoMatch = weekNo.match(/^(\d{4})-(\d{2})$/)
+  if (!weekNoMatch) {
+    console.error('[PUBLISH] Invalid weekNo format:', weekNo)
+    throw new AppError(400, `Invalid weekNo format: ${weekNo}. Expected format: YYYY-WW`)
   }
 
   // 获取所有活跃任务
@@ -180,6 +189,8 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     where: { familyId, isActive: true },
     orderBy: { sortOrder: 'asc' },
   })
+
+  console.log('[PUBLISH] Found tasks:', tasks.length)
 
   if (tasks.length === 0) {
     throw new AppError(400, 'No active tasks found. Please create tasks first.')
@@ -195,7 +206,10 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     },
   })
 
+  console.log('[PUBLISH] Found children:', children.length)
+
   if (children.length !== childIds.length) {
+    console.error('[PUBLISH] Children mismatch. Expected:', childIds.length, 'Found:', children.length)
     throw new AppError(400, 'Some children not found or do not belong to your family')
   }
 
@@ -203,6 +217,8 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   const family = await prisma.family.findUnique({ where: { id: familyId } })
   const settings = family?.settings as { dailyTimeLimit?: number } | null
   const dailyTimeLimit = settings?.dailyTimeLimit || 210
+
+  console.log('[PUBLISH] Daily time limit:', dailyTimeLimit)
 
   // 合并节假日列表
   const allHolidays = new Set(HOLIDAYS_2025)
