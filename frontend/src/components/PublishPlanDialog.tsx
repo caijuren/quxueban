@@ -337,13 +337,14 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
       if (!task) return;
       const rule = taskRules[taskId] || batchRule;
       
+      // JavaScript getDay(): 0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
       if (rule === 'daily') {
         [0,1,2,3,4,5,6].forEach(d => {
           if (dayAvailable[d]) dayMinutes[d] += task.timePerUnit;
         });
       }
       else if (rule === 'school') {
-        [0,1,3,4].forEach(d => {
+        [1,2,4,5].forEach(d => { // 上学日：周一(1)、周二(2)、周四(4)、周五(5)
           if (dayAvailable[d]) dayMinutes[d] += task.timePerUnit;
         });
       }
@@ -351,7 +352,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, onSuccess }: Publ
         shuffledFlexible.push({ taskId, time: task.timePerUnit });
       }
       else if (rule === 'weekend') {
-        [0,6].forEach(d => {
+        [0,6].forEach(d => { // 周末：周日(0)、周六(6)
           if (dayAvailable[d]) dayMinutes[d] += task.timePerUnit;
         });
       }

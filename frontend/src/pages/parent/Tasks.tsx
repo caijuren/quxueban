@@ -276,6 +276,7 @@ export default function TasksPage() {
           subject: subjectMap[formData.subject],
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
+          scheduleRule: formData.scheduleRule, // 保存排期规则到 tags
         },
       }
     });
