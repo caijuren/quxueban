@@ -78,9 +78,18 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
     `
     
     const formattedTasks = (tasks as any[]).map(task => {
-      // 从 tags 中提取 scheduleRule
-      const taskTags = task.tags || {};
-      const scheduleRule = typeof taskTags === 'object' && taskTags !== null ? taskTags.scheduleRule : null;
+      // 从 tags 中提取 scheduleRule（确保 tags 是对象）
+      let taskTags = task.tags || {};
+      if (typeof taskTags === 'string') {
+        try {
+          taskTags = JSON.parse(taskTags);
+        } catch (e) {
+          taskTags = {};
+        }
+      }
+      const scheduleRule = (typeof taskTags === 'object' && taskTags !== null && 'scheduleRule' in taskTags) 
+        ? taskTags.scheduleRule 
+        : null;
       
       return {
         id: task.id, 
@@ -93,7 +102,7 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
         sortOrder: task.sort_order, 
         isActive: task.is_active,
         appliesTo: task.applies_to || [],
-        tags: task.tags || {},
+        tags: typeof taskTags === 'object' ? taskTags : {},
         scheduleRule: scheduleRule || 'daily', // 添加 scheduleRule 字段
         createdAt: task.created_at, 
         updatedAt: task.updated_at,
