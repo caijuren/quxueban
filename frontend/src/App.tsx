@@ -81,7 +81,7 @@ function App() {
                 <Route path="task-templates" data-genie-title="Task Templates" data-genie-key="ParentTaskTemplates" element={<PageTransition transition="slide-up"><ParentTaskTemplates /></PageTransition>} />
                 <Route path="plans" data-genie-title="Plans" data-genie-key="ParentPlans" element={<PageTransition transition="slide-up"><ParentPlans /></PageTransition>} />
                 <Route path="library" data-genie-title="Library" data-genie-key="ParentLibrary" element={<PageTransition transition="slide-up"><ParentLibrary /></PageTransition>} />
-                <Route path="library/:id" data-genie-title="Book Detail" data-genie-key="BookDetail" element={<BookDetail />} />
+                <Route path="library/:id" data-genie-title="Book Detail" data-genie-key="BookDetail" element={<PageTransition transition="slide-up"><BookDetail /></PageTransition>} />
                 <Route path="reading" data-genie-title="Reading" data-genie-key="ParentReading" element={<PageTransition transition="slide-up"><ParentReading /></PageTransition>} />
                 <Route path="achievements" data-genie-title="Achievements" data-genie-key="ParentAchievements" element={<PageTransition transition="slide-up"><ParentAchievements /></PageTransition>} />
                 <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<PageTransition transition="slide-up"><ParentChildren /></PageTransition>} />

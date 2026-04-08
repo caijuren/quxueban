@@ -685,6 +685,115 @@ plansRouter.post('/temp-task', async (req: AuthRequest, res: Response) => {
   }
 })
 
+/**
+ * POST /modify - Modify weekly plan (remove/move task on specific day)
+ * Body: { taskId, action: 'remove'|'move', date?, fromDate?, toDate? }
+ */
+plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
+  try {
+    const { familyId, role } = req.user!
+    const { taskId, action, date, fromDate, toDate } = req.body
+
+    console.log('[MODIFY] Request:', { taskId, action, date, fromDate, toDate })
+
+    if (role !== 'parent') {
+      throw new AppError(403, 'Only parents can modify plans')
+    }
+
+    if (!taskId || !action) {
+      throw new AppError(400, 'Missing required fields: taskId, action')
+    }
+
+    if (!['remove', 'move'].includes(action)) {
+      throw new AppError(400, "Invalid action. Must be 'remove' or 'move'")
+    }
+
+    // Parse the target date to get day of week
+    const targetDate = action === 'move' ? new Date(fromDate!) : new Date(date!)
+    const dayOfWeek = targetDate.getDay() // 0=Sunday, 1=Monday, ..., 6=Saturday
+    const weekNo = getWeekNo(targetDate)
+
+    // Find the weekly plan for this task
+    const weeklyPlan = await prisma.weeklyPlan.findFirst({
+      where: {
+        taskId: parseInt(taskId),
+        weekNo,
+      },
+    })
+
+    if (!weeklyPlan) {
+      throw new AppError(404, '未找到该任务的周计划')
+    }
+
+    const currentAssignedDays = (weeklyPlan.assignedDays as number[]) || []
+
+    if (action === 'remove') {
+      // Remove the specific day from assignedDays
+      const newAssignedDays = currentAssignedDays.filter(d => d !== dayOfWeek)
+      const newTarget = Math.max(0, newAssignedDays.length)
+
+      await prisma.weeklyPlan.update({
+        where: { id: weeklyPlan.id },
+        data: {
+          assignedDays: newAssignedDays,
+          target: newTarget,
+          status: newTarget > 0 ? 'active' : 'inactive',
+        },
+      })
+
+      console.log(`[MODIFY] Removed day ${dayOfWeek} from task ${taskId}, remaining days:`, newAssignedDays)
+
+      res.json({
+        status: 'success',
+        message: '已删除该日安排',
+        data: { assignedDays: newAssignedDays, target: newTarget },
+      })
+    } else if (action === 'move') {
+      // Move from one day to another
+      const fromDateObj = new Date(fromDate!)
+      const toDateObj = new Date(toDate!)
+      const fromDay = fromDateObj.getDay()
+      const toDay = toDateObj.getDay()
+
+      if (fromDay === toDay) {
+        throw new AppError(400, '源日期和目标日期不能相同')
+      }
+
+      // Check if already assigned to target day
+      if (currentAssignedDays.includes(toDay)) {
+        throw new AppError(400, '该任务已在目标日期安排')
+      }
+
+      // Remove from source day and add to target day
+      const newAssignedDays = currentAssignedDays
+        .filter(d => d !== fromDay)
+        .concat(toDay)
+        .sort((a, b) => a - b)
+
+      await prisma.weeklyPlan.update({
+        where: { id: weeklyPlan.id },
+        data: {
+          assignedDays: newAssignedDays,
+        },
+      })
+
+      console.log(`[MODIFY] Moved task ${taskId} from day ${fromDay} to day ${toDay}, days:`, newAssignedDays)
+
+      res.json({
+        status: 'success',
+        message: '已移动到新日期',
+        data: { assignedDays: newAssignedDays },
+      })
+    }
+  } catch (error: any) {
+    console.error('[MODIFY] Error:', error)
+    if (error instanceof AppError) {
+      throw error
+    }
+    throw new AppError(500, '操作失败: ' + error.message)
+  }
+})
+
 // ============================================
 // Helper Functions
 // ============================================

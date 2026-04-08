@@ -32,15 +32,67 @@ const SUBJECT_MAP: Record<string, string> = { chinese: '语文', math: '数学',
 const PARENT_ROLE_MAP: Record<string, string> = { independent: '独立完成', accompany: '家长陪伴', 'parent-led': '家长主导', parent: '家长主导' }
 const DIFFICULTY_MAP: Record<string, string> = { basic: '普通', advanced: '提升', challenge: '挑战' }
 
-// 2025年中国法定节假日
-const HOLIDAYS_2025: Set<string> = new Set([
-  '2025-01-01', // 元旦
-  '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03', '2025-02-04', // 春节
-  '2025-04-04', '2025-04-05', '2025-04-06', // 清明节
-  '2025-05-01', '2025-05-02', '2025-05-03', '2025-05-04', '2025-05-05', // 劳动节
-  '2025-05-31', '2025-06-01', '2025-06-02', // 端午节
-  '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07', '2025-10-08', // 国庆节
-])
+/**
+ * 获取指定年份的中国法定节假日
+ */
+function getHolidaysByYear(year: number): Set<string> {
+  const holidays = new Set<string>()
+  
+  // 元旦
+  holidays.add(`${year}-01-01`)
+  
+  // 春节（简化处理，实际需要根据农历计算）
+  // 这里使用固定日期作为示例，实际应用中应使用农历计算
+  if (year === 2025) {
+    holidays.add('2025-01-28')
+    holidays.add('2025-01-29')
+    holidays.add('2025-01-30')
+    holidays.add('2025-01-31')
+    holidays.add('2025-02-01')
+    holidays.add('2025-02-02')
+    holidays.add('2025-02-03')
+    holidays.add('2025-02-04')
+  } else if (year === 2026) {
+    // 2026年春节：2月16日-2月23日
+    holidays.add('2026-02-16')
+    holidays.add('2026-02-17')
+    holidays.add('2026-02-18')
+    holidays.add('2026-02-19')
+    holidays.add('2026-02-20')
+    holidays.add('2026-02-21')
+    holidays.add('2026-02-22')
+    holidays.add('2026-02-23')
+  }
+  
+  // 清明节（4月4日或5日）
+  holidays.add(`${year}-04-04`)
+  holidays.add(`${year}-04-05`)
+  holidays.add(`${year}-04-06`)
+  
+  // 劳动节
+  holidays.add(`${year}-05-01`)
+  holidays.add(`${year}-05-02`)
+  holidays.add(`${year}-05-03`)
+  holidays.add(`${year}-05-04`)
+  holidays.add(`${year}-05-05`)
+  
+  // 端午节（6月1日左右）
+  holidays.add(`${year}-05-31`)
+  holidays.add(`${year}-06-01`)
+  holidays.add(`${year}-06-02`)
+  
+  // 国庆节
+  holidays.add(`${year}-10-01`)
+  holidays.add(`${year}-10-02`)
+  holidays.add(`${year}-10-03`)
+  holidays.add(`${year}-10-04`)
+  holidays.add(`${year}-10-05`)
+  holidays.add(`${year}-10-06`)
+  holidays.add(`${year}-10-07`)
+  holidays.add(`${year}-10-08`)
+  
+  return holidays
+}
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo } = req.body
@@ -122,36 +174,38 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const mappedCategory = category ? (CATEGORY_MAP[category] || category) : undefined
   const mappedType = type ? (TYPE_MAP[type] || type) : undefined
   
-  const existing = await prisma.$queryRawUnsafe(`SELECT id FROM tasks WHERE id = ${id} AND family_id = ${familyId}`) as any[]
+  const existing = await prisma.$queryRaw`SELECT id FROM tasks WHERE id = ${id} AND family_id = ${familyId}` as any[]
   if (!existing?.length) throw new AppError(404, 'Task not found')
 
   let validatedTags: any = {}
   if (tags?.subject && VALID_SUBJECTS.includes(tags.subject)) validatedTags.subject = tags.subject
   if (tags?.parentRole && VALID_PARENT_ROLES.includes(tags.parentRole)) validatedTags.parentRole = tags.parentRole
   if (tags?.difficulty && VALID_DIFFICULTIES.includes(tags.difficulty)) validatedTags.difficulty = tags.difficulty
-  if (tags?.totalAmount?.value > 0) validatedTags.totalAmount = tags.totalAmount
+  if (tags?.totalAmount?.value > 0 && tags?.totalAmount?.unit && VALID_AMOUNT_UNITS.includes(tags.totalAmount.unit)) validatedTags.totalAmount = tags.totalAmount
   if (tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule)) validatedTags.scheduleRule = tags.scheduleRule
 
-  const updates: string[] = []
-  if (name) updates.push(`name = '${name.replace(/'/g, "''")}'`)
-  if (mappedCategory) updates.push(`category = '${mappedCategory}'`)
-  if (mappedType) updates.push(`type = '${mappedType}'`)
-  if (timePerUnit !== undefined) updates.push(`time_per_unit = ${timePerUnit}`)
-  if (Object.keys(validatedTags).length > 0) updates.push(`tags = '${JSON.stringify(validatedTags).replace(/'/g, "''")}'::jsonb`)
-
-  if (updates.length > 0) await prisma.$executeRawUnsafe(`UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ${id}`)
+  const task = await prisma.task.update({
+    where: { id },
+    data: {
+      ...(name && { name }),
+      ...(mappedCategory && { category: mappedCategory }),
+      ...(mappedType && { type: mappedType }),
+      ...(timePerUnit !== undefined && { timePerUnit }),
+      ...(Object.keys(validatedTags).length > 0 && { tags: validatedTags }),
+      updatedAt: new Date()
+    }
+  })
   
-  const updated = await prisma.$queryRawUnsafe(`SELECT * FROM tasks WHERE id = ${id}`) as any[]
-  res.json({ status: 'success', message: 'Task updated', data: updated[0] })
+  res.json({ status: 'success', message: 'Task updated', data: task })
 })
 
 tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const task = await prisma.$queryRawUnsafe(`SELECT family_id FROM tasks WHERE id = ${id}`) as any[]
+  const task = await prisma.$queryRaw`SELECT family_id FROM tasks WHERE id = ${id}` as any[]
   if (!task?.length) throw new AppError(404, '任务不存在')
   if (task[0].family_id !== familyId) throw new AppError(403, '无权限')
-  await prisma.$executeRawUnsafe(`UPDATE tasks SET is_active = false WHERE id = ${id}`)
+  await prisma.task.update({ where: { id }, data: { isActive: false } })
   res.json({ status: 'success', message: 'Task deleted' })
 })
 
@@ -203,15 +257,15 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   const settings = family?.settings as { dailyTimeLimit?: number } | null
   const dailyTimeLimit = settings?.dailyTimeLimit || 210
 
-  // 合并节假日列表
-  const allHolidays = new Set(HOLIDAYS_2025)
-  if (Array.isArray(holidayDates)) {
-    holidayDates.forEach((d: string) => allHolidays.add(d))
-  }
-
   // 解析 weekNo 获取周开始日期
   const [year, week] = weekNo.split('-').map(Number)
   const weekStartDate = getWeekStartDate(year, week)
+
+  // 合并节假日列表
+  const allHolidays = getHolidaysByYear(year)
+  if (Array.isArray(holidayDates)) {
+    holidayDates.forEach((d: string) => allHolidays.add(d))
+  }
 
   console.log('[PUBLISH] Week start:', weekStartDate, 'Skip holidays:', skipHolidays, 'Holidays:', Array.from(allHolidays))
 
@@ -257,13 +311,13 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         }
 
         if (scheduleRule === 'daily') {
-          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天（后端索引：周一到周日）
+          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天（JavaScript标准索引：0=周日，1=周一，...，6=周六）
         } else if (scheduleRule === 'school') {
-          allowedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（后端索引）
+          allowedDays = [1, 2, 4, 5] // 周一、周二、周四、周五（JavaScript标准索引）
         } else if (scheduleRule === 'weekend') {
-          allowedDays = [5, 6] // 周六和周日（后端索引：5=周六，6=周日）
+          allowedDays = [0, 6] // 周六和周日（JavaScript标准索引：0=周日，6=周六）
         } else if (scheduleRule === 'flexible') {
-          allowedDays = [0, 1, 2, 3, 4] // 周一到周五（后端索引）
+          allowedDays = [1, 2, 3, 4, 5] // 周一到周五（JavaScript标准索引）
         } else {
           // 默认：每天
           allowedDays = [0, 1, 2, 3, 4, 5, 6]
@@ -300,12 +354,11 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         const daysAllocated: number[] = []
         for (const day of allowedDays) {
           if (dayTimeUsed[day] + task.timePerUnit <= dailyTimeLimit) {
-            // 计算实际日期并转换为 JavaScript 标准星期索引（0=周日）
+            // 计算实际日期（JavaScript标准索引：0=周日，1=周一，...，6=周六）
             const actualDate = new Date(weekStartDate)
             actualDate.setDate(actualDate.getDate() + day)
-            const jsDayIndex = actualDate.getDay() // 0=周日, 1=周一, ..., 6=周六
 
-            daysAllocated.push(jsDayIndex)
+            daysAllocated.push(day)
             dayTimeUsed[day] += task.timePerUnit
           }
         }
@@ -367,6 +420,9 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
       console.error('[PUBLISH] Error message:', error.message)
       console.error('[PUBLISH] Error stack:', error.stack)
     }
+    if (!(error instanceof AppError)) {
+      throw new AppError(500, 'Failed to publish plan: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    }
     throw error
   }
 })
@@ -378,9 +434,7 @@ tasksRouter.get('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
 
-  const task = await prisma.$queryRawUnsafe(
-    `SELECT * FROM tasks WHERE id = ${id} AND family_id = ${familyId} LIMIT 1`
-  ) as any[]
+  const task = await prisma.$queryRaw`SELECT * FROM tasks WHERE id = ${id} AND family_id = ${familyId} LIMIT 1` as any[]
 
   if (!task || task.length === 0) {
     throw new AppError(404, 'Task not found')
@@ -405,17 +459,17 @@ tasksRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 })
 
 /**
- * 辅助函数：根据年份和周数获取周开始日期
+ * 辅助函数：根据年份和周数获取周开始日期（周日）
  */
 function getWeekStartDate(year: number, week: number): Date {
   const jan1 = new Date(year, 0, 1)
-  const dayOfWeek = jan1.getDay()
-  const daysToAdd = (dayOfWeek <= 4 ? 1 - dayOfWeek : 8 - dayOfWeek)
-  const firstMonday = new Date(jan1)
-  firstMonday.setDate(jan1.getDate() + daysToAdd)
+  const dayOfWeek = jan1.getDay() // 0=周日, 1=周一, ..., 6=周六
+  const daysToAdd = (dayOfWeek === 0 ? 0 : 7 - dayOfWeek)
+  const firstSunday = new Date(jan1)
+  firstSunday.setDate(jan1.getDate() + daysToAdd)
   
-  const weekStart = new Date(firstMonday)
-  weekStart.setDate(firstMonday.getDate() + (week - 1) * 7)
+  const weekStart = new Date(firstSunday)
+  weekStart.setDate(firstSunday.getDate() + (week - 1) * 7)
   
   return weekStart
 }
