@@ -128,7 +128,7 @@ taskTemplatesRouter.get('/children/:childId/tasks', async (req: AuthRequest, res
   }
 
   const tasks = await prisma.$queryRaw`
-    SELECT ct.*, tt.name as template_name, tt.type as template_type, tt.subject, tt.single_duration as template_duration
+    SELECT ct.*, tt.name as template_name, tt.type as template_type, tt.subject, tt.single_duration as template_duration, tt.schedule_rule as schedule_rule
     FROM child_tasks ct
     JOIN task_templates tt ON ct.task_template_id = tt.id
     WHERE ct.child_id = ${childId} AND ct.family_id = ${familyId}

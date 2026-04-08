@@ -157,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await apiClient.post('/auth/child-login', credentials);
+      const response = await apiClient.post('/auth/child/login', credentials);
       const { user, token } = response.data.data;
       setState({ user, token, isAuthenticated: true });
       redirectByRole(user);

@@ -99,25 +99,60 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
     // Check if task should be shown today
     let showToday = true
 
+    // 首先检查任务是否分配到了今天
+    let assignedDays = plan.assignedDays as number[] || []
+    
+    // 如果没有实际分配，根据 scheduleRule 计算默认值
+    if (assignedDays.length === 0) {
+      const taskTags = task.tags as any || {}
+      const taskWeeklyRule = task.weeklyRule as any || {}
+      const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
+      
+      switch (scheduleRule) {
+        case 'daily':
+          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
+          break
+        case 'school':
+          assignedDays = [1, 2, 4, 5] // 周一、周二、周四、周五
+          break
+        case 'flexible':
+          assignedDays = [1, 2, 3, 4, 5] // 周一到周五
+          break
+        case 'weekend':
+          assignedDays = [0, 6] // 周日、周六
+          break
+        default:
+          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 默认为每天
+      }
+    }
+    
+    if (!assignedDays.includes(dayOfWeek)) {
+      showToday = false
+    }
+
     // School homework: exclude Wednesday (day 3)
-    if (task.category === 'school') {
+    if (showToday && (task.category === 'school' || task.category === 'advanced')) {
+      console.log(`Task: ${task.name}, Category: ${task.category}, Day: ${dayOfWeek}`)
       if (task.name.includes('培优') || task.name.includes('高思') || task.name.includes('全新英语')) {
         // Advanced: weekend only
+        console.log(`Advanced task, should only show on weekend: ${dayOfWeek === 0 || dayOfWeek === 6}`)
         showToday = dayOfWeek === 0 || dayOfWeek === 6
       } else {
         // Regular school homework: exclude Wednesday
+        console.log(`Regular school task, should exclude Wednesday: ${dayOfWeek !== 3}`)
         showToday = dayOfWeek !== 3
       }
     }
+    console.log(`Task: ${task.name}, Show today: ${showToday}, Assigned days: ${assignedDays}`)
 
     // Apply weekly rule overrides
-    if (weeklyRule?.onlyWeekend) {
+    if (showToday && weeklyRule?.onlyWeekend) {
       showToday = showToday && (dayOfWeek === 0 || dayOfWeek === 6)
     }
-    if (weeklyRule?.excludeDays && weeklyRule.excludeDays.length > 0) {
+    if (showToday && weeklyRule?.excludeDays && weeklyRule.excludeDays.length > 0) {
       showToday = showToday && !weeklyRule.excludeDays.includes(dayOfWeek)
     }
-    if (weeklyRule?.days && weeklyRule.days.length > 0) {
+    if (showToday && weeklyRule?.days && weeklyRule.days.length > 0) {
       showToday = weeklyRule.days.includes(dayOfWeek)
     }
 
@@ -135,6 +170,10 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
       progress: plan.progress,
       completedToday: todayCheckin?.status === 'completed',
       todayStatus: todayCheckin?.status || null,
+      // 精细化记录字段
+      trackingType: (task as any).trackingType || 'simple',
+      trackingUnit: (task as any).trackingUnit || null,
+      targetValue: (task as any).targetValue || null,
     }
 
     if (showToday && !todayCheckin) {
@@ -180,6 +219,10 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
     category: checkin.plan?.task?.category || '',
     timePerUnit: checkin.plan?.task?.timePerUnit || 30,
     originalStatus: checkin.status,
+    // 精细化记录字段
+    trackingType: (checkin.plan?.task as any)?.trackingType || 'simple',
+    trackingUnit: (checkin.plan?.task as any)?.trackingUnit || null,
+    targetValue: (checkin.plan?.task as any)?.targetValue || null,
   }))
 
   // Advance tasks: show if remaining time >= 30min and all fixed tasks completed
@@ -198,6 +241,10 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
           timePerUnit: plan.task.timePerUnit,
           currentProgress: plan.progress,
           target: plan.target,
+          // 精细化记录字段
+          trackingType: (plan.task as any).trackingType || 'simple',
+          trackingUnit: (plan.task as any).trackingUnit || null,
+          targetValue: (plan.task as any).targetValue || null,
         })
       }
     }
@@ -222,12 +269,12 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /checkin - Save daily checkin
- * Body: { taskId, planId, status, value }
+ * Body: { taskId, planId, status, value, completedValue, notes }
  *
  * Statuses: completed, partial, postponed, not_involved, not_completed, makeup, advance
  */
 plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
-  const { taskId, planId, status, value } = req.body
+  const { taskId, planId, status, value, completedValue, notes } = req.body
   const { userId, familyId, role } = req.user!
 
   // Only children can check in
@@ -259,12 +306,14 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
 
   if (existingCheckin) {
     // Update existing checkin
-    const updatedCheckin = await prisma.dailyCheckin.update({
+    const updatedCheckin = await (prisma.dailyCheckin.update as any)({
       where: { id: existingCheckin.id },
       data: {
         status,
         value: value || 1,
         planId: planId || existingCheckin.planId,
+        completedValue: completedValue || null,
+        notes: notes || null,
       },
     })
 
@@ -283,7 +332,7 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
     })
   } else {
     // Create new checkin
-    const checkin = await prisma.dailyCheckin.create({
+    const checkin = await (prisma.dailyCheckin.create as any)({
       data: {
         familyId,
         childId: userId,
@@ -292,6 +341,8 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         status,
         value: value || 1,
         checkDate: today,
+        completedValue: completedValue || null,
+        notes: notes || null,
       },
     })
 
@@ -312,51 +363,92 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
 })
 
 /**
- * GET /week/:weekStart - Get weekly plan for parent view
- * Returns: WeeklyPlan[] for all children in the family
+ * GET /week/:weekStart - Get weekly plan
+ * For parents: Returns WeeklyPlan[] for all children in the family
+ * For children: Returns WeeklyPlan[] only for the current child
  */
 plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
-  const { familyId, role } = req.user!
+  const { familyId, role, userId } = req.user!
   const weekStart = req.params.weekStart as string
-
-  // Only parents can view family weekly plans
-  if (role !== 'parent') {
-    throw new AppError(403, 'This endpoint is only for parents')
-  }
 
   const weekNo = getWeekNo(new Date(weekStart))
 
-  // Get all children in the family
-  const children = await prisma.user.findMany({
-    where: {
-      familyId,
-      role: 'child',
-      status: 'active',
-    },
-    select: {
-      id: true,
-      name: true,
-      avatar: true,
-    },
-  })
+  let children = []
+  let weeklyPlans = []
 
-  // Get weekly plans for all children
-  const weeklyPlans = await prisma.weeklyPlan.findMany({
-    where: {
-      familyId,
-      weekNo,
-    },
-    include: {
-      task: true,
-      child: {
-        select: {
-          id: true,
-          name: true,
-          avatar: true,
+  if (role === 'parent') {
+    // Parents can view all children in the family
+    children = await prisma.user.findMany({
+      where: {
+        familyId,
+        role: 'child',
+        status: 'active',
+      },
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+      },
+    })
+
+    // Get weekly plans for all children
+    weeklyPlans = await prisma.weeklyPlan.findMany({
+      where: {
+        familyId,
+        weekNo,
+      },
+      include: {
+        task: true,
+        child: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
         },
       },
-    },
-  })
+    })
+  } else if (role === 'child') {
+    // Children can only view their own plans
+    const child = await prisma.user.findUnique({
+      where: {
+        id: userId,
+        role: 'child',
+        status: 'active',
+      },
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+      },
+    })
+
+    if (!child) {
+      throw new AppError(404, 'Child not found')
+    }
+
+    children = [child]
+
+    // Get weekly plans only for the current child
+    weeklyPlans = await prisma.weeklyPlan.findMany({
+      where: {
+        childId: userId,
+        weekNo,
+      },
+      include: {
+        task: true,
+        child: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+      },
+    })
+  } else {
+    throw new AppError(403, 'Unauthorized')
+  }
 
   // Group by child and format for frontend
   const plansByChild = children.map(child => {
@@ -498,14 +590,18 @@ plansRouter.get('/week', async (req: AuthRequest, res: Response) => {
       totalTarget,
       totalProgress,
       completionRate,
-      plans: weeklyPlans.map(p => ({
+      allocations: weeklyPlans.map(p => ({
         planId: p.id,
         taskId: p.taskId,
         taskName: p.task.name,
         category: p.task.category,
+        timePerUnit: p.task.timePerUnit,
         target: p.target,
         progress: p.progress,
         status: p.status,
+        assignedDays: p.assignedDays as number[] || [],
+        scheduleRule: p.task.scheduleRule || 'daily',
+        subject: (p.task.tags as any)?.subject || 'other',
       })),
       dailyStats,
     },

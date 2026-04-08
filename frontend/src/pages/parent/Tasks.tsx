@@ -47,6 +47,10 @@ export interface Task {
     weeklyFrequency?: number;
   };
   appliesTo?: number[];
+  // 精细化记录字段
+  trackingType?: 'simple' | 'numeric' | 'progress';
+  trackingUnit?: string;
+  targetValue?: number;
 }
 
 const tagConfig: Record<string, { icon: any; color: string }> = {
@@ -93,6 +97,10 @@ export default function TasksPage() {
     completedUnits: 0,
     totalPages: 0,
     completedPages: 0,
+    // 精细化记录字段
+    trackingType: 'simple' as 'simple' | 'numeric' | 'progress',
+    trackingUnit: '' as string,
+    targetValue: 0 as number,
   });
   // 使用localStorage存储当前选中的选项卡
   const [activeTab, setActiveTab] = useState<'all' | 'subject' | 'type' | 'completion'>(() => {
@@ -160,6 +168,10 @@ export default function TasksPage() {
       completedUnits: 0,
       totalPages: 0,
       completedPages: 0,
+      // 精细化记录字段
+      trackingType: 'simple',
+      trackingUnit: '',
+      targetValue: 0,
     });
   };
 
@@ -189,6 +201,10 @@ export default function TasksPage() {
       completedUnits: 0,
       totalPages: 0,
       completedPages: 0,
+      // 精细化记录字段 - 从task中获取
+      trackingType: (task as any).trackingType || 'simple',
+      trackingUnit: (task as any).trackingUnit || '',
+      targetValue: (task as any).targetValue || 0,
     });
     setEditDialogOpen(true);
   };
@@ -226,6 +242,10 @@ export default function TasksPage() {
         scheduleRule: formData.scheduleRule,
         weeklyFrequency: formData.weeklyFrequency,
       },
+      // 精细化记录字段
+      trackingType: formData.trackingType,
+      trackingUnit: formData.trackingUnit,
+      targetValue: formData.targetValue,
     });
   };
 
@@ -264,6 +284,10 @@ export default function TasksPage() {
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
         },
+        // 精细化记录字段
+        trackingType: formData.trackingType,
+        trackingUnit: formData.trackingUnit,
+        targetValue: formData.targetValue,
       }
     });
   };
@@ -989,6 +1013,102 @@ export default function TasksPage() {
                 </div>
               </div>
             </div>
+
+            {/* 记录方式设置 */}
+            <div className="space-y-3 pt-4 border-t border-gray-100">
+              <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                记录方式设置
+              </Label>
+              
+              {/* 记录方式选择 */}
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">记录类型</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant={formData.trackingType === 'simple' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, trackingType: 'simple', trackingUnit: '', targetValue: 0 })}
+                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    简单记录
+                  </Button>
+                  <Button
+                    variant={formData.trackingType === 'numeric' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, trackingType: 'numeric' })}
+                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    数值记录
+                  </Button>
+                  <Button
+                    variant={formData.trackingType === 'progress' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, trackingType: 'progress' })}
+                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    进度记录
+                  </Button>
+                </div>
+              </div>
+
+              {/* 单位和目标值（仅在数值记录或进度记录时显示） */}
+              {formData.trackingType !== 'simple' && (
+                <div className="space-y-3 pt-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-500">计量单位</Label>
+                      <Select
+                        value={formData.trackingUnit}
+                        onValueChange={(value) => setFormData({ ...formData, trackingUnit: value })}
+                      >
+                        <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                          <SelectValue placeholder="选择单位" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="页">页</SelectItem>
+                          <SelectItem value="次">次</SelectItem>
+                          <SelectItem value="分钟">分钟</SelectItem>
+                          <SelectItem value="道">道</SelectItem>
+                          <SelectItem value="篇">篇</SelectItem>
+                          <SelectItem value="个">个</SelectItem>
+                          <SelectItem value="组">组</SelectItem>
+                          <SelectItem value="字">字</SelectItem>
+                          <SelectItem value="词">词</SelectItem>
+                          <SelectItem value="句">句</SelectItem>
+                          <SelectItem value="段">段</SelectItem>
+                          <SelectItem value="章">章</SelectItem>
+                          <SelectItem value="本">本</SelectItem>
+                          <SelectItem value="套">套</SelectItem>
+                          <SelectItem value="卷">卷</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-500">目标值（可选）</Label>
+                      <Input
+                        type="number"
+                        value={formData.targetValue || ''}
+                        onChange={e => setFormData({ ...formData, targetValue: parseInt(e.target.value) || 0 })}
+                        placeholder="如：100"
+                        className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 预览提示 */}
+                  <div className="bg-purple-50 rounded-lg p-3 text-sm text-purple-700">
+                    <p className="flex items-center gap-2">
+                      <span className="text-lg">💡</span>
+                      <span>
+                        孩子完成时将看到：
+                        {formData.trackingType === 'numeric' 
+                          ? `输入本次完成的${formData.trackingUnit || '数量'}${formData.targetValue ? `（目标：${formData.targetValue}${formData.trackingUnit}）` : ''}`
+                          : `输入当前进度${formData.trackingUnit ? `（${formData.trackingUnit}）` : ''}${formData.targetValue ? `，目标${formData.targetValue}${formData.trackingUnit}` : ''}`
+                        }
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
@@ -1264,6 +1384,102 @@ export default function TasksPage() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* 记录方式设置 */}
+            <div className="space-y-3 pt-4 border-t border-gray-100">
+              <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                记录方式设置
+              </Label>
+              
+              {/* 记录方式选择 */}
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">记录类型</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant={formData.trackingType === 'simple' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, trackingType: 'simple', trackingUnit: '', targetValue: 0 })}
+                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    简单记录
+                  </Button>
+                  <Button
+                    variant={formData.trackingType === 'numeric' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, trackingType: 'numeric' })}
+                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    数值记录
+                  </Button>
+                  <Button
+                    variant={formData.trackingType === 'progress' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, trackingType: 'progress' })}
+                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    进度记录
+                  </Button>
+                </div>
+              </div>
+
+              {/* 单位和目标值（仅在数值记录或进度记录时显示） */}
+              {formData.trackingType !== 'simple' && (
+                <div className="space-y-3 pt-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-500">计量单位</Label>
+                      <Select
+                        value={formData.trackingUnit}
+                        onValueChange={(value) => setFormData({ ...formData, trackingUnit: value })}
+                      >
+                        <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                          <SelectValue placeholder="选择单位" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="页">页</SelectItem>
+                          <SelectItem value="次">次</SelectItem>
+                          <SelectItem value="分钟">分钟</SelectItem>
+                          <SelectItem value="道">道</SelectItem>
+                          <SelectItem value="篇">篇</SelectItem>
+                          <SelectItem value="个">个</SelectItem>
+                          <SelectItem value="组">组</SelectItem>
+                          <SelectItem value="字">字</SelectItem>
+                          <SelectItem value="词">词</SelectItem>
+                          <SelectItem value="句">句</SelectItem>
+                          <SelectItem value="段">段</SelectItem>
+                          <SelectItem value="章">章</SelectItem>
+                          <SelectItem value="本">本</SelectItem>
+                          <SelectItem value="套">套</SelectItem>
+                          <SelectItem value="卷">卷</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-500">目标值（可选）</Label>
+                      <Input
+                        type="number"
+                        value={formData.targetValue || ''}
+                        onChange={e => setFormData({ ...formData, targetValue: parseInt(e.target.value) || 0 })}
+                        placeholder="如：100"
+                        className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 预览提示 */}
+                  <div className="bg-purple-50 rounded-lg p-3 text-sm text-purple-700">
+                    <p className="flex items-center gap-2">
+                      <span className="text-lg">💡</span>
+                      <span>
+                        孩子完成时将看到：
+                        {formData.trackingType === 'numeric' 
+                          ? `输入本次完成的${formData.trackingUnit || '数量'}${formData.targetValue ? `（目标：${formData.targetValue}${formData.trackingUnit}）` : ''}`
+                          : `输入当前进度${formData.trackingUnit ? `（${formData.trackingUnit}）` : ''}${formData.targetValue ? `，目标${formData.targetValue}${formData.trackingUnit}` : ''}`
+                        }
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter className="border-t border-gray-100 pt-6 gap-3">

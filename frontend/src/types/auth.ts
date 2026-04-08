@@ -20,9 +20,8 @@ export interface LoginCredentials {
 }
 
 export interface ChildLoginCredentials {
-  familyCode: string;
   childName: string;
-  pin: string;
+  childPin: string;
 }
 
 export interface RegisterData {

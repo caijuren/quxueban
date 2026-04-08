@@ -9,10 +9,12 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
+import ChildLogin from "./pages/ChildLogin";
 import Register from "./pages/Register";
 import ChildLayout from "./components/child/Layout";
 import ChildDashboard from "./pages/child/Dashboard";
 import ChildTasks from "./pages/child/Tasks";
+import ChildWeeklyPlan from "./pages/child/WeeklyPlanPage";
 import ChildLibrary from "./pages/child/Library";
 import ChildAchievements from "./pages/child/Achievements";
 import ChildReports from "./pages/child/Reports";
@@ -65,12 +67,14 @@ function App() {
               {/* Public Routes */}
               <Route path="/" data-genie-title="Home Page" data-genie-key="Home" element={<PageTransition transition="slide-up"><Index /></PageTransition>} />
               <Route path="/login" data-genie-title="Login" data-genie-key="Login" element={<PageTransition transition="fade"><Login /></PageTransition>} />
+              <Route path="/child-login" data-genie-title="Child Login" data-genie-key="ChildLogin" element={<PageTransition transition="fade"><ChildLogin /></PageTransition>} />
               <Route path="/register" data-genie-title="Register" data-genie-key="Register" element={<PageTransition transition="fade"><Register /></PageTransition>} />
 
               {/* Child Routes with Layout */}
               <Route path="/child" element={<ChildLayout />}>
                 <Route index data-genie-title="Child Dashboard" data-genie-key="ChildDashboard" element={<PageTransition transition="slide-up"><ChildDashboard /></PageTransition>} />
                 <Route path="tasks" data-genie-title="Tasks" data-genie-key="ChildTasks" element={<PageTransition transition="slide-up"><ChildTasks /></PageTransition>} />
+                <Route path="weekly-plan" data-genie-title="Weekly Plan" data-genie-key="ChildWeeklyPlan" element={<PageTransition transition="slide-up"><ChildWeeklyPlan /></PageTransition>} />
                 <Route path="library" data-genie-title="Library" data-genie-key="Library" element={<PageTransition transition="slide-up"><ChildLibrary /></PageTransition>} />
                 <Route path="achievements" data-genie-title="Achievements" data-genie-key="Achievements" element={<PageTransition transition="slide-up"><ChildAchievements /></PageTransition>} />
                 <Route path="reports" data-genie-title="Reports" data-genie-key="Reports" element={<PageTransition transition="slide-up"><ChildReports /></PageTransition>} />

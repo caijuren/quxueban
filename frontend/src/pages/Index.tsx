@@ -85,7 +85,14 @@ const Index = () => {
                 onClick={() => navigate('/login')}
                 className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
               >
-                登录
+                家长登录
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/child-login')}
+                className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
+              >
+                孩子登录
               </Button>
               <Button
                 onClick={() => navigate('/register')}

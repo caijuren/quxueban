@@ -159,28 +159,19 @@ authRouter.post('/login', async (req, res: Response) => {
 
 /**
  * POST /child/login - Simplified login for children using PIN
- * Body: { familyCode, childName, childPin }
+ * Body: { childName, childPin }
  */
 authRouter.post('/child/login', async (req, res: Response) => {
-  const { familyCode, childName, childPin } = req.body
+  console.log('收到登录请求:', req.body)
+  const { childName, childPin } = req.body
 
-  if (!familyCode || !childName || !childPin) {
-    throw new AppError(400, 'Missing required fields: familyCode, childName, childPin')
-  }
-
-  // Find family
-  const family = await prisma.family.findUnique({
-    where: { familyCode },
-  })
-
-  if (!family) {
-    throw new AppError(401, 'Invalid family code')
+  if (!childName || !childPin) {
+    throw new AppError(400, 'Missing required fields: childName, childPin')
   }
 
   // Find child user
   const child = await prisma.user.findFirst({
     where: {
-      familyId: family.id,
       name: childName,
       role: 'child',
       status: 'active',
@@ -203,7 +194,7 @@ authRouter.post('/child/login', async (req, res: Response) => {
     id: child.id,
     name: child.name,
     role: child.role,
-    familyId: family.id,
+    familyId: child.familyId,
     avatar: child.avatar,
   })
 
@@ -216,9 +207,7 @@ authRouter.post('/child/login', async (req, res: Response) => {
         id: child.id,
         name: child.name,
         role: child.role,
-        familyId: family.id,
-        familyName: family.name,
-        familyCode: family.familyCode,
+        familyId: child.familyId,
         avatar: child.avatar,
       },
     },
