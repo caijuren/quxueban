@@ -937,7 +937,7 @@ export default function PlansPage() {
                   console.log('任务名称:', taskItem.taskName);
                   console.log('scheduleRule:', taskItem.scheduleRule);
                   console.log('assignedDays (后端索引):', taskItem.assignedDays);
-                  console.log('assignedDays 含义:', taskItem.assignedDays?.map(d => {
+                  console.log('assignedDays 含义:', taskItem.assignedDays?.map((d: number) => {
                     const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
                     return `${d}=${dayNames[d]}`;
                   }));

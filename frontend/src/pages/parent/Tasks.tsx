@@ -43,6 +43,7 @@ export interface Task {
     subject?: string;
     difficulty?: string;
     parentRole?: string;
+    scheduleRule?: ScheduleRule;
   };
   appliesTo?: number[];
 }
