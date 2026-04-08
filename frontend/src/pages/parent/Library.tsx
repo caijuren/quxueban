@@ -601,7 +601,10 @@ export default function LibraryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">图书馆</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <LibraryIcon className="w-7 h-7 text-purple-500" />
+            图书馆
+          </h1>
           <p className="text-gray-500 mt-1">管理家庭藏书，开始新的阅读之旅</p>
         </div>
         <div className="flex gap-2">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -117,31 +117,8 @@ export default function TasksPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const subjectMap: Record<string, string> = {
-        '语文': 'chinese',
-        '数学': 'math',
-        '英语': 'english',
-        '体育': 'sports'
-      };
-      const parentRoleMap: Record<string, string> = {
-        '独立完成': 'independent',
-        '家长陪伴': 'accompany',
-        '家长主导': 'parent-led'
-      };
-      const difficultyMap: Record<string, string> = {
-        '基础': 'basic',
-        '提高': 'advanced',
-        '挑战': 'challenge'
-      };
-      const r = await apiClient.post('/tasks', {
-        ...data,
-        tags: {
-          subject: subjectMap[data.subject],
-          parentRole: parentRoleMap[data.parentRole],
-          difficulty: difficultyMap[data.difficulty],
-        },
-      });
+    mutationFn: async (data: any) => {
+      const r = await apiClient.post('/tasks', data);
       return r.data;
     },
     onSuccess: () => {
@@ -155,30 +132,7 @@ export default function TasksPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: number; updates: Partial<Task> }) => {
-      const subjectMap: Record<string, string> = {
-        '语文': 'chinese',
-        '数学': 'math',
-        '英语': 'english',
-        '体育': 'sports'
-      };
-      const parentRoleMap: Record<string, string> = {
-        '独立完成': 'independent',
-        '家长陪伴': 'accompany',
-        '家长主导': 'parent-led'
-      };
-      const difficultyMap: Record<string, string> = {
-        '基础': 'basic',
-        '提高': 'advanced',
-        '挑战': 'challenge'
-      };
-      const r = await apiClient.put('/tasks/' + data.id, {
-        ...data.updates,
-        tags: {
-          subject: subjectMap[data.updates.tags?.subject as string] || data.updates.tags?.subject,
-          parentRole: parentRoleMap[data.updates.tags?.parentRole as string] || data.updates.tags?.parentRole,
-          difficulty: difficultyMap[data.updates.tags?.difficulty as string] || data.updates.tags?.difficulty,
-        },
-      });
+      const r = await apiClient.put('/tasks/' + data.id, data.updates);
       return r.data;
     },
     onSuccess: () => {
@@ -242,7 +196,35 @@ export default function TasksPage() {
       toast.error('请输入任务名称');
       return;
     }
-    createMutation.mutate(formData);
+    const subjectMap: Record<string, string> = {
+      '语文': 'chinese',
+      '数学': 'math',
+      '英语': 'english',
+      '体育': 'sports'
+    };
+    const parentRoleMap: Record<string, string> = {
+      '独立完成': 'independent',
+      '家长陪伴': 'accompany',
+      '家长主导': 'parent-led'
+    };
+    const difficultyMap: Record<string, string> = {
+      '基础': 'basic',
+      '提高': 'advanced',
+      '挑战': 'challenge'
+    };
+    createMutation.mutate({
+      name: formData.name,
+      category: formData.category,
+      type: formData.type,
+      timePerUnit: formData.timePerUnit,
+      tags: {
+        subject: subjectMap[formData.subject],
+        parentRole: parentRoleMap[formData.parentRole],
+        difficulty: difficultyMap[formData.difficulty],
+        scheduleRule: formData.scheduleRule,
+        weeklyFrequency: formData.weeklyFrequency,
+      },
+    });
   };
 
   const handleUpdate = () => {
@@ -269,11 +251,16 @@ export default function TasksPage() {
     updateMutation.mutate({ 
       id: taskToEdit.id, 
       updates: {
-        ...formData,
+        name: formData.name,
+        category: formData.category,
+        type: formData.type,
+        timePerUnit: formData.timePerUnit,
         tags: {
           subject: subjectMap[formData.subject],
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
+          scheduleRule: formData.scheduleRule,
+          weeklyFrequency: formData.weeklyFrequency,
         },
       }
     });
@@ -366,7 +353,10 @@ export default function TasksPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">任务配置</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <ListTodo className="w-7 h-7 text-purple-500" />
+            任务配置
+          </h1>
           <p className="text-gray-500 mt-1">管理学习任务的模板和分类</p>
         </div>
         <Button
@@ -707,18 +697,23 @@ export default function TasksPage() {
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-xl font-bold text-red-600 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-white" />
+              </div>
+              确认删除
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500 ml-[52px]">
               确定要删除任务「{taskToDelete?.name}」吗？此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogFooter className="gap-3">
+            <AlertDialogCancel className="rounded-xl h-11 px-6">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => taskToDelete && deleteMutation.mutate(taskToDelete.id)}
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-11 px-6"
             >
               删除
             </AlertDialogAction>
@@ -728,9 +723,14 @@ export default function TasksPage() {
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-gray-900">新建任务</DialogTitle>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                <Plus className="w-5 h-5 text-white" />
+              </div>
+              新建任务
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* 任务名称 */}
@@ -748,13 +748,13 @@ export default function TasksPage() {
             {/* 分配规则 */}
             <div className="space-y-3">
               <Label className="text-sm font-medium text-gray-700">分配规则</Label>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <Button
                   variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
                   className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
-                  每周任务
+                  每日任务
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
@@ -764,18 +764,18 @@ export default function TasksPage() {
                   在校日任务
                 </Button>
                 <Button
-                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  周末任务
-                </Button>
-                <Button
                   variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
                   className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   智能分配
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  周末任务
                 </Button>
               </div>
               {formData.scheduleRule === 'flexible' && (
@@ -988,9 +988,9 @@ export default function TasksPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="border-t border-gray-100 py-4">
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="rounded-xl border-gray-200 hover:bg-gray-50">取消</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
+          <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="rounded-xl h-11 px-6 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
               {createMutation.isPending ? '创建中...' : '创建'}
             </Button>
           </DialogFooter>
@@ -999,9 +999,14 @@ export default function TasksPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-gray-900">编辑任务</DialogTitle>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                <Edit2 className="w-5 h-5 text-white" />
+              </div>
+              编辑任务
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* 任务名称 */}
@@ -1019,13 +1024,13 @@ export default function TasksPage() {
             {/* 分配规则 */}
             <div className="space-y-3">
               <Label className="text-sm font-medium text-gray-700">分配规则</Label>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <Button
                   variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
                   className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
-                  每周任务
+                  每日任务
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
@@ -1035,18 +1040,18 @@ export default function TasksPage() {
                   在校日任务
                 </Button>
                 <Button
-                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  周末任务
-                </Button>
-                <Button
                   variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
                   className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   智能分配
+                </Button>
+                <Button
+                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
+                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  周末任务
                 </Button>
               </div>
               {formData.scheduleRule === 'flexible' && (
@@ -1259,9 +1264,9 @@ export default function TasksPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="border-t border-gray-100 py-4">
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl border-gray-200 hover:bg-gray-50">取消</Button>
-            <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
+          <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
+            <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="rounded-xl h-11 px-6 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
               {updateMutation.isPending ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>

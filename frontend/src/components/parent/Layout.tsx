@@ -14,11 +14,13 @@ import {
   LogOut,
   Menu,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -105,7 +107,7 @@ export default function ParentLayout() {
           >
             <Menu className="size-5" />
           </Button>
-          <h1 className="font-semibold text-gray-900">小书虫</h1>
+          <h1 className="font-semibold text-gray-900 text-base">趣学伴</h1>
           <Avatar className="size-9 ring-2 ring-white shadow-sm">
             <AvatarImage src={user?.avatar} />
             <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
@@ -150,7 +152,7 @@ export default function ParentLayout() {
       {/* Desktop Layout */}
       <div className="hidden lg:flex min-h-screen relative z-10">
         {/* Desktop Sidebar */}
-        <aside className="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col h-screen sticky top-0">
+        <aside className="w-56 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col h-screen sticky top-0">
           <SidebarContent 
             user={user} 
             onLogout={handleLogout}
@@ -187,29 +189,21 @@ function SidebarContent({ user, onLogout, onClose, currentPath }: SidebarContent
   return (
     <>
       {/* Header */}
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-purple-500/25">
-              🐛
-            </div>
-            <div>
-              <h1 className="font-bold text-gray-900 text-lg">小书虫</h1>
-              <p className="text-xs text-gray-500">学习计划</p>
-            </div>
+      <div className="p-4">
+        <div className="flex items-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/25 hover:scale-105 transition-transform duration-300">
+            🐛
           </div>
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="size-5" />
-            </Button>
-          )}
+          <div className="ml-2">
+            <h1 className="font-bold text-gray-900 text-base">趣学伴</h1>
+          </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-4">
-        <nav className="space-y-1">
-          {navItems.map((item) => {
+      <ScrollArea className="flex-1 px-3">
+        <nav className="space-y-1.5">
+          {navItems.filter(item => item.path !== '/parent/settings').map((item) => {
             // 对于概览(/parent)，只精确匹配，不匹配子路径
             // 对于其他路径，匹配当前路径或以该路径开头的子路径
             const isActive = item.path === '/parent'
@@ -222,51 +216,70 @@ function SidebarContent({ user, onLogout, onClose, currentPath }: SidebarContent
                 to={item.path}
                 onClick={onClose}
                 className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group',
+                  'flex items-center gap-2.5 px-3 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden',
                   isActive
                     ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white font-medium shadow-lg shadow-purple-500/25'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 )}
               >
-                <Icon className={cn(
-                  'size-5 transition-transform duration-200',
-                  isActive ? '' : 'group-hover:scale-110'
-                )} />
-                <span>{item.label}</span>
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300',
+                  isActive ? 'bg-white/20' : 'bg-gray-100/50 group-hover:bg-gray-100'
+                )}>
+                  <Icon className={cn(
+                    'size-4 transition-transform duration-200',
+                    isActive ? '' : 'group-hover:scale-110'
+                  )} />
+                </div>
+                <span className="text-sm transition-all duration-200 group-hover:translate-x-1">{item.label}</span>
+                {isActive && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-l-xl" />
+                )}
               </NavLink>
             );
           })}
         </nav>
       </ScrollArea>
 
-      {/* User Section */}
-      <div className="p-4 mt-auto">
-        <div className="space-y-3">
-          {/* Current User Card */}
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200/50">
+      {/* User Info */}
+      <div className="p-3 border-t border-gray-200/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <div className="relative">
-              <Avatar className="size-11 ring-2 ring-white shadow-md">
+              <Avatar className="size-10 ring-2 ring-white shadow-sm">
                 <AvatarImage src={user?.avatar} />
-                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white font-semibold">
+                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
                   {user?.name?.charAt(0) || 'P'}
                 </AvatarFallback>
               </Avatar>
               <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full ring-2 ring-white" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{user?.name || '家长'}</p>
+            <div>
+              <p className="font-medium text-gray-900 text-sm">{user?.name || '家长'}</p>
               <p className="text-xs text-gray-500">在线</p>
             </div>
           </div>
-
-          {/* Logout Button */}
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-200 group"
-          >
-            <LogOut className="size-5 group-hover:scale-110 transition-transform" />
-            <span className="font-medium">退出登录</span>
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-1 rounded-xl hover:bg-gray-100 transition-all">
+                <ChevronDown className="size-4 text-gray-400" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="p-2 border-b border-gray-100">
+                <p className="font-medium text-gray-900 text-sm">{user?.name || '家长'}</p>
+                <p className="text-xs text-gray-500">在线</p>
+              </div>
+              <DropdownMenuItem className="cursor-pointer">
+                <Settings className="size-4 mr-2" />
+                <span>设置</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer text-red-600" onClick={onLogout}>
+                <LogOut className="size-4 mr-2" />
+                <span>退出登录</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </>

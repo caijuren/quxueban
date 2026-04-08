@@ -10,7 +10,8 @@ import {
   Users,
   ChevronRight,
   Target,
-  Award
+  Award,
+  LayoutDashboard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -122,7 +123,10 @@ export default function ParentDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">概览</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <LayoutDashboard className="w-7 h-7 text-purple-500" />
+            概览
+          </h1>
           <p className="text-gray-500 mt-1">查看孩子们的学习进度和活动</p>
         </div>
         <div className="flex gap-3">

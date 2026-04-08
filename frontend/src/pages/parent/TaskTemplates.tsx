@@ -351,7 +351,10 @@ export default function TaskTemplatesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">任务管理中心</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Settings2 className="w-7 h-7 text-purple-500" />
+            任务管理中心
+          </h1>
           <p className="text-gray-500 mt-1">智能任务模板库 + 多孩子实例化管理</p>
         </div>
       </div>

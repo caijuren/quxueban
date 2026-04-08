@@ -46,9 +46,9 @@ interface TaskDetailProps {
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const subjectLabel = (s: string | null) => s === 'chinese' ? '语文' : s === 'math' ? '数学' : s === 'english' ? '英语' : s === 'sports' ? '体育' : s || '其他';
-const subjectColor = (s: string | null) => s === 'chinese' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : s === 'math' ? 'bg-blue-100 text-blue-700 border-blue-200' : s === 'english' ? 'bg-purple-100 text-purple-700 border-purple-200' : s === 'sports' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-600 border-gray-200';
+const subjectColor = (s: string | null) => s === 'chinese' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : s === 'math' ? 'bg-blue-50 text-blue-700 border border-blue-200' : s === 'english' ? 'bg-purple-50 text-purple-700 border border-purple-200' : s === 'sports' ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-gray-50 text-gray-600 border border-gray-200';
 const diffLabel = (d: string | null) => d === 'basic' ? '基础' : d === 'advanced' ? '提升' : d === 'challenge' ? '挑战' : '';
-const ruleLabel = (r: string) => r === 'daily' ? '每日' : r === 'school' ? '上学日' : r === 'flexible' ? '灵活' : r === 'weekend' ? '周末' : r || '每日';
+const ruleLabel = (r: string) => r === 'daily' ? '每日任务' : r === 'school' ? '在校日任务' : r === 'flexible' ? '智能分配' : r === 'weekend' ? '周末任务' : r || '每日任务';
 
 // 优化后的任务详情弹窗
 function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetailProps) {
@@ -94,6 +94,15 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
       const date = addDays(weekStartDate, dayIndex);
       const dateStr = format(date, 'yyyy-MM-dd');
       
+      console.log('删除请求参数:', { 
+        taskId: task.taskId, 
+        action: 'remove', 
+        date: dateStr,
+        dayIndex,
+        dateObject: date,
+        dayOfWeek: date.getDay()
+      });
+      
       const response = await apiClient.post('/plans/modify', {
         taskId: task.taskId,
         action: 'remove',
@@ -101,7 +110,8 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
       });
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('删除成功响应:', data);
       toast.success('已删除该日安排');
       setShowDeleteConfirm(false);
       setSelectedDayForAction(null);
@@ -566,20 +576,23 @@ export default function PlansPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">计划管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <CalendarDays className="w-7 h-7 text-purple-500" />
+            计划管理
+          </h1>
           <p className="text-gray-500 mt-1">查看和管理每周学习计划</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setTempDialogOpen(true)} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl px-5 h-10 shadow-lg shadow-amber-500/25">
-            <Plus className="w-5 h-5 mr-1" />
+        <div className="flex gap-3">
+          <Button onClick={() => setTempDialogOpen(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white rounded-2xl px-6 h-11 shadow-lg shadow-amber-400/25 transition-all duration-300 hover:shadow-xl hover:shadow-amber-400/35 transform hover:-translate-y-0.5">
+            <Plus className="w-5 h-5 mr-2" />
             <span>临时任务</span>
           </Button>
-          <Button onClick={handleExportPNG} disabled={isExporting} className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl px-5 h-10 shadow-lg shadow-emerald-500/25">
-            <Download className="w-5 h-5 mr-1" />
+          <Button onClick={handleExportPNG} disabled={isExporting} className="bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl px-6 h-11 shadow-lg shadow-emerald-400/25 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-400/35 transform hover:-translate-y-0.5">
+            <Download className="w-5 h-5 mr-2" />
             <span>{isExporting ? '导出中...' : '导出'}</span>
           </Button>
-          <Button onClick={() => setPublishDialogOpen(true)} className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl px-5 h-10 shadow-lg shadow-purple-500/25">
-            <Plus className="w-5 h-5 mr-1" />
+          <Button onClick={() => setPublishDialogOpen(true)} className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-2xl px-6 h-11 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/35 transform hover:-translate-y-0.5">
+            <Plus className="w-5 h-5 mr-2" />
             <span>发布计划</span>
           </Button>
         </div>
@@ -597,93 +610,96 @@ export default function PlansPage() {
           {(weeklyPlans && weeklyPlans.length > 0 ? weeklyPlans : [{id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []}]).map((plan, index) => (
             <motion.div
               key={plan.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: index * 0.1, duration: 0.5, ease: "easeOut" }}
             >
-              <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
-                <CardHeader className="pb-3 pt-4 px-6">
-                  <div className="flex items-center justify-between gap-4">
-                    {/* 左侧：标题 */}
-                    <CardTitle className="text-lg font-bold text-gray-900 shrink-0">
-                      {plan.childName}的学习计划
-                    </CardTitle>
-                    {/* 中间：图例均匀分布 */}
-                    <div className="flex-1 flex items-center justify-around px-4">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />校内作业
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />拔高训练
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />课外课程
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />语文阅读
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />英语学习
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />体育任务
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                            <span className="text-sm text-gray-600">{weekLabel}</span>
-                            <ChevronDown className="size-4 text-gray-400" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl" align="end">
-                          <div className="p-3 border-b border-gray-100">
-                            <div className="flex gap-2">
-                              <button onClick={() => goToCurrentWeek()} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isCurrentWeek ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100")}>本周</button>
-                              <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isNextWeek ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100")}>下周</button>
-                              <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, -1))} className="flex-1 text-center py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">上周</button>
+              <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden hover:shadow-xl hover:shadow-gray-200/70 transition-all duration-300">
+                <CardHeader className="pb-3 pt-6 px-6">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between gap-4">
+                      {/* 左侧：标题 */}
+                      <CardTitle className="text-xl font-bold text-gray-900 shrink-0 flex items-center gap-2">
+                        <CalendarDays className="w-6 h-6 text-purple-500" />
+                        {plan.childName}的学习计划
+                      </CardTitle>
+                      <div className="flex items-center gap-3">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+                              <span className="text-sm font-medium text-gray-700">{weekLabel}</span>
+                              <ChevronDown className="size-4 text-gray-400" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl" align="end">
+                            <div className="p-3 border-b border-gray-100">
+                              <div className="flex gap-2">
+                                <button onClick={() => goToCurrentWeek()} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isCurrentWeek ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100")}>本周</button>
+                                <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isNextWeek ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100")}>下周</button>
+                                <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, -1))} className="flex-1 text-center py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">上周</button>
+                              </div>
                             </div>
-                          </div>
-                          <DayPickerCalendar
-                            mode="single"
-                            selected={currentWeekStart}
-                            onSelect={(date: Date | undefined) => {
-                              if (date) {
-                                const day = date.getDay();
-                                const mondayOffset = day === 0 ? -6 : 1 - day;
-                                const monday = new Date(date);
-                                monday.setDate(monday.getDate() + mondayOffset);
-                                setCurrentWeekStart(monday);
+                            <DayPickerCalendar
+                              mode="single"
+                              selected={currentWeekStart}
+                              onSelect={(date: Date | undefined) => {
+                                if (date) {
+                                  const day = date.getDay();
+                                  const mondayOffset = day === 0 ? -6 : 1 - day;
+                                  const monday = new Date(date);
+                                  monday.setDate(monday.getDate() + mondayOffset);
+                                  setCurrentWeekStart(monday);
+                                }
+                              }}
+                              className="rounded-2xl p-3"
+                              classNames={{
+                                day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
+                                day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
+                                nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
+                                caption: "flex justify-center pt-1 relative items-center w-full",
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        {plan.childId !== "0" && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await apiClient.post('/dingtalk/push-weekly-plan', { childId: parseInt(plan.childId), weekStartDate: currentWeekStart.toISOString() });
+                                toast.success('已推送至钉钉');
+                              } catch (e: unknown) {
+                                const error = e as { response?: { data?: { message?: string } } };
+                                toast.error(error.response?.data?.message || '推送失败');
                               }
                             }}
-                            className="rounded-2xl p-3"
-                            classNames={{
-                              day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
-                              day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
-                              nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
-                              caption: "flex justify-center pt-1 relative items-center w-full",
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      {plan.childId !== "0" && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              await apiClient.post('/dingtalk/push-weekly-plan', { childId: parseInt(plan.childId), weekStartDate: currentWeekStart.toISOString() });
-                              toast.success('已推送至钉钉');
-                            } catch (e: unknown) {
-                              const error = e as { response?: { data?: { message?: string } } };
-                              toast.error(error.response?.data?.message || '推送失败');
-                            }
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors text-sm font-medium"
-                        >
-                          <Send className="size-4" />
-                          推送
-                        </button>
-                      )}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white transition-all duration-300 shadow-md shadow-blue-400/25 hover:shadow-lg hover:shadow-blue-400/35 text-sm font-medium"
+                          >
+                            <Send className="size-4" />
+                            推送
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* 图例 */}
+                    <div className="flex flex-wrap gap-2 px-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />校内作业
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />拔高训练
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                        <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />课外课程
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />语文阅读
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />英语学习
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />体育任务
+                      </span>
                     </div>
                   </div>
                 </CardHeader>
@@ -691,7 +707,7 @@ export default function PlansPage() {
                   <div className="overflow-x-auto">
                     <div className="min-w-[600px]">
                       {/* Day headers */}
-                      <div className="grid grid-cols-8 gap-1 mb-2">
+                      <div className="grid grid-cols-8 gap-2 mb-3">
                         <div className="p-2"></div>
                         {weekDays.map((day, i) => {
                           const date = weekDates[i];
@@ -699,10 +715,10 @@ export default function PlansPage() {
                           const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(i));
                           const dayTotalMin = dayTasks.reduce((s, a) => s + a.timePerUnit, 0);
                           return (
-                            <div key={day} className={cn('p-2 text-center rounded-xl', isTodayDate ? 'bg-purple-500 text-white' : 'bg-gray-50')}>
-                              <span className={cn('text-[10px]', isTodayDate ? 'text-white/70' : 'text-gray-400')}>{day}</span>
-                              <div className={cn('text-sm font-bold', isTodayDate ? 'text-white' : 'text-gray-700')}>{format(date, 'M/d')}</div>
-                              {dayTotalMin > 0 && <span className={cn('text-[9px]', isTodayDate ? 'text-white/60' : 'text-gray-400')}>{dayTotalMin}m</span>}
+                            <div key={day} className={cn('p-3 text-center rounded-2xl transition-all duration-300', isTodayDate ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-gray-50 hover:bg-gray-100')}>
+                              <span className={cn('text-[10px] font-medium', isTodayDate ? 'text-white/80' : 'text-gray-500')}>{day}</span>
+                              <div className={cn('text-sm font-bold mt-1', isTodayDate ? 'text-white' : 'text-gray-700')}>{format(date, 'M/d')}</div>
+                              {dayTotalMin > 0 && <span className={cn('text-[9px] mt-1 block', isTodayDate ? 'text-white/70' : 'text-gray-400')}>{dayTotalMin}m</span>}
                             </div>
                           );
                         })}
@@ -723,13 +739,13 @@ export default function PlansPage() {
                         const getCategoryColor = (category: string) => {
                           const cat = (category || '').toLowerCase();
                           switch (cat) {
-                            case 'school': return { bg: 'bg-blue-500', text: 'text-blue-600', light: 'bg-blue-100' };
-                            case 'advanced': return { bg: 'bg-indigo-500', text: 'text-indigo-600', light: 'bg-indigo-100' };
-                            case 'extra': return { bg: 'bg-purple-500', text: 'text-purple-600', light: 'bg-purple-100' };
-                            case 'chinese': return { bg: 'bg-emerald-500', text: 'text-emerald-600', light: 'bg-emerald-100' };
-                            case 'english': return { bg: 'bg-orange-500', text: 'text-orange-600', light: 'bg-orange-100' };
-                            case 'sports': return { bg: 'bg-yellow-500', text: 'text-yellow-600', light: 'bg-yellow-100' };
-                            default: return { bg: 'bg-gray-400', text: 'text-gray-600', light: 'bg-gray-100' };
+                            case 'school': return { bg: 'bg-blue-400', text: 'text-blue-700', light: 'bg-blue-50' };
+                            case 'advanced': return { bg: 'bg-indigo-400', text: 'text-indigo-700', light: 'bg-indigo-50' };
+                            case 'extra': return { bg: 'bg-purple-400', text: 'text-purple-700', light: 'bg-purple-50' };
+                            case 'chinese': return { bg: 'bg-emerald-400', text: 'text-emerald-700', light: 'bg-emerald-50' };
+                            case 'english': return { bg: 'bg-orange-400', text: 'text-orange-700', light: 'bg-orange-50' };
+                            case 'sports': return { bg: 'bg-yellow-400', text: 'text-yellow-700', light: 'bg-yellow-50' };
+                            default: return { bg: 'bg-gray-400', text: 'text-gray-600', light: 'bg-gray-50' };
                           }
                         };
 
@@ -762,13 +778,20 @@ export default function PlansPage() {
                           };
 
                           return (
-                            <div key={taskItem.taskId} className="grid grid-cols-8 gap-1 group/row">
-                              <div className="p-1.5 flex items-center gap-1.5 pr-2" title={taskItem.taskName}>
-                                <span className={cn('w-2 h-2 rounded-full shrink-0', getDotColor())} />
-                                <span className={cn('text-[12px] font-medium truncate', taskItem.isTemporary && 'text-amber-500 font-bold', !hasAssignedDays && 'text-gray-400')}>
+                            <motion.div 
+                              key={taskItem.taskId} 
+                              className="grid grid-cols-8 gap-2 group/row mb-1.5"
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.3, ease: "easeOut" }}
+                              whileHover={{ backgroundColor: 'rgba(249, 250, 251, 0.5)' }}
+                            >
+                              <div className="p-2.5 flex items-center gap-2 pr-3 rounded-2xl hover:bg-gray-50 transition-all duration-300" title={taskItem.taskName}>
+                                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDotColor())} />
+                                <span className={cn('text-sm font-medium truncate', taskItem.isTemporary && 'text-amber-500 font-bold', !hasAssignedDays && 'text-gray-400')}>
                                   {taskItem.isTemporary && <span className="mr-0.5">⚡</span>}
                                   {taskItem.taskName}
-                                  {!hasAssignedDays && <span className="ml-1 text-[10px]">(未分配)</span>}
+                                  {!hasAssignedDays && <span className="ml-1 text-xs text-gray-400">(未分配)</span>}
                                 </span>
                               </div>
                               {weekDays.map((_, i) => {
@@ -777,34 +800,46 @@ export default function PlansPage() {
                                 const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
 
                                 return (
-                                  <div key={i} className={cn('p-1.5 flex items-center justify-center rounded-lg min-h-[32px]', isToday(weekDates[i]) && 'bg-purple-50/50')}>
+                                  <div key={i} className={cn('p-2.5 flex items-center justify-center rounded-2xl min-h-[40px] transition-all duration-300', isToday(weekDates[i]) && 'bg-purple-50/70 hover:bg-purple-100/70')}>
                                     <div className="relative">
                                       {isAssigned ? (
                                         taskItem.isTemporary ? (
-                                          <button onClick={() => setSelectedTask(taskItem)} className={cn('w-5 h-5 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm bg-amber-500')} title={`${taskItem.taskName} - 临时任务`}>
+                                          <motion.button 
+                                            onClick={() => setSelectedTask(taskItem)} 
+                                            className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm bg-amber-500')} 
+                                            title={`${taskItem.taskName} - 临时任务`}
+                                            whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' }}
+                                            whileTap={{ scale: 0.95 }}
+                                          >
                                             <span className="text-white text-xs">⚡</span>
-                                          </button>
+                                          </motion.button>
                                         ) : (
-                                          <button onClick={() => setSelectedTask(taskItem)} className={cn('w-5 h-5 rounded-full hover:scale-125 transition-all cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} title={`${taskItem.taskName} - 点击查看详情`}>
+                                          <motion.button 
+                                            onClick={() => setSelectedTask(taskItem)} 
+                                            className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} 
+                                            title={`${taskItem.taskName} - 点击查看详情`}
+                                            whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                                            whileTap={{ scale: 0.95 }}
+                                          >
                                             {isCompleted && <span className="text-white text-xs">✓</span>}
                                             {taskItem.difficulty === 'challenge' && !isCompleted && (
                                               <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
                                             )}
-                                          </button>
+                                          </motion.button>
                                         )
                                       ) : (
-                                        <div className="w-5 h-5 rounded-full bg-gray-300 shadow-sm"></div>
+                                        <div className="w-6 h-6 rounded-full bg-gray-200 shadow-sm"></div>
                                       )}
                                     </div>
                                   </div>
                                 );
                               })}
-                            </div>
+                            </motion.div>
                           );
                         });
                       })()}
                       {plan.allocations.length === 0 && (
-                        <div className="py-8 text-center text-gray-400 text-sm">该周暂无任务安排</div>
+                        <div className="py-12 text-center text-gray-400 text-sm bg-gray-50 rounded-2xl">该周暂无任务安排</div>
                       )}
                     </div>
                   </div>

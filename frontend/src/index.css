@@ -82,20 +82,24 @@
   --radius: 0.875rem;
 
   /* === 字体排版 === */
-  --font-family: "Nunito Variable", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  --font-size-display: 3.5rem;
-  --font-size-headline: 2rem;
-  --font-size-title: 1.5rem;
-  --font-size-body: 1rem;
-  --font-size-label: 0.875rem;
-  --font-size-small: 0.75rem;
-  --font-weight-bold: 700;
-  --font-weight-semibold: 600;
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --line-height: 1.5;
-  --letter-spacing-tight: -0.02em;
-  --letter-spacing-normal: 0;
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  --font-size-display: 3.5rem;      /* 大标题 H0 */
+  --font-size-headline: 2.25rem;    /* 大标题 H1 */
+  --font-size-title: 1.5rem;         /* 中标题 H2 */
+  --font-size-subtitle: 1.125rem;   /* 小标题 H3 */
+  --font-size-body: 1rem;           /* 正文 */
+  --font-size-label: 0.875rem;      /* 小字 */
+  --font-size-small: 0.75rem;       /* 微字 */
+  --font-weight-bold: 700;           /* 粗体 */
+  --font-weight-semibold: 600;       /* 半粗体 */
+  --font-weight-medium: 500;         /* 中等粗细 */
+  --font-weight-normal: 400;         /* 正常 */
+  --line-height: 1.5;                /* 行高 */
+  --line-height-tight: 1.25;         /* 紧凑行高 */
+  --line-height-loose: 1.75;         /* 宽松行高 */
+  --letter-spacing-tight: -0.02em;   /* 紧凑字间距 */
+  --letter-spacing-normal: 0;         /* 正常字间距 */
+  --letter-spacing-wide: 0.02em;      /* 宽松字间距 */
 
   /* === 间距系统 === */
   --spacing-xs: 0.5rem;
@@ -139,12 +143,12 @@
   --popover-foreground: oklch(0.25 0.02 300);
 
   /* === 主色调 === */
-  --primary: oklch(0.75 0.12 350);
+  --primary: oklch(0.68 0.15 300); /* 紫色系 */
   --primary-foreground: oklch(1 0 0);
 
   /* === 次要色 === */
-  --secondary: oklch(0.92 0.04 230);
-  --secondary-foreground: oklch(0.25 0.02 300);
+  --secondary: oklch(0.65 0.12 230); /* 蓝色系 */
+  --secondary-foreground: oklch(1 0 0);
 
   /* === 柔和色 === */
   --muted: oklch(0.96 0.01 320);
@@ -156,19 +160,20 @@
 
   /* === 危险/错误色 === */
   --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
 
   /* === 边框和输入框 === */
   --border: oklch(0.91 0.02 340);
   --input: oklch(0.91 0.02 340);
-  --ring: oklch(0.75 0.12 350);
+  --ring: oklch(0.68 0.15 300);
 
   /* === 功能颜色 (新增) === */
-  --success: oklch(0.70 0.12 160);
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.78 0.14 85);
+  --success: oklch(0.70 0.12 160); /* 绿色 */
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.78 0.14 85); /* 橙色 */
   --warning-foreground: oklch(0.205 0 0);
-  --info: oklch(0.72 0.10 230);
-  --info-foreground: oklch(0.985 0 0);
+  --info: oklch(0.72 0.10 230); /* 蓝色 */
+  --info-foreground: oklch(1 0 0);
 
   /* === 主题特色颜色 (新增) === */
   --theme-red: oklch(0.72 0.15 20);

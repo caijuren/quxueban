@@ -304,7 +304,7 @@ export default function SettingsPage() {
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/25">
                 <span className="text-3xl">🐛</span>
               </div>
-              <p className="font-bold text-gray-900 text-lg">小书虫学习助手</p>
+              <p className="font-bold text-gray-900 text-lg">趣学伴学习助手</p>
               <p className="text-sm text-gray-400 mt-1">v1.0.0 · 帮助家长科学管理孩子的学习计划</p>
             </div>
           </CardContent>
