@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ExportDialog } from '@/components/ExportDialog';
 
 type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
 type TaskType = '固定' | '灵活' | '跟随学校';
@@ -81,8 +82,10 @@ export default function TasksPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     name: '',
     category: '校内巩固' as TaskCategory,
@@ -375,7 +378,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" ref={pageRef}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -385,13 +388,23 @@ export default function TasksPage() {
           </h1>
           <p className="text-gray-500 mt-1">管理学习任务的模板和分类</p>
         </div>
-        <Button
-          onClick={() => { resetForm(); setCreateDialogOpen(true); }}
-          className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
-        >
-          <Plus className="size-4 mr-2" />
-          新建任务
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setExportDialogOpen(true)}
+            className="rounded-xl border-gray-200 hover:bg-purple-50 hover:border-purple-200"
+          >
+            <Download className="w-4 h-4 mr-2 text-purple-500" />
+            导出
+          </Button>
+          <Button
+            onClick={() => { resetForm(); setCreateDialogOpen(true); }}
+            className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+          >
+            <Plus className="size-4 mr-2" />
+            新建任务
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -720,6 +733,15 @@ export default function TasksPage() {
           )}
         </div>
       )}
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        targetRef={pageRef}
+        title="导出任务配置"
+        filename="任务配置"
+      />
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

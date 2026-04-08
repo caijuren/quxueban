@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { PublishPlanDialog } from '@/components/PublishPlanDialog';
 import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Calendar as DayPickerCalendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { AdvancedExportDialog, AdvancedExportConfig, ChildOption } from '@/components/AdvancedExportDialog';
 
 interface TaskAllocation {
   taskId: string;
@@ -71,20 +72,25 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
     return frontendIndex + 1; // 其他日期
   };
   
+  // 将后端索引的 assignedDays 转换为前端索引
   const assignedDays = useMemo(() => {
     // 优先使用实际分配的天数（后端已存储的 assignedDays）
+    let backendDays: number[];
     if (task.assignedDays && task.assignedDays.length > 0) {
-      return task.assignedDays;
+      backendDays = task.assignedDays;
+    } else {
+      // 如果没有实际分配，根据 scheduleRule 计算默认值
+      // 使用 JavaScript 标准索引：0=周日, 1=周一, ..., 6=周六
+      switch (task.scheduleRule) {
+        case 'daily': backendDays = [0, 1, 2, 3, 4, 5, 6]; break;
+        case 'school': backendDays = [1, 2, 4, 5]; break; // 周一、周二、周四、周五
+        case 'flexible': backendDays = [1, 2, 3, 4, 5]; break; // 周一到周五
+        case 'weekend': backendDays = [0, 6]; break; // 周日、周六
+        default: backendDays = [0, 1, 2, 3, 4, 5, 6];
+      }
     }
-    // 如果没有实际分配，根据 scheduleRule 计算默认值
-    // 使用 JavaScript 标准索引：0=周日, 1=周一, ..., 6=周六
-    switch (task.scheduleRule) {
-      case 'daily': return [0, 1, 2, 3, 4, 5, 6];
-      case 'school': return [1, 2, 4, 5]; // 周一、周二、周四、周五
-      case 'flexible': return [1, 2, 3, 4, 5]; // 周一到周五
-      case 'weekend': return [0, 6]; // 周日、周六
-      default: return [0, 1, 2, 3, 4, 5, 6];
-    }
+    // 转换为前端索引（0=周一, 1=周二, ..., 6=周日）
+    return backendDays.map(getFrontendDayIndex);
   }, [task.scheduleRule, task.assignedDays]);
 
   // 删除某天的安排
@@ -473,6 +479,8 @@ export default function PlansPage() {
   const [tempUrgency, setTempUrgency] = useState('normal');
   const [isExporting, setIsExporting] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<{[key: string]: boolean}>({});
+  const [advancedExportOpen, setAdvancedExportOpen] = useState(false);
+  const exportContainerRef = useRef<HTMLDivElement>(null);
   
   const toggleCategory = (category: string) => {
     setCollapsedCategories(prev => ({
@@ -513,63 +521,14 @@ export default function PlansPage() {
   }, [currentWeekStart]);
   const weekLabel = `${format(currentWeekStart, 'M月d日', { locale: zhCN })} - ${format(addDays(currentWeekStart, 6), 'M月d日', { locale: zhCN })}`;
 
-  // 导出为 PNG
-  const handleExportPNG = async () => {
-    if (!weeklyPlans || weeklyPlans.length === 0) {
-      toast.error('暂无计划数据，无法导出');
-      return;
-    }
-    
-    setIsExporting(true);
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const element = document.getElementById('export-container');
-      if (!element) {
-        toast.error('未找到导出内容');
-        setIsExporting(false);
-        return;
-      }
-
-      // 临时显示导出容器以确保正确渲染
-      const originalStyle = element.style.cssText;
-      element.style.cssText = 'position: fixed; left: 0; top: 0; width: 1200px; padding: 40px; background: white; z-index: -9999; opacity: 0; pointer-events: none;';
-
-      // 等待渲染
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // 使用更好的配置
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        width: 1200,
-        windowWidth: 1200,
-      });
-
-      // 恢复原始样式
-      element.style.cssText = originalStyle;
-
-      const link = document.createElement('a');
-      link.download = `学习计划_${format(currentWeekStart, 'yyyy-MM-dd')}.png`;
-      link.href = canvas.toDataURL('image/png');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success('导出成功');
-    } catch (error) {
-      console.error('导出失败:', error);
-      toast.error('导出失败，请重试');
-      // 确保恢复样式
-      const element = document.getElementById('export-container');
-      if (element) {
-        element.style.cssText = "position: absolute; left: '-9999px'; top: '-9999px'; width: '1200px'; padding: '40px'; background: 'white'";
-      }
-    } finally {
-      setIsExporting(false);
-    }
-  };
+  const childOptions = useMemo<ChildOption[]>(() => {
+    if (!weeklyPlans || weeklyPlans.length === 0) return [];
+    return weeklyPlans.map(plan => ({
+      id: parseInt(plan.childId),
+      name: plan.childName,
+      avatar: '',
+    }));
+  }, [weeklyPlans]);
 
   return (
     <div className="space-y-6" id="weekly-plan-view">
@@ -587,9 +546,9 @@ export default function PlansPage() {
             <Plus className="w-5 h-5 mr-2" />
             <span>临时任务</span>
           </Button>
-          <Button onClick={handleExportPNG} disabled={isExporting} className="bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl px-6 h-11 shadow-lg shadow-emerald-400/25 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-400/35 transform hover:-translate-y-0.5">
+          <Button onClick={() => setAdvancedExportOpen(true)} className="bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl px-6 h-11 shadow-lg shadow-emerald-400/25 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-400/35 transform hover:-translate-y-0.5">
             <Download className="w-5 h-5 mr-2" />
-            <span>{isExporting ? '导出中...' : '导出'}</span>
+            <span>导出</span>
           </Button>
           <Button onClick={() => setPublishDialogOpen(true)} className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-2xl px-6 h-11 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/35 transform hover:-translate-y-0.5">
             <Plus className="w-5 h-5 mr-2" />
@@ -606,7 +565,7 @@ export default function PlansPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div ref={exportContainerRef} className="space-y-6">
           {(weeklyPlans && weeklyPlans.length > 0 ? weeklyPlans : [{id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []}]).map((plan, index) => (
             <motion.div
               key={plan.id}
@@ -714,7 +673,9 @@ export default function PlansPage() {
                         {weekDays.map((day, i) => {
                           const date = weekDates[i];
                           const isTodayDate = isToday(date);
-                          const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(i));
+                          // 转换前端索引到后端索引（0=周一→1, 6=周日→0）
+                          const backendIndex = i === 6 ? 0 : i + 1;
+                          const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(backendIndex));
                           const dayTotalMin = dayTasks.reduce((s, a) => s + a.timePerUnit, 0);
                           return (
                             <div key={day} className={cn('p-3 text-center rounded-2xl transition-all duration-300', isTodayDate ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-gray-50 hover:bg-gray-100')}>
@@ -951,75 +912,16 @@ export default function PlansPage() {
 
       <PublishPlanDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} tasks={planTasks} onSuccess={() => setCurrentWeekStart(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }))} />
 
-      {/* Hidden Export Container - 使用 visibility: hidden 而非 position offscreen */}
-      <div id="export-container" style={{ position: 'fixed', left: '0', top: '0', width: '1200px', padding: '40px', background: 'white', zIndex: -9999, visibility: 'hidden', pointerEvents: 'none' }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>📚 学习计划</h1>
-          <p style={{ fontSize: '16px', color: '#6b7280' }}>{format(currentWeekStart, 'yyyy年M月d日', { locale: zhCN })} - {format(addDays(currentWeekStart, 6), 'M月d日', { locale: zhCN })}</p>
-        </div>
-
-        {/* Plans */}
-        {weeklyPlans && weeklyPlans.map((plan, idx) => (
-          <div key={idx} style={{ marginBottom: '30px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', marginBottom: '16px', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px' }}>
-              {plan.childName}的学习计划
-            </h2>
-
-            {/* Schedule Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '8px', marginBottom: '16px' }}>
-              {/* Header Row */}
-              <div style={{ padding: '8px', textAlign: 'center', fontWeight: '600', color: '#6b7280', fontSize: '12px' }}>任务</div>
-              {weekDays.map((day, i) => (
-                <div key={i} style={{
-                  padding: '8px',
-                  textAlign: 'center',
-                  fontWeight: '600',
-                  color: '#374151',
-                  fontSize: '12px',
-                  background: '#f9fafb',
-                  borderRadius: '8px'
-                }}>{day}</div>
-              ))}
-
-              {/* Tasks */}
-              {plan.allocations.map((task, taskIdx) => (
-                <React.Fragment key={taskIdx}>
-                  <div style={{ padding: '8px', fontSize: '12px', fontWeight: '500', color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {task.taskName}
-                  </div>
-                  {weekDays.map((_, dayIdx) => {
-                    // weekDays 是周一到周日，索引 0-6
-                    // assignedDays 是 JS 标准索引，0=周日, 1=周一, ..., 6=周六
-                    // 需要转换：weekDays[0] = 周一 = JS索引1
-                    const jsDayIndex = dayIdx === 6 ? 0 : dayIdx + 1;
-                    const isAssigned = task.assignedDays.includes(jsDayIndex);
-                    return (
-                      <div key={dayIdx} style={{
-                        height: '32px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '6px',
-                        background: isAssigned ? '#ddd6fe' : 'transparent'
-                      }}>
-                        {isAssigned && (
-                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }} />
-                        )}
-                      </div>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        {/* Footer */}
-        <div style={{ marginTop: '40px', paddingTop:'20px', borderTop: '1px solid #e5e7eb', textAlign: 'center' }}>
-          <p style={{ fontSize: '12px', color: '#9ca3af' }}>Generated by 趣学伴 · {format(new Date(), 'yyyy-MM-dd HH:mm')}</p>
-        </div>
-      </div>
+      {/* Advanced Export Dialog */}
+      <AdvancedExportDialog
+        open={advancedExportOpen}
+        onOpenChange={setAdvancedExportOpen}
+        targetRef={exportContainerRef}
+        children={childOptions}
+        title="导出学习计划"
+        filenamePrefix="学习计划"
+        currentWeekStart={currentWeekStart}
+      />
     </div>
   );
 }

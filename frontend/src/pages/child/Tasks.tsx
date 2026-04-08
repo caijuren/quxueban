@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award, X, ArrowLeft, Camera, Image, Mic, ListTodo } from 'lucide-react';
+import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award, X, ArrowLeft, Camera, Image, Mic, ListTodo, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -13,6 +13,7 @@ import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ExportDialog } from '@/components/ExportDialog';
 
 interface ChildTask {
   planId: number;
@@ -46,6 +47,7 @@ export default function ChildTasks() {
   const [loading, setLoading] = useState(true);
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const { user } = useAuth();
+  const taskListRef = useRef<HTMLDivElement>(null);
   
   // 任务完成模态框状态
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
@@ -53,6 +55,9 @@ export default function ChildTasks() {
   const [completionStatus, setCompletionStatus] = useState<'completed' | 'partial' | 'postponed'>('completed');
   const [completedValue, setCompletedValue] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
+
+  // 导出对话框状态
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user && user.role === 'child') {
@@ -167,14 +172,26 @@ export default function ChildTasks() {
           </h1>
           <p className="text-gray-500 mt-1">完成今日任务，获得成就感！</p>
         </div>
-        <Button 
-          variant="default"
-          className="rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
-          onClick={fetchTasks}
-        >
-          刷新任务
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            className="rounded-xl h-11 border-gray-200 hover:bg-purple-50 hover:border-purple-200"
+            onClick={() => setExportDialogOpen(true)}
+          >
+            <Download className="w-4 h-4 mr-2 text-purple-500" />
+            导出
+          </Button>
+          <Button 
+            variant="default"
+            className="rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+            onClick={fetchTasks}
+          >
+            刷新任务
+          </Button>
+        </div>
       </motion.div>
+
+      <div ref={taskListRef} className="space-y-6">
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -331,6 +348,16 @@ export default function ChildTasks() {
           </CardContent>
         </Card>
       </motion.div>
+      </div>
+
+      {/* 导出对话框 */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        targetRef={taskListRef}
+        title="导出任务列表"
+        filename="我的任务"
+      />
 
       {/* 任务完成模态框 */}
       <Dialog open={completionModalOpen} onOpenChange={setCompletionModalOpen}>

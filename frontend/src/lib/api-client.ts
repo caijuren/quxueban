@@ -25,7 +25,7 @@ export const apiClient = axios.create({
 
 /**
  * Request interceptor
- * Automatically adds authentication token to requests if available
+ * Automatically adds authentication token and selected child ID to requests if available
  */
 apiClient.interceptors.request.use(
   (config) => {
@@ -33,6 +33,16 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // 自动注入 selectedChildId 到 GET 请求的 query 参数
+    const selectedChildId = localStorage.getItem('selected_child_id');
+    if (selectedChildId && config.method?.toLowerCase() === 'get') {
+      config.params = {
+        ...config.params,
+        childId: selectedChildId,
+      };
+    }
+
     return config;
   },
   (error) => {
