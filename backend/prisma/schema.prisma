@@ -18,8 +18,11 @@ model Family {
   activeReadings ActiveReading[]
   books          Book[]
   tasks          Task[]
+  taskTemplates  TaskTemplate[]
   users          User[]
   weeklyPlans    WeeklyPlan[]
+  bookReadStates BookReadState[]
+  childTasks     ChildTask[]
 
   @@map("families")
 }
@@ -32,54 +35,122 @@ model User {
   passwordHash    String           @map("password_hash") @db.VarChar(255)
   familyId        Int              @map("family_id")
   status          String           @default("active") @db.VarChar(20)
+  dingtalkWebhook String?          @default("") @map("dingtalk_webhook") @db.VarChar(500)
+  dingtalkSecret  String?          @default("") @map("dingtalk_secret") @db.VarChar(100)
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
   achievementLogs AchievementLog[]
   activeReadings  ActiveReading[]
+  childTasks      ChildTask[]
   dailyCheckins   DailyCheckin[]
   readingLogs     ReadingLog[]
   family          Family           @relation(fields: [familyId], references: [id])
   weeklyPlans     WeeklyPlan[]
+  bookReadStates  BookReadState[]
 
   @@map("users")
 }
 
+// ============================================
+// 任务模板表 - 通用任务定义
+// ============================================
+model TaskTemplate {
+  id                  Int     @id @default(autoincrement())
+  name                String  @db.VarChar(100)
+  type                String  @db.VarChar(30) // 校内任务/阅读任务/体育运动/课外课程
+  subject             String? @db.VarChar(30) // chinese/math/english/sports/null
+  singleDuration      Int     @default(30) @map("single_duration")
+  difficulty          String? @default("basic") @db.VarChar(20) // basic/advanced/challenge
+  description         String? @db.Text
+  coverUrl            String? @map("cover_url") @db.VarChar(500)
+  scheduleRule        String  @default("daily") @map("schedule_rule") @db.VarChar(20) // daily/school_day/flexible/weekend
+  defaultWeeklyTarget Int?    @map("default_weekly_target")
+
+  familyId  Int      @map("family_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family     Family      @relation(fields: [familyId], references: [id])
+  childTasks ChildTask[]
+
+  @@map("task_templates")
+}
+
+// ============================================
+// 孩子任务实例表 - 个性化任务配置
+// ============================================
+model ChildTask {
+  id             Int @id @default(autoincrement())
+  childId        Int @map("child_id")
+  taskTemplateId Int @map("task_template_id")
+
+  // 个性化覆盖字段
+  customName         String? @map("custom_name") @db.VarChar(100)
+  customDuration     Int?    @map("custom_duration")
+  customScheduleRule String? @map("custom_schedule_rule") @db.VarChar(20)
+  weeklyTarget       Int?    @map("weekly_target")
+
+  // 状态与时间
+  status    String    @default("active") @db.VarChar(20) // active/paused
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  // 高级设置
+  skipHolidays Boolean @default(true) @map("skip_holidays")
+  excludeDays  String? @map("exclude_days") @db.VarChar(50)
+
+  familyId  Int      @map("family_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  child        User         @relation(fields: [childId], references: [id])
+  taskTemplate TaskTemplate @relation(fields: [taskTemplateId], references: [id])
+  family       Family       @relation(fields: [familyId], references: [id])
+
+  @@unique([childId, taskTemplateId])
+  @@map("child_tasks")
+}
+
+// 保留原有Task表以兼容现有功能
 model Task {
-  id          Int          @id @default(autoincrement())
-  familyId    Int          @map("family_id")
-  name        String       @db.VarChar(100)
-  category    String       @db.VarChar(30)
-  type        String       @db.VarChar(20)
-  timePerUnit Int          @default(30) @map("time_per_unit")
-  weeklyRule  Json?        @map("weekly_rule")
-  sortOrder   Int          @default(0) @map("sort_order")
-  isActive    Boolean      @default(true) @map("is_active")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  tags        Json?        @default("{}")
-  appliesTo   Json?        @default("[]") @map("applies_to")
-  family      Family       @relation(fields: [familyId], references: [id])
-  weeklyPlans WeeklyPlan[]
+  id              Int          @id @default(autoincrement())
+  familyId        Int          @map("family_id")
+  name            String       @db.VarChar(100)
+  category        String       @db.VarChar(30)
+  type            String       @db.VarChar(20)
+  timePerUnit     Int          @default(30) @map("time_per_unit")
+  weeklyRule      Json?        @map("weekly_rule")
+  sortOrder       Int          @default(0) @map("sort_order")
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  tags            Json?        @default("{}")
+  appliesTo       Json?        @default("[]") @map("applies_to")
+  scheduleRule    String       @default("daily") @map("schedule_rule") @db.VarChar(20)
+  weeklyFrequency Int?         @map("weekly_frequency")
+  family          Family       @relation(fields: [familyId], references: [id])
+  weeklyPlans     WeeklyPlan[]
 
   @@map("tasks")
 }
 
 model WeeklyPlan {
-  id            Int            @id @default(autoincrement())
-  familyId      Int            @map("family_id")
-  childId       Int            @map("child_id")
-  taskId        Int            @map("task_id")
-  target        Int            @default(1)
-  progress      Int            @default(0)
-  weekNo        String         @map("week_no") @db.VarChar(10)
-  status        String         @default("active") @db.VarChar(20)
-  assignedDays  Json?          @default("[]") @map("assigned_days")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  checkins      DailyCheckin[]
-  child         User           @relation(fields: [childId], references: [id])
-  family        Family         @relation(fields: [familyId], references: [id])
-  task          Task           @relation(fields: [taskId], references: [id])
+  id        Int            @id @default(autoincrement())
+  familyId  Int            @map("family_id")
+  childId   Int            @map("child_id")
+  taskId    Int            @map("task_id")
+  target    Int            @default(1)
+  progress  Int            @default(0)
+  weekNo    String         @map("week_no") @db.VarChar(10)
+  status    String         @default("active") @db.VarChar(20)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  checkins  DailyCheckin[]
+  child     User           @relation(fields: [childId], references: [id])
+  family    Family         @relation(fields: [familyId], references: [id])
+  task      Task           @relation(fields: [taskId], references: [id])
 
   @@map("weekly_plans")
 }
@@ -105,8 +176,12 @@ model Book {
   familyId       Int             @map("family_id")
   name           String          @db.VarChar(200)
   author         String          @default("") @db.VarChar(100)
+  isbn           String          @default("") @db.VarChar(20)
+  publisher      String          @default("") @db.VarChar(100)
   type           String          @default("fiction") @db.VarChar(30)
   coverUrl       String          @default("") @map("cover_url") @db.Text
+  description    String          @default("") @db.Text
+  wordCount      Int?            @map("word_count")
   status         String          @default("active") @db.VarChar(20)
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
@@ -114,6 +189,7 @@ model Book {
   readCount      Int             @default(0) @map("read_count")
   totalPages     Int             @default(0) @map("total_pages")
   activeReadings ActiveReading[]
+  bookReadStates BookReadState[]
   family         Family          @relation(fields: [familyId], references: [id])
   readingLogs    ReadingLog[]
 
@@ -157,22 +233,41 @@ model ReadingProgressLog {
 }
 
 model ReadingLog {
-  id           Int      @id @default(autoincrement())
-  familyId     Int      @map("family_id")
-  childId      Int?     @map("child_id")
-  bookId       Int      @map("book_id")
-  pages        Int      @default(0)
-  minutes      Int      @default(0)
-  readDate     DateTime @map("read_date")
-  effect       String   @default("") @db.VarChar(50)
-  performance  String   @default("") @db.VarChar(200)
-  note         String   @default("") @db.VarChar(500)
-  readStage    String   @default("") @map("read_stage") @db.VarChar(50)
-  createdAt    DateTime @default(now()) @map("created_at")
-  book         Book     @relation(fields: [bookId], references: [id])
-  child        User?    @relation(fields: [childId], references: [id])
+  id          Int      @id @default(autoincrement())
+  familyId    Int      @map("family_id")
+  childId     Int?     @map("child_id")
+  bookId      Int      @map("book_id")
+  pages       Int      @default(0)
+  minutes     Int      @default(0)
+  readDate    DateTime @map("read_date")
+  effect      String   @default("") @db.VarChar(50)
+  performance String   @default("") @db.VarChar(200)
+  note        String   @default("") @db.VarChar(500)
+  readStage   String   @default("") @map("read_stage") @db.VarChar(50)
+  focusRating Int      @default(0) @map("focus_rating")
+  tags        Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at")
+  book        Book     @relation(fields: [bookId], references: [id])
+  child       User?    @relation(fields: [childId], references: [id])
 
   @@map("reading_logs")
+}
+
+model BookReadState {
+  id         Int       @id @default(autoincrement())
+  familyId   Int       @map("family_id")
+  childId    Int       @map("child_id")
+  bookId     Int       @map("book_id")
+  status     String    @default("want_to_read") @db.VarChar(20)
+  finishedAt DateTime? @map("finished_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  book       Book      @relation(fields: [bookId], references: [id])
+  child      User      @relation(fields: [childId], references: [id])
+  family     Family    @relation(fields: [familyId], references: [id])
+
+  @@unique([childId, bookId])
+  @@map("book_read_states")
 }
 
 model Achievement {

@@ -49,17 +49,19 @@ export default function ChildTasks() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (user && user.role === 'child') {
       fetchTasks();
     }
   }, [user]);
 
   const fetchTasks = async () => {
-    if (!user) return;
+    if (!user || user.role !== 'child') return;
     
     try {
+      console.log('当前用户信息:', user);
       setLoading(true);
       const response = await apiClient.get(`/task-templates/children/${user.id}/tasks`);
+      console.log('任务数据:', response.data);
       const tasksData = response.data.data;
       
       // 模拟添加完成状态和进度数据
@@ -104,6 +106,16 @@ export default function ChildTasks() {
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(task => task.completedToday).length;
   const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  if (!user || user.role !== 'child') {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 text-gray-500">
+        <CheckCircle2 className="w-16 h-16 mb-4 opacity-30" />
+        <h2 className="text-xl font-semibold mb-2">请以孩子身份登录</h2>
+        <p className="text-center max-w-md">只有孩子账号才能查看和完成任务</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

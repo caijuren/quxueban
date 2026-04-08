@@ -6,14 +6,16 @@ import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 export const taskTemplatesRouter: Router = Router()
 
 taskTemplatesRouter.use(authMiddleware)
-taskTemplatesRouter.use(requireRole('parent'))
 
 // ============================================
-// 任务模板 CRUD
+// 任务模板 CRUD - 仅家长可访问
 // ============================================
+
+// 为任务模板 CRUD 操作添加家长角色限制
+const parentOnly = requireRole('parent')
 
 // 获取所有任务模板
-taskTemplatesRouter.get('/templates', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.get('/templates', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const { type, subject } = req.query
 
@@ -32,7 +34,7 @@ taskTemplatesRouter.get('/templates', async (req: AuthRequest, res: Response) =>
 })
 
 // 创建任务模板
-taskTemplatesRouter.post('/templates', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.post('/templates', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const {
     name, type, subject, singleDuration, difficulty,
@@ -53,7 +55,7 @@ taskTemplatesRouter.post('/templates', async (req: AuthRequest, res: Response) =
 })
 
 // 更新任务模板
-taskTemplatesRouter.put('/templates/:id', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.put('/templates/:id', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const id = parseInt(req.params.id as string)
   const updates = req.body
@@ -86,7 +88,7 @@ taskTemplatesRouter.put('/templates/:id', async (req: AuthRequest, res: Response
 })
 
 // 删除任务模板
-taskTemplatesRouter.delete('/templates/:id', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.delete('/templates/:id', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const id = parseInt(req.params.id as string)
 
@@ -108,8 +110,13 @@ taskTemplatesRouter.delete('/templates/:id', async (req: AuthRequest, res: Respo
 
 // 获取孩子的所有任务实例
 taskTemplatesRouter.get('/children/:childId/tasks', async (req: AuthRequest, res: Response) => {
-  const { familyId } = req.user!
+  const { familyId, userId, role } = req.user!
   const childId = parseInt(req.params.childId as string)
+
+  // 验证权限：家长可以查看所有孩子的任务，孩子只能查看自己的任务
+  if (role === 'child' && userId !== childId) {
+    throw new AppError(403, '无权限查看其他孩子的任务')
+  }
 
   // 验证孩子属于该家庭
   const child = await prisma.$queryRawUnsafe(
@@ -132,7 +139,7 @@ taskTemplatesRouter.get('/children/:childId/tasks', async (req: AuthRequest, res
 })
 
 // 为孩子分配任务（从模板创建实例）
-taskTemplatesRouter.post('/children/:childId/tasks', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.post('/children/:childId/tasks', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = parseInt(req.params.childId as string)
   const {
@@ -183,7 +190,7 @@ taskTemplatesRouter.post('/children/:childId/tasks', async (req: AuthRequest, re
 })
 
 // 更新孩子任务实例
-taskTemplatesRouter.put('/children/:childId/tasks/:taskId', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.put('/children/:childId/tasks/:taskId', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = parseInt(req.params.childId as string)
   const taskId = parseInt(req.params.taskId as string)
@@ -216,7 +223,7 @@ taskTemplatesRouter.put('/children/:childId/tasks/:taskId', async (req: AuthRequ
 })
 
 // 删除孩子任务实例
-taskTemplatesRouter.delete('/children/:childId/tasks/:taskId', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.delete('/children/:childId/tasks/:taskId', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = parseInt(req.params.childId as string)
   const taskId = parseInt(req.params.taskId as string)
@@ -234,7 +241,7 @@ taskTemplatesRouter.delete('/children/:childId/tasks/:taskId', async (req: AuthR
 })
 
 // 批量分配任务给多个孩子
-taskTemplatesRouter.post('/templates/:templateId/assign', async (req: AuthRequest, res: Response) => {
+taskTemplatesRouter.post('/templates/:templateId/assign', parentOnly, async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const templateId = parseInt(req.params.templateId as string)
   const { childIds } = req.body

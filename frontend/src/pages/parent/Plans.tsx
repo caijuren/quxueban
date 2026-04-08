@@ -618,12 +618,35 @@ export default function PlansPage() {
                 <CardHeader className="pb-3 pt-6 px-6">
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between gap-4">
-                      {/* 左侧：标题 */}
-                      <CardTitle className="text-xl font-bold text-gray-900 shrink-0 flex items-center gap-2">
-                        <CalendarDays className="w-6 h-6 text-purple-500" />
-                        {plan.childName}的学习计划
-                      </CardTitle>
-                      <div className="flex items-center gap-3">
+                      {/* 左侧：标题和图例 */}
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <CardTitle className="text-xl font-bold text-gray-900 shrink-0 flex items-center gap-2">
+                          <CalendarDays className="w-6 h-6 text-purple-500" />
+                          {plan.childName}的学习计划
+                        </CardTitle>
+                        {/* 图例 - 放在标题右边一行 */}
+                        <div className="flex flex-wrap gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />校内作业
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />拔高训练
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                            <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />课外课程
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />语文阅读
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                            <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />英语学习
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
+                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />体育任务
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
                         <Popover>
                           <PopoverTrigger asChild>
                             <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
@@ -679,27 +702,6 @@ export default function PlansPage() {
                           </button>
                         )}
                       </div>
-                    </div>
-                    {/* 图例 */}
-                    <div className="flex flex-wrap gap-2 px-2">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />校内作业
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />拔高训练
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />课外课程
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />语文阅读
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />英语学习
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />体育任务
-                      </span>
                     </div>
                   </div>
                 </CardHeader>
