@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award, X, ArrowLeft, Camera, Image, Mic } from 'lucide-react';
+import { CheckCircle2, Clock, Calendar, BookOpen, Dumbbell, Star, ChevronDown, ChevronUp, Award, X, ArrowLeft, Camera, Image, Mic, ListTodo } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface ChildTask {
   planId: number;
@@ -33,11 +34,11 @@ interface ChildTask {
   targetValue?: number | null;
 }
 
-const typeConfig: Record<string, { icon: any; color: string }> = {
-  '校内任务': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
-  '阅读任务': { icon: BookOpen, color: 'bg-purple-100 text-purple-600' },
-  '体育运动': { icon: Dumbbell, color: 'bg-green-100 text-green-600' },
-  '课外课程': { icon: Star, color: 'bg-orange-100 text-orange-600' },
+const typeConfig: Record<string, { icon: any; color: string; gradient: string }> = {
+  '校内任务': { icon: BookOpen, color: 'bg-blue-100 text-blue-600', gradient: 'from-blue-500 to-cyan-500' },
+  '阅读任务': { icon: BookOpen, color: 'bg-purple-100 text-purple-600', gradient: 'from-purple-500 to-violet-500' },
+  '体育运动': { icon: Dumbbell, color: 'bg-green-100 text-green-600', gradient: 'from-emerald-500 to-teal-500' },
+  '课外课程': { icon: Star, color: 'bg-orange-100 text-orange-600', gradient: 'from-orange-500 to-amber-500' },
 };
 
 export default function ChildTasks() {
@@ -134,7 +135,7 @@ export default function ChildTasks() {
   };
 
   const getTaskTypeConfig = (category: string) => {
-    return typeConfig[category] || { icon: BookOpen, color: 'bg-gray-100 text-gray-600' };
+    return typeConfig[category] || { icon: BookOpen, color: 'bg-gray-100 text-gray-600', gradient: 'from-gray-500 to-gray-600' };
   };
 
   const totalTasks = tasks.length;
@@ -152,7 +153,7 @@ export default function ChildTasks() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -161,14 +162,14 @@ export default function ChildTasks() {
       >
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <CheckCircle2 className="w-7 h-7 text-purple-500" />
+            <ListTodo className="w-7 h-7 text-purple-500" />
             我的任务
           </h1>
           <p className="text-gray-500 mt-1">完成今日任务，获得成就感！</p>
         </div>
         <Button 
           variant="default"
-          className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white"
+          className="rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
           onClick={fetchTasks}
         >
           刷新任务
@@ -180,7 +181,7 @@ export default function ChildTasks() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
       >
-        <Card className="overflow-hidden">
+        <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-purple-500 to-blue-500 text-white">
             <CardTitle className="flex items-center gap-2">
               <Award className="w-5 h-5" />
@@ -208,115 +209,127 @@ export default function ChildTasks() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">任务列表</h2>
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <Card key={i}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-gray-200 rounded animate-pulse" />
-                      <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4" />
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : tasks.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>暂无任务</p>
-            <p className="text-sm mt-1">家长还没有为你分配任务</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {tasks.map(task => {
-              const TypeIcon = getTaskTypeConfig(task.category).icon;
-              const typeColor = getTaskTypeConfig(task.category).color;
-              
-              return (
-                <motion.div
-                  key={task.planId}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <Card className="overflow-hidden border border-gray-200 hover:shadow-md transition-shadow duration-300">
-                    <CardContent className="p-0">
-                      <div 
-                        className="flex items-center justify-between p-4 cursor-pointer"
-                        onClick={() => toggleExpandTask(task.planId)}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full ${typeColor} flex items-center justify-center`}>
-                            <TypeIcon className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-900">{getTaskName(task)}</h3>
-                            <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>{getTaskDuration(task)}分钟</span>
-                              <Calendar className="w-3.5 h-3.5" />
-                              <span>{task.type}</span>
-                            </div>
-                          </div>
+        <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between pb-4 pt-6 px-6">
+            <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                <ListTodo className="size-4 text-white" />
+              </div>
+              任务列表
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => (
+                  <Card key={i} className="border-0 shadow-md">
+                    <CardContent className="p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-gray-200 rounded animate-pulse" />
+                          <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4" />
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant={task.completedToday ? "default" : "outline"}
-                            size="icon"
-                            className={`w-10 h-10 rounded-full ${task.completedToday ? 'bg-green-500 hover:bg-green-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!task.completedToday) {
-                                openCompletionModal(task);
-                              }
-                            }}
-                          >
-                            <CheckCircle2 className={`w-5 h-5 ${task.completedToday ? '' : 'text-gray-400'}`} />
-                          </Button>
-                          {expandedTask === task.planId ? (
-                            <ChevronUp className="w-5 h-5 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
-                          )}
-                        </div>
+                        <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
                       </div>
-                      {expandedTask === task.planId && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          <Separator />
-                          <div className="p-4 space-y-3">
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">本周进度</span>
-                                <span className="font-medium text-purple-600">{task.progress || 0}/{task.target || 0}</span>
-                              </div>
-                              <Progress value={(task.progress || 0) / (task.target || 1) * 100} className="h-1.5 bg-gray-200" />
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              <p><strong>任务类型：</strong>{task.category}</p>
-                              <p><strong>目标：</strong>本周完成 {task.target || 1} 次</p>
-                              {task.todayStatus && <p><strong>今日状态：</strong>{task.todayStatus}</p>}
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
                     </CardContent>
                   </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
+                ))}
+              </div>
+            ) : tasks.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>暂无任务</p>
+                <p className="text-sm mt-1">家长还没有为你分配任务</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {tasks.map(task => {
+                  const TypeIcon = getTaskTypeConfig(task.category).icon;
+                  const typeColor = getTaskTypeConfig(task.category).color;
+                  const typeGradient = getTaskTypeConfig(task.category).gradient;
+                  
+                  return (
+                    <motion.div
+                      key={task.planId}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
+                        <CardContent className="p-0">
+                          <div 
+                            className="flex items-center justify-between p-5 cursor-pointer"
+                            onClick={() => toggleExpandTask(task.planId)}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${typeGradient} flex items-center justify-center text-white`}>
+                                <TypeIcon className="w-6 h-6" />
+                              </div>
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-gray-900">{getTaskName(task)}</h3>
+                                <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>{getTaskDuration(task)}分钟</span>
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span>{task.type}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Button
+                                variant={task.completedToday ? "default" : "outline"}
+                                size="icon"
+                                className={`w-10 h-10 rounded-full ${task.completedToday ? 'bg-green-500 hover:bg-green-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!task.completedToday) {
+                                    openCompletionModal(task);
+                                  }
+                                }}
+                              >
+                                <CheckCircle2 className={`w-5 h-5 ${task.completedToday ? '' : 'text-gray-400'}`} />
+                              </Button>
+                              {expandedTask === task.planId ? (
+                                <ChevronUp className="w-5 h-5 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                          </div>
+                          {expandedTask === task.planId && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <Separator />
+                              <div className="p-5 space-y-4">
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">本周进度</span>
+                                    <span className="font-medium text-purple-600">{task.progress || 0}/{task.target || 0}</span>
+                                  </div>
+                                  <Progress value={(task.progress || 0) / (task.target || 1) * 100} className="h-2 bg-gray-200" />
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  <p><strong>任务类型：</strong>{task.category}</p>
+                                  <p><strong>目标：</strong>本周完成 {task.target || 1} 次</p>
+                                  {task.todayStatus && <p><strong>今日状态：</strong>{task.todayStatus}</p>}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* 任务完成模态框 */}

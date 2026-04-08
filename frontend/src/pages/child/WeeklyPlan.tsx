@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
+import { cn } from '@/lib/utils';
 
 interface ChildTask {
   id: number;
@@ -37,11 +38,11 @@ interface ChildTask {
 
 type TaskType = '校内任务' | '阅读任务' | '体育运动' | '课外课程';
 
-const typeConfig: Record<string, { icon: any; color: string }> = {
-  '校内任务': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
-  '阅读任务': { icon: BookOpen, color: 'bg-purple-100 text-purple-600' },
-  '体育运动': { icon: Dumbbell, color: 'bg-green-100 text-green-600' },
-  '课外课程': { icon: Star, color: 'bg-orange-100 text-orange-600' },
+const typeConfig: Record<string, { icon: any; color: string; gradient: string }> = {
+  '校内任务': { icon: BookOpen, color: 'bg-blue-100 text-blue-600', gradient: 'from-blue-500 to-cyan-500' },
+  '阅读任务': { icon: BookOpen, color: 'bg-purple-100 text-purple-600', gradient: 'from-purple-500 to-violet-500' },
+  '体育运动': { icon: Dumbbell, color: 'bg-green-100 text-green-600', gradient: 'from-emerald-500 to-teal-500' },
+  '课外课程': { icon: Star, color: 'bg-orange-100 text-orange-600', gradient: 'from-orange-500 to-amber-500' },
 };
 
 // 生成本周日期
@@ -167,7 +168,7 @@ export default function WeeklyPlan() {
   };
 
   const getTaskTypeConfig = (type: string) => {
-    return typeConfig[type] || { icon: BookOpen, color: 'bg-gray-100 text-gray-600' };
+    return typeConfig[type] || { icon: BookOpen, color: 'bg-gray-100 text-gray-600', gradient: 'from-gray-500 to-gray-600' };
   };
 
   // 过滤出今天的任务
@@ -192,7 +193,7 @@ export default function WeeklyPlan() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -209,7 +210,7 @@ export default function WeeklyPlan() {
         </div>
         <Button 
           variant="default"
-          className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white"
+          className="rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
           onClick={fetchTasks}
         >
           刷新任务
@@ -225,51 +226,67 @@ export default function WeeklyPlan() {
           transition={{ duration: 0.5 }}
           className="lg:col-span-1"
         >
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-purple-500" />
+          <Card className="h-full border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-4 pt-6 px-6">
+              <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                  <Calendar className="size-4 text-white" />
+                </div>
                 我的本周计划
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6">
               <div className="space-y-4">
                 {weekDays.map((day, index) => {
                   const backendDay = day.dayOfWeek;
                   const dayTasks = tasks.filter(task => isTaskDueOnDay(task, backendDay));
                   
                   return (
-                    <div key={index} className={`p-3 rounded-lg ${day.isToday ? 'bg-purple-50 border border-purple-200' : 'border border-gray-100'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`font-medium ${day.isToday ? 'text-purple-600' : 'text-gray-700'}`}>
+                    <motion.div 
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-4 rounded-2xl ${day.isToday ? 'bg-purple-50 border border-purple-200' : 'bg-white border border-gray-100'}`}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`font-medium ${day.isToday ? 'text-purple-600' : 'text-gray-900'}`}>
                           {day.dayName}
                         </span>
                         <span className="text-sm text-gray-500">
                           {day.date.getMonth() + 1}月{day.date.getDate()}日
                         </span>
                       </div>
-                      <div className="space-y-2 ml-6">
+                      <div className="space-y-3 ml-2">
                         {dayTasks.length === 0 ? (
                           <span className="text-sm text-gray-400">无任务</span>
                         ) : (
-                          dayTasks.map(task => {
+                          dayTasks.map((task, taskIndex) => {
                             const isCompleted = day.isToday && task.completedToday;
+                            const TypeIcon = getTaskTypeConfig(task.template_type).icon;
                             return (
-                              <div key={task.id} className="flex items-center gap-2 text-sm">
+                              <motion.div 
+                                key={task.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: taskIndex * 0.05 }}
+                                className="flex items-center gap-3 text-sm"
+                              >
                                 {isCompleted ? (
                                   <CircleCheck className="w-4 h-4 text-green-500" />
                                 ) : (
                                   <Circle className="w-4 h-4 text-gray-300" />
                                 )}
-                                <span className={`${isCompleted ? 'text-gray-500 line-through' : 'text-gray-600'}`}>
+                                <TypeIcon className="w-4 h-4 text-gray-500" />
+                                <span className={`${isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
                                   {getTaskName(task)}
                                 </span>
-                              </div>
+                              </motion.div>
                             );
                           })
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -284,14 +301,14 @@ export default function WeeklyPlan() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="lg:col-span-2"
         >
-          <Card className="h-full">
+          <Card className="h-full border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-purple-500 to-blue-500 text-white">
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" />
                 今日任务 ({new Date().getMonth() + 1}月{new Date().getDate()}日 {weekDays.find(day => day.isToday)?.dayName})
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6">
               {/* Progress Summary */}
               <div className="mb-6 space-y-4">
                 <div className="flex justify-between items-center">
@@ -309,8 +326,8 @@ export default function WeeklyPlan() {
               {loading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map(i => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
+                    <Card key={i} className="border-0 shadow-md">
+                      <CardContent className="p-5">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
                           <div className="flex-1 space-y-2">
@@ -330,10 +347,10 @@ export default function WeeklyPlan() {
                   <p className="text-sm mt-1">好好休息一下吧！</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {todayTasks.map(task => {
                     const TypeIcon = getTaskTypeConfig(task.template_type).icon;
-                    const typeColor = getTaskTypeConfig(task.template_type).color;
+                    const typeGradient = getTaskTypeConfig(task.template_type).gradient;
                     
                     return (
                       <motion.div
@@ -342,18 +359,18 @@ export default function WeeklyPlan() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3 }}
                       >
-                        <Card className="overflow-hidden border border-gray-200 hover:shadow-md transition-shadow duration-300">
+                        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
                           <CardContent className="p-0">
                             <div 
-                              className="flex items-center justify-between p-4 cursor-pointer"
+                              className="flex items-center justify-between p-5 cursor-pointer"
                               onClick={() => toggleExpandTask(task.id)}
                             >
                               <div className="flex items-center gap-4">
-                                <div className={`w-10 h-10 rounded-full ${typeColor} flex items-center justify-center`}>
-                                  <TypeIcon className="w-5 h-5" />
+                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${typeGradient} flex items-center justify-center text-white`}>
+                                  <TypeIcon className="w-6 h-6" />
                                 </div>
                                 <div className="flex-1">
-                                  <h3 className="font-medium text-gray-900">{getTaskName(task)}</h3>
+                                  <h3 className="font-semibold text-gray-900">{getTaskName(task)}</h3>
                                   <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                                     <Clock className="w-3.5 h-3.5" />
                                     <span>{getTaskDuration(task)}分钟</span>
@@ -389,13 +406,13 @@ export default function WeeklyPlan() {
                                 transition={{ duration: 0.3 }}
                               >
                                 <Separator />
-                                <div className="p-4 space-y-3">
+                                <div className="p-5 space-y-4">
                                   <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
                                       <span className="text-gray-600">本周进度</span>
                                       <span className="font-medium text-purple-600">{task.weeklyProgress}%</span>
                                     </div>
-                                    <Progress value={task.weeklyProgress} className="h-1.5 bg-gray-200" />
+                                    <Progress value={task.weeklyProgress} className="h-2 bg-gray-200" />
                                   </div>
                                   <div className="text-sm text-gray-600">
                                     <p><strong>任务类型：</strong>{task.template_type}</p>
