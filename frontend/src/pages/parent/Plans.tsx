@@ -72,12 +72,18 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
   };
   
   const assignedDays = useMemo(() => {
+    // 优先使用实际分配的天数（后端已存储的 assignedDays）
+    if (task.assignedDays && task.assignedDays.length > 0) {
+      return task.assignedDays;
+    }
+    // 如果没有实际分配，根据 scheduleRule 计算默认值
+    // 使用 JavaScript 标准索引：0=周日, 1=周一, ..., 6=周六
     switch (task.scheduleRule) {
       case 'daily': return [0, 1, 2, 3, 4, 5, 6];
-      case 'school': return [0, 1, 2, 3, 4];
-      case 'flexible': return [0, 1, 2, 3, 4];
-      case 'weekend': return [5, 6];
-      default: return task.assignedDays.length > 0 ? task.assignedDays.map(getFrontendDayIndex) : [0, 1, 2, 3, 4, 5, 6];
+      case 'school': return [1, 2, 4, 5]; // 周一、周二、周四、周五
+      case 'flexible': return [1, 2, 3, 4, 5]; // 周一到周五
+      case 'weekend': return [0, 6]; // 周日、周六
+      default: return [0, 1, 2, 3, 4, 5, 6];
     }
   }, [task.scheduleRule, task.assignedDays]);
 

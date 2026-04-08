@@ -11,12 +11,41 @@ settingsRouter.use(authMiddleware)
 settingsRouter.use(requireRole('parent'))
 
 /**
+ * GET / - Get family settings
+ */
+settingsRouter.get('/', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  console.log('[GET SETTINGS] Family ID:', familyId)
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  console.log('[GET SETTINGS] Family settings:', family.settings)
+
+  res.json({
+    status: 'success',
+    data: {
+      familyName: family.name,
+      settings: family.settings || {},
+    },
+  })
+})
+
+/**
  * PUT / - Update family settings
  * Body: { familyName, dingtalkWebhook, dailyTimeLimit }
  */
 settingsRouter.put('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const { familyName, dingtalkWebhook, dailyTimeLimit } = req.body
+
+  console.log('[PUT SETTINGS] Request:', { familyId, familyName, dailyTimeLimit })
 
   if (!familyName) {
     throw new AppError(400, '请输入家庭名称')
@@ -43,6 +72,8 @@ settingsRouter.put('/', async (req: AuthRequest, res: Response) => {
       },
     },
   })
+
+  console.log('[PUT SETTINGS] Updated settings:', updatedFamily.settings)
 
   res.json({
     status: 'success',

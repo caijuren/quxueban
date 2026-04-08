@@ -368,42 +368,43 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
       childName: child.name,
       weekStartDate: weekStart,
       allocations: childPlans.map(p => {
-        const weeklyRule = p.task.weeklyRule as { days?: number[] } | null
+        // 优先使用数据库存储的 assignedDays（JavaScript 标准索引：0=周日, 6=周六）
+        const storedAssignedDays = p.assignedDays as number[] | null
         let assignedDays: number[] = []
-        
+
         // 获取任务的 scheduleRule
         const taskTags = p.task.tags as any || {}
         const taskWeeklyRule = p.task.weeklyRule as any || {}
         const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
-        
-        // 使用任务的 weeklyRule 或 scheduleRule 来确定分配的天数
-        if (weeklyRule?.days && weeklyRule.days.length > 0) {
-          assignedDays = weeklyRule.days
+
+        // 优先使用实际分配的天数
+        if (storedAssignedDays && storedAssignedDays.length > 0) {
+          assignedDays = storedAssignedDays
         } else if (scheduleRule === 'daily') {
           assignedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
         } else if (scheduleRule === 'school') {
-          assignedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（不包含周三）
+          assignedDays = [1, 2, 4, 5] // 周一、周二、周四、周五
         } else if (scheduleRule === 'weekend') {
-          assignedDays = [5, 6] // 周六和周日
+          assignedDays = [0, 6] // 周日、周六
         } else if (scheduleRule === 'flexible') {
-          assignedDays = [0, 1, 2, 3, 4, 5, 6] // 周一到周日
+          assignedDays = [1, 2, 3, 4, 5] // 周一到周五
         } else {
           assignedDays = [0, 1, 2, 3, 4, 5, 6]
         }
-        
+
         // 确保 subject 是字符串类型
         let subject = 'other'
         if (p.task.tags && typeof p.task.tags === 'object') {
           subject = (p.task.tags as any).subject || 'other'
         }
-        
+
         return {
           taskId: String(p.taskId),
           taskName: p.task.name,
           category: p.task.category,
           timePerUnit: p.task.timePerUnit,
           assignedDays: assignedDays,
-          subject: subject,
+          subject:subject,
           difficulty: (p.task.tags as any)?.difficulty || 'basic',
           isTemporary: (p.task.tags as any)?.isTemporary || false,
           scheduleRule: scheduleRule,

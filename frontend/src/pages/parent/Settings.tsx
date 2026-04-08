@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -42,6 +42,11 @@ const settingsSchema = z.object({
 type SettingsFormData = z.infer<typeof settingsSchema>;
 
 // API functions
+async function getFamilySettings(): Promise<any> {
+  const response = await apiClient.get('/settings');
+  return response.data;
+}
+
 async function updateSettings(data: SettingsFormData): Promise<void> {
   await apiClient.put('/settings', data);
 }
@@ -65,6 +70,43 @@ export default function SettingsPage() {
     defaultValues: { familyName: '我的家庭', dingtalkWebhook: '', dailyTimeLimit: 210 }
   });
 
+  // Load current settings
+  const { data: settingsData, isLoading, isError, error } = useQuery({
+    queryKey: ['family-settings'],
+    queryFn: getFamilySettings,
+    staleTime: 0, // 禁用缓存，确保每次都重新获取
+    refetchOnWindowFocus: true,
+  });
+
+  // Update form when settings are loaded
+  useEffect(() => {
+    console.log('[Settings] Loading settings:', settingsData);
+    console.log('[Settings] IsLoading:', isLoading, 'IsError:', isError);
+    
+    if (isError) {
+      console.error('[Settings] Error:', error);
+      toast.error('加载设置失败');
+    }
+    
+    if (settingsData?.data) {
+      const { familyName, settings } = settingsData.data;
+      
+      console.log('[Settings] Family settings:', { familyName, settings });
+      
+      // 显示实际加载的值
+      const savedTimeLimit = settings?.dailyTimeLimit || 210;
+      console.log('[Settings] Setting dailyTimeLimit to:', savedTimeLimit);
+      
+      // 调试：显示实际加载的值
+      toast.info(`加载的时间限制: ${savedTimeLimit}分钟`, { duration: 5000 });
+      
+      setValue('familyName', familyName || '我的家庭');
+      setValue('dingtalkWebhook', settings?.dingtalkWebhook || '');
+      setValue('dailyTimeLimit', savedTimeLimit);
+      setDailyTimeLimit(savedTimeLimit);
+    }
+  }, [settingsData, setValue, isLoading, isError, error]);
+
   const updateMutation = useMutation({
     mutationFn: updateSettings,
     onSuccess: () => toast.success('设置已保存'),
@@ -87,7 +129,10 @@ export default function SettingsPage() {
     onError: (error) => toast.error(getErrorMessage(error))
   });
 
-  const onSubmit = (data: SettingsFormData) => updateMutation.mutate({ ...data, dailyTimeLimit });
+  const onSubmit = (data: SettingsFormData) => {
+    console.log('[Settings] Submitting:', { ...data, dailyTimeLimit });
+    updateMutation.mutate({ ...data, dailyTimeLimit });
+  };
 
   const handleTestWebhook = () => {
     const webhook = watch('dingtalkWebhook');

@@ -321,6 +321,12 @@ authRouter.get('/me', authMiddleware, async (req: AuthRequest, res: Response) =>
       familyId: user.familyId,
       familyName: user.family.name,
       familyCode: user.family.familyCode,
+      family: {
+        id: user.family.id,
+        name: user.family.name,
+        familyCode: user.family.familyCode,
+        settings: user.family.settings || {},
+      },
     },
   })
 })

@@ -76,16 +76,37 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
       FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
     `
     
-    const formattedTasks = (tasks as any[]).map(task => ({
-      id: task.id, familyId: task.family_id, name: task.name,
-      category: CATEGORY_REVERSE_MAP[task.category] || task.category,
-      type: TYPE_REVERSE_MAP[task.type] || task.type,
-      timePerUnit: task.time_per_unit, weeklyRule: task.weekly_rule,
-      sortOrder: task.sort_order, isActive: task.is_active,
-      appliesTo: task.applies_to || [],
-      tags: task.tags || {},
-      createdAt: task.created_at, updatedAt: task.updated_at,
-    }))
+    const formattedTasks = (tasks as any[]).map(task => {
+      // 从 tags 中提取 scheduleRule
+      let taskTags = task.tags || {};
+      if (typeof taskTags === 'string') {
+        try {
+          taskTags = JSON.parse(taskTags);
+        } catch (e) {
+          taskTags = {};
+        }
+      }
+      const scheduleRule = (typeof taskTags === 'object' && taskTags !== null && 'scheduleRule' in taskTags) 
+        ? taskTags.scheduleRule 
+        : null;
+      
+      return {
+        id: task.id, 
+        familyId: task.family_id, 
+        name: task.name,
+        category: CATEGORY_REVERSE_MAP[task.category] || task.category,
+        type: TYPE_REVERSE_MAP[task.type] || task.type,
+        timePerUnit: task.time_per_unit, 
+        weeklyRule: task.weekly_rule,
+        sortOrder: task.sort_order, 
+        isActive: task.is_active,
+        appliesTo: task.applies_to || [],
+        tags: typeof taskTags === 'object' ? taskTags : {},
+        scheduleRule: scheduleRule || 'daily',
+        createdAt: task.created_at, 
+        updatedAt: task.updated_at,
+      };
+    })
     res.json({ status: 'success', data: formattedTasks })
   } catch (error: any) {
     console.error('[GET TASKS] Error:', error)
@@ -109,6 +130,7 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   if (tags?.parentRole && VALID_PARENT_ROLES.includes(tags.parentRole)) validatedTags.parentRole = tags.parentRole
   if (tags?.difficulty && VALID_DIFFICULTIES.includes(tags.difficulty)) validatedTags.difficulty = tags.difficulty
   if (tags?.totalAmount?.value > 0) validatedTags.totalAmount = tags.totalAmount
+  if (tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule)) validatedTags.scheduleRule = tags.scheduleRule
 
   const updates: string[] = []
   if (name) updates.push(`name = '${name.replace(/'/g, "''")}'`)
@@ -235,13 +257,13 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         }
 
         if (scheduleRule === 'daily') {
-          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天
+          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 每天（后端索引：周一到周日）
         } else if (scheduleRule === 'school') {
-          allowedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（不包含周三）
+          allowedDays = [0, 1, 3, 4] // 周一、周二、周四、周五（后端索引）
         } else if (scheduleRule === 'weekend') {
-          allowedDays = [5, 6] // 周六和周日
+          allowedDays = [5, 6] // 周六和周日（后端索引：5=周六，6=周日）
         } else if (scheduleRule === 'flexible') {
-          allowedDays = [0, 1, 2, 3, 4, 5, 6] // 周一到周日
+          allowedDays = [0, 1, 2, 3, 4] // 周一到周五（后端索引）
         } else {
           // 默认：每天
           allowedDays = [0, 1, 2, 3, 4, 5, 6]
@@ -278,7 +300,12 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         const daysAllocated: number[] = []
         for (const day of allowedDays) {
           if (dayTimeUsed[day] + task.timePerUnit <= dailyTimeLimit) {
-            daysAllocated.push(day)
+            // 计算实际日期并转换为 JavaScript 标准星期索引（0=周日）
+            const actualDate = new Date(weekStartDate)
+            actualDate.setDate(actualDate.getDate() + day)
+            const jsDayIndex = actualDate.getDay() // 0=周日, 1=周一, ..., 6=周六
+
+            daysAllocated.push(jsDayIndex)
             dayTimeUsed[day] += task.timePerUnit
           }
         }
@@ -293,7 +320,8 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
             target,
             progress: 0,
             weekNo,
-            status: target > 0 ? 'active' : 'inactive'
+            status: target > 0 ? 'active' : 'inactive',
+            assignedDays: daysAllocated, // 存储 JavaScript 标准索引
           }
         })
 
