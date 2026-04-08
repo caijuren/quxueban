@@ -609,7 +609,7 @@ export default function PlansPage() {
           
           // 转换为排序后的数组
           const sortedCategories = Object.entries(tasksByCategory)
-            .sort(([catA], [catB]) => (categoryOrder[catA] || 999) - (categoryOrder[catB] || 999));
+            .sort(([catA], [catB]) => ((categoryOrder as any)[catA] || 999) - ((categoryOrder as any)[catB] || 999));
           
           // 渲染分组和任务
           sortedCategories.forEach(([category, tasks]) => {
