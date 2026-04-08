@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { ChildSwitcher } from './ChildSwitcher';
 
 const navItems = [
   { path: '/parent', label: '概览', icon: LayoutDashboard },
@@ -107,7 +108,10 @@ export default function ParentLayout() {
           >
             <Menu className="size-5" />
           </Button>
-          <h1 className="font-semibold text-gray-900 text-base">趣学伴</h1>
+          <div className="flex items-center gap-2">
+            <ChildSwitcher />
+            <h1 className="font-semibold text-gray-900 text-base">趣学伴</h1>
+          </div>
           <Avatar className="size-9 ring-2 ring-white shadow-sm">
             <AvatarImage src={user?.avatar} />
             <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
@@ -190,13 +194,19 @@ function SidebarContent({ user, onLogout, onClose, currentPath }: SidebarContent
     <>
       {/* Header */}
       <div className="p-4">
-        <div className="flex items-center">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/25 hover:scale-105 transition-transform duration-300">
-            🐛
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/25 hover:scale-105 transition-transform duration-300">
+              🐛
+            </div>
+            <div className="ml-2">
+              <h1 className="font-bold text-gray-900 text-base">趣学伴</h1>
+            </div>
           </div>
-          <div className="ml-2">
-            <h1 className="font-bold text-gray-900 text-base">趣学伴</h1>
-          </div>
+        </div>
+        {/* Child Switcher - Desktop Sidebar */}
+        <div className="mt-3">
+          <ChildSwitcher className="w-full bg-white/50 border border-gray-100" />
         </div>
       </div>
 

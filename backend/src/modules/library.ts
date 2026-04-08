@@ -407,7 +407,7 @@ libraryRouter.get('/search-by-title/:title', async (req: AuthRequest, res: Respo
 
   try {
     // Call Douban API to search books
-    const response = await fetch(`https://api.douban.com/v2/book/search?q=${encodeURIComponent(title)}&count=10`)
+    const response = await fetch(`https://api.douban.com/v2/book/search?q=${encodeURIComponent(title as string)}&count=10`)
     if (!response.ok) {
       throw new Error('Failed to search books from Douban')
     }
