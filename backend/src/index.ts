@@ -23,7 +23,7 @@ const startServer = async () => {
     }
 
     const app = createApp()
-    const port = env.PORT || 10000
+    const port = 9000
 
     // Listen on 0.0.0.0 for Render compatibility
     app.listen(port, '0.0.0.0', () => {

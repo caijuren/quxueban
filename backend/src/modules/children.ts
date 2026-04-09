@@ -37,7 +37,7 @@ childrenRouter.get('/:childId/dingtalk-config', async (req: AuthRequest, res: Re
 
   const child = await prisma.user.findFirst({
     where: { 
-      id: parseInt(childId),
+      id: parseInt(childId as string),
       familyId,
       role: 'child'
     },
@@ -76,7 +76,7 @@ childrenRouter.put('/:childId/dingtalk-config', async (req: AuthRequest, res: Re
 
   const child = await prisma.user.findFirst({
     where: { 
-      id: parseInt(childId),
+      id: parseInt(childId as string),
       familyId,
       role: 'child'
     }
@@ -96,7 +96,7 @@ childrenRouter.put('/:childId/dingtalk-config', async (req: AuthRequest, res: Re
   }
 
   const updatedChild = await prisma.user.update({
-    where: { id: parseInt(childId) },
+    where: { id: parseInt(childId as string) },
     data: updateData,
     select: {
       id: true,

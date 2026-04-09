@@ -307,20 +307,32 @@ libraryRouter.post('/import', upload.single('file'), async (req: AuthRequest, re
     let skipped = 0
     const batchSize = 100
     const booksToCreate: any[] = []
+    const totalRows = data.length
 
-    for (const row of data as any[]) {
+    // 先获取所有已存在的书籍名称，减少数据库查询次数
+    const existingBooks = await prisma.book.findMany({
+      where: { familyId },
+      select: { name: true }
+    })
+    const existingBookNames = new Set(existingBooks.map(book => book.name))
+    console.log(`[IMPORT] Found ${existingBookNames.size} existing books`)
+
+    // 启用分块响应
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Transfer-Encoding': 'chunked'
+    })
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i]
       const name = row['书名']
       if (!name) {
         skipped++
         continue
       }
 
-      // Check if book already exists
-      const existing = await prisma.book.findFirst({
-        where: { familyId, name: String(name) }
-      })
-
-      if (existing) {
+      // Check if book already exists (using Set for faster lookup)
+      if (existingBookNames.has(String(name))) {
         skipped++
         continue
       }
@@ -344,6 +356,22 @@ libraryRouter.post('/import', upload.single('file'), async (req: AuthRequest, re
         imported += booksToCreate.length
         booksToCreate.length = 0
         console.log(`[IMPORT] Batch inserted, total: ${imported}`)
+
+        // 发送进度信息
+        const progress = Math.round((i / totalRows) * 100)
+        res.write(JSON.stringify({
+          status: 'progress',
+          data: {
+            progress,
+            imported,
+            skipped,
+            processed: i
+          }
+        }) + '\n')
+        // 确保数据立即发送到前端
+        if (res.flush) {
+          res.flush()
+        }
       }
     }
 
@@ -355,14 +383,24 @@ libraryRouter.post('/import', upload.single('file'), async (req: AuthRequest, re
 
     console.log(`[IMPORT] Completed: ${imported} imported, ${skipped} skipped`)
 
-    res.json({
+    // 发送完成信息
+    res.write(JSON.stringify({
       status: 'success',
       message: `导入完成：成功 ${imported} 本，跳过 ${skipped} 本`,
       data: { imported, skipped },
-    })
+    }) + '\n')
+
+    res.end()
   } catch (error: any) {
     console.error('[IMPORT] Error:', error)
-    throw new AppError(500, `导入失败: ${error.message}`)
+    res.writeHead(500, {
+      'Content-Type': 'application/json'
+    })
+    res.write(JSON.stringify({
+      status: 'error',
+      message: `导入失败: ${error.message}`
+    }) + '\n')
+    res.end()
   }
 })
 
