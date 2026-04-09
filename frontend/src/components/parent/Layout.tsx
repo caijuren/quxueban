@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -15,6 +15,9 @@ import {
   Menu,
   X,
   ChevronDown,
+  Bell,
+  Plus,
+  CalendarPlus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -22,17 +25,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { ChildSwitcher } from './ChildSwitcher';
+import { ChildTabs } from './ChildTabs';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 const navItems = [
   { path: '/parent', label: '概览', icon: LayoutDashboard },
-  { path: '/parent/tasks', label: '任务配置', icon: ListTodo },
-  { path: '/parent/plans', label: '计划管理', icon: CalendarDays },
+  { path: '/parent/tasks', label: '任务', icon: ListTodo },
+  { path: '/parent/plans', label: '计划', icon: CalendarDays },
   { path: '/parent/library', label: '图书馆', icon: Library },
-  { path: '/parent/reading', label: '阅读管理', icon: BookOpen },
-  { path: '/parent/achievements', label: '成就配置', icon: Trophy },
-  { path: '/parent/children', label: '孩子管理', icon: Users },
-  { path: '/parent/statistics', label: '数据统计', icon: BarChart3 },
+  { path: '/parent/reading', label: '阅读', icon: BookOpen },
+  { path: '/parent/achievements', label: '成就', icon: Trophy },
+  { path: '/parent/statistics', label: '数据', icon: BarChart3 },
   { path: '/parent/settings', label: '设置', icon: Settings },
 ];
 
@@ -48,16 +51,21 @@ const overlayVariants = {
 
 export default function ParentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const { user, logout, isAuthenticated, isInitializing } = useAuth();
+  const { selectedChild } = useSelectedChild();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 路由守卫：未登录时跳转到登录页
+  // 路由守卫：未登录时跳转到登录页，孩子用户跳转到孩子页面
   useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
       navigate('/login', { replace: true, state: { from: location } });
+    } else if (!isInitializing && isAuthenticated && user?.role !== 'parent') {
+      // 孩子用户访问家长页面，重定向到孩子首页
+      navigate('/child', { replace: true });
     }
-  }, [isInitializing, isAuthenticated, navigate, location]);
+  }, [isInitializing, isAuthenticated, user, navigate, location]);
 
   // 初始化中显示加载状态，避免子组件访问未定义数据
   if (isInitializing) {
@@ -90,34 +98,114 @@ export default function ParentLayout() {
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7]">
+    <div className="min-h-screen bg-background">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-purple-200/40 to-blue-200/40 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gradient-to-tr from-blue-200/30 to-purple-200/30 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-primary/5 to-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gradient-to-tr from-primary/5 to-primary/10 rounded-full blur-3xl" />
       </div>
 
+      {/* Global Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-border shadow-sm h-16">
+        <div className="flex items-center justify-between h-full px-6">
+          {/* Left: Brand + Navigation + Child Tabs */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-sm shadow-md">
+                趣
+              </div>
+              <h1 className="ml-2 font-semibold text-foreground text-base">趣学伴</h1>
+            </div>
+            <nav className="hidden md:flex items-center gap-2 ml-6">
+              {navItems.map((item) => {
+                const isActive = item.path === '/parent'
+                  ? location.pathname === '/parent'
+                  : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group',
+                      isActive
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-7 h-7 rounded flex items-center justify-center transition-all duration-200',
+                      isActive ? 'bg-white/20' : 'bg-muted group-hover:bg-muted/50'
+                    )}>
+                      <Icon className={cn(
+                        'size-4 transition-transform duration-200',
+                        isActive ? '' : 'group-hover:scale-105'
+                      )} />
+                    </div>
+                    <span className="text-sm transition-all duration-200">{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </nav>
+            <div className="hidden lg:flex ml-6">
+              <ChildTabs />
+            </div>
+          </div>
+
+          {/* Right: Notifications + User */}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" className="text-foreground hover:bg-muted">
+              <Bell className="size-5" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 p-1 rounded-lg hover:bg-muted transition-colors">
+                  <Avatar className="size-8 ring-2 ring-white shadow-sm">
+                    <AvatarImage src={user?.avatar} />
+                    <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
+                      {user?.name?.charAt(0) || 'P'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium text-foreground hidden md:inline">
+                    {user?.name || '家长'}
+                  </span>
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="p-2 border-b border-border">
+                  <p className="font-medium text-foreground text-sm">{user?.name || '家长'}</p>
+                  <p className="text-xs text-muted-foreground">在线</p>
+                </div>
+                <DropdownMenuItem className="cursor-pointer">
+                  <Settings className="size-4 mr-2" />
+                  <span>个人设置</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer text-destructive" onClick={handleLogout}>
+                  <LogOut className="size-4 mr-2" />
+                  <span>退出登录</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </header>
+
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-200/50">
-        <div className="flex items-center justify-between h-16 px-5">
+      <header className="lg:hidden fixed top-16 left-0 right-0 z-40 bg-white border-b border-border">
+        <div className="flex items-center justify-between h-12 px-5">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(true)}
-            className="text-gray-600 hover:bg-gray-100"
+            className="text-foreground hover:bg-muted"
           >
             <Menu className="size-5" />
           </Button>
-          <div className="flex items-center gap-2">
-            <ChildSwitcher />
-            <h1 className="font-semibold text-gray-900 text-base">趣学伴</h1>
-          </div>
-          <Avatar className="size-9 ring-2 ring-white shadow-sm">
-            <AvatarImage src={user?.avatar} />
-            <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
-              {user?.name?.charAt(0) || 'P'}
-            </AvatarFallback>
-          </Avatar>
+          <h1 className="font-semibold text-foreground text-base">趣学伴</h1>
+          <Button variant="ghost" size="icon" className="text-foreground hover:bg-muted">
+            <Bell className="size-5" />
+          </Button>
         </div>
       </header>
 
@@ -147,6 +235,7 @@ export default function ParentLayout() {
                 onLogout={handleLogout} 
                 onClose={closeSidebar}
                 currentPath={location.pathname}
+                selectedChild={selectedChild}
               />
             </motion.aside>
           </>
@@ -154,27 +243,31 @@ export default function ParentLayout() {
       </AnimatePresence>
 
       {/* Desktop Layout */}
-      <div className="hidden lg:flex min-h-screen relative z-10">
+      <div className="hidden lg:flex min-h-screen relative z-10 pt-16">
         {/* Desktop Sidebar */}
-        <aside className="w-56 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col h-screen sticky top-0">
-          <SidebarContent 
-            user={user} 
-            onLogout={handleLogout}
-            currentPath={location.pathname}
-          />
-        </aside>
+        {!sidebarCollapsed && (
+          <aside className="w-56 bg-white border-r border-border flex flex-col h-screen sticky top-16 transition-all duration-300">
+            <SidebarContent 
+              user={user} 
+              onLogout={handleLogout}
+              currentPath={location.pathname}
+              selectedChild={selectedChild}
+            />
+          </aside>
+        )}
 
         {/* Main Content */}
-        <main className="flex-1 min-h-screen overflow-auto">
-          <div className="p-8">
+        <main className="flex-1 min-h-screen overflow-auto transition-all duration-300">
+          <div className="p-6">
             <Outlet />
           </div>
         </main>
       </div>
 
       {/* Mobile Main Content */}
-      <main className="lg:hidden pt-16 min-h-screen overflow-auto relative z-10">
+      <main className="lg:hidden pt-28 min-h-screen overflow-auto relative z-10">
         <div className="p-5">
+          <ChildTabs />
           <Outlet />
         </div>
       </main>
@@ -187,27 +280,25 @@ interface SidebarContentProps {
   onLogout: () => void;
   onClose?: () => void;
   currentPath: string;
+  selectedChild?: any;
 }
 
-function SidebarContent({ user, onLogout, onClose, currentPath }: SidebarContentProps) {
+function SidebarContent({ user, onLogout, onClose, currentPath, selectedChild }: SidebarContentProps) {
   return (
     <>
       {/* Header */}
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/25 hover:scale-105 transition-transform duration-300">
-              🐛
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-sm shadow-md">
+              趣
             </div>
             <div className="ml-2">
-              <h1 className="font-bold text-gray-900 text-base">趣学伴</h1>
+              <h1 className="font-bold text-foreground text-base">趣学伴</h1>
             </div>
           </div>
         </div>
-        {/* Child Switcher - Desktop Sidebar */}
-        <div className="mt-3">
-          <ChildSwitcher className="w-full bg-white/50 border border-gray-100" />
-        </div>
+
       </div>
 
       {/* Navigation */}
@@ -226,25 +317,22 @@ function SidebarContent({ user, onLogout, onClose, currentPath }: SidebarContent
                 to={item.path}
                 onClick={onClose}
                 className={cn(
-                  'flex items-center gap-2.5 px-3 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
                   isActive
-                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white font-medium shadow-lg shadow-purple-500/25'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-primary text-white font-medium shadow-sm'
+                    : 'text-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
                 <div className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300',
-                  isActive ? 'bg-white/20' : 'bg-gray-100/50 group-hover:bg-gray-100'
+                  'w-7 h-7 rounded flex items-center justify-center transition-all duration-200',
+                  isActive ? 'bg-white/20' : 'bg-muted group-hover:bg-muted/50'
                 )}>
                   <Icon className={cn(
                     'size-4 transition-transform duration-200',
-                    isActive ? '' : 'group-hover:scale-110'
+                    isActive ? '' : 'group-hover:scale-105'
                   )} />
                 </div>
-                <span className="text-sm transition-all duration-200 group-hover:translate-x-1">{item.label}</span>
-                {isActive && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-l-xl" />
-                )}
+                <span className="text-sm transition-all duration-200">{item.label}</span>
               </NavLink>
             );
           })}

@@ -79,42 +79,42 @@
 
 :root {
   /* === 圆角基准值 === */
-  --radius: 0.875rem;
+  --radius: 0.5rem;
 
   /* === 字体排版 === */
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
-  --font-size-display: 3.5rem;      /* 大标题 H0 */
-  --font-size-headline: 2.25rem;    /* 大标题 H1 */
-  --font-size-title: 1.5rem;         /* 中标题 H2 */
-  --font-size-subtitle: 1.125rem;   /* 小标题 H3 */
-  --font-size-body: 1rem;           /* 正文 */
-  --font-size-label: 0.875rem;      /* 小字 */
-  --font-size-small: 0.75rem;       /* 微字 */
-  --font-weight-bold: 700;           /* 粗体 */
-  --font-weight-semibold: 600;       /* 半粗体 */
-  --font-weight-medium: 500;         /* 中等粗细 */
-  --font-weight-normal: 400;         /* 正常 */
-  --line-height: 1.5;                /* 行高 */
-  --line-height-tight: 1.25;         /* 紧凑行高 */
-  --line-height-loose: 1.75;         /* 宽松行高 */
-  --letter-spacing-tight: -0.02em;   /* 紧凑字间距 */
+  --font-size-display: 3rem;          /* 大标题 H0 */
+  --font-size-headline: 2rem;         /* 大标题 H1 */
+  --font-size-title: 1.25rem;         /* 中标题 H2 */
+  --font-size-subtitle: 1rem;         /* 小标题 H3 */
+  --font-size-body: 0.875rem;         /* 正文 */
+  --font-size-label: 0.75rem;         /* 小字 */
+  --font-size-small: 0.625rem;        /* 微字 */
+  --font-weight-bold: 600;            /* 粗体 */
+  --font-weight-semibold: 500;        /* 半粗体 */
+  --font-weight-medium: 400;          /* 中等粗细 */
+  --font-weight-normal: 400;          /* 正常 */
+  --line-height: 1.4;                 /* 行高 */
+  --line-height-tight: 1.2;           /* 紧凑行高 */
+  --line-height-loose: 1.6;           /* 宽松行高 */
+  --letter-spacing-tight: -0.01em;    /* 紧凑字间距 */
   --letter-spacing-normal: 0;         /* 正常字间距 */
-  --letter-spacing-wide: 0.02em;      /* 宽松字间距 */
+  --letter-spacing-wide: 0.01em;      /* 宽松字间距 */
 
   /* === 间距系统 === */
-  --spacing-xs: 0.5rem;
-  --spacing-sm: 0.75rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-  --spacing-3xl: 4rem;
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.5rem;
+  --spacing-2xl: 2rem;
+  --spacing-3xl: 3rem;
 
   /* === 阴影层级 === */
-  --ds-shadow-sm: 0 1px 3px oklch(0.205 0 0 / 0.08);
-  --ds-shadow-md: 0 4px 12px oklch(0.205 0 0 / 0.10), 0 2px 4px oklch(0.205 0 0 / 0.06);
-  --ds-shadow-lg: 0 8px 24px oklch(0.205 0 0 / 0.12), 0 4px 8px oklch(0.205 0 0 / 0.08);
-  --ds-shadow-xl: 0 16px 48px oklch(0.205 0 0 / 0.16), 0 8px 16px oklch(0.205 0 0 / 0.10);
+  --ds-shadow-sm: 0 1px 2px oklch(0 0 0 / 0.05);
+  --ds-shadow-md: 0 2px 4px oklch(0 0 0 / 0.08);
+  --ds-shadow-lg: 0 4px 8px oklch(0 0 0 / 0.12);
+  --ds-shadow-xl: 0 8px 16px oklch(0 0 0 / 0.16);
   /* 向后兼容别名（供原生 CSS var(--shadow-*) 引用使用） */
   --shadow-sm: var(--ds-shadow-sm);
   --shadow-md: var(--ds-shadow-md);
@@ -122,85 +122,79 @@
   --shadow-xl: var(--ds-shadow-xl);
 
   /* === 动效时间 === */
-  --duration-fast: 150ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
+  --duration-fast: 100ms;
+  --duration-normal: 150ms;
+  --duration-slow: 200ms;
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* === 背景颜色 === */
-  --background: oklch(0.98 0.005 350);
-  --foreground: oklch(0.25 0.02 300);
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.2 0 0);
 
   /* === 卡片 === */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.25 0.02 300);
+  --card-foreground: oklch(0.2 0 0);
 
   /* === 弹出层 === */
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.25 0.02 300);
+  --popover-foreground: oklch(0.2 0 0);
 
   /* === 主色调 === */
-  --primary: oklch(0.68 0.15 300); /* 紫色系 */
+  --primary: oklch(0.55 0.15 260); /* 专业蓝色 */
   --primary-foreground: oklch(1 0 0);
 
   /* === 次要色 === */
-  --secondary: oklch(0.65 0.12 230); /* 蓝色系 */
-  --secondary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0.02 0); /* 中性灰色 */
+  --secondary-foreground: oklch(0.2 0 0);
 
   /* === 柔和色 === */
-  --muted: oklch(0.96 0.01 320);
-  --muted-foreground: oklch(0.50 0.02 300);
+  --muted: oklch(0.97 0.01 0);
+  --muted-foreground: oklch(0.5 0 0);
 
   /* === 强调色 === */
-  --accent: oklch(0.93 0.06 160);
-  --accent-foreground: oklch(0.25 0.02 300);
+  --accent: oklch(0.55 0.15 260);
+  --accent-foreground: oklch(1 0 0);
 
   /* === 危险/错误色 === */
-  --destructive: oklch(0.65 0.22 25);
+  --destructive: oklch(0.6 0.2 20);
   --destructive-foreground: oklch(1 0 0);
 
   /* === 边框和输入框 === */
-  --border: oklch(0.91 0.02 340);
-  --input: oklch(0.91 0.02 340);
-  --ring: oklch(0.68 0.15 300);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.95 0 0);
+  --ring: oklch(0.55 0.15 260);
 
   /* === 功能颜色 (新增) === */
-  --success: oklch(0.70 0.12 160); /* 绿色 */
+  --success: oklch(0.6 0.15 160); /* 专业绿色 */
   --success-foreground: oklch(1 0 0);
-  --warning: oklch(0.78 0.14 85); /* 橙色 */
-  --warning-foreground: oklch(0.205 0 0);
-  --info: oklch(0.72 0.10 230); /* 蓝色 */
+  --warning: oklch(0.75 0.15 80); /* 专业橙色 */
+  --warning-foreground: oklch(0.2 0 0);
+  --info: oklch(0.55 0.15 260); /* 专业蓝色 */
   --info-foreground: oklch(1 0 0);
 
-  /* === 主题特色颜色 (新增) === */
-  --theme-red: oklch(0.72 0.15 20);
-  --theme-green: oklch(0.70 0.12 160);
-  --theme-gold: oklch(0.80 0.12 85);
-  --theme-blue: oklch(0.72 0.10 230);
-
   /* === 图表颜色 === */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --chart-1: oklch(0.55 0.15 260);
+  --chart-2: oklch(0.6 0.15 160);
+  --chart-3: oklch(0.75 0.15 80);
+  --chart-4: oklch(0.6 0.2 20);
+  --chart-5: oklch(0.5 0.1 320);
 
   /* === 侧边栏 === */
-  --sidebar: oklch(0.99 0.005 350);
-  --sidebar-foreground: oklch(0.25 0.02 300);
-  --sidebar-primary: oklch(0.75 0.12 350);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.2 0 0);
+  --sidebar-primary: oklch(0.55 0.15 260);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.03 350);
-  --sidebar-accent-foreground: oklch(0.25 0.02 300);
-  --sidebar-border: oklch(0.91 0.02 340);
-  --sidebar-ring: oklch(0.75 0.12 350);
+  --sidebar-accent: oklch(0.97 0.01 0);
+  --sidebar-accent-foreground: oklch(0.2 0 0);
+  --sidebar-border: oklch(0.92 0 0);
+  --sidebar-ring: oklch(0.55 0.15 260);
 
   /* === Hero 区域 (新增) === */
-  --hero: oklch(0.205 0 0);
-  --hero-foreground: oklch(0.985 0 0);
+  --hero: oklch(0.2 0 0);
+  --hero-foreground: oklch(1 0 0);
 
   /* === 动画 Token === */
   --duration-fast: 150ms;

@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { Calendar as DayPickerCalendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AdvancedExportDialog, AdvancedExportConfig, ChildOption } from '@/components/AdvancedExportDialog';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 interface TaskAllocation {
   taskId: string;
@@ -464,8 +465,9 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
   );
 }
 
-async function fetchWeeklyPlan(weekStart: string): Promise<WeeklyPlan[]> {
-  const response = await apiClient.get(`/plans/week/${weekStart}`);
+async function fetchWeeklyPlan(weekStart: string, childId?: number): Promise<WeeklyPlan[]> {
+  const params = childId ? { childId } : {};
+  const response = await apiClient.get(`/plans/week/${weekStart}`, { params });
   return response.data.data || [];
 }
 
@@ -481,6 +483,7 @@ export default function PlansPage() {
   const [collapsedCategories, setCollapsedCategories] = useState<{[key: string]: boolean}>({});
   const [advancedExportOpen, setAdvancedExportOpen] = useState(false);
   const exportContainerRef = useRef<HTMLDivElement>(null);
+  const { selectedChildId } = useSelectedChild();
   
   const toggleCategory = (category: string) => {
     setCollapsedCategories(prev => ({
@@ -502,8 +505,8 @@ export default function PlansPage() {
   const isNextWeek = isSameDay(currentWeekStart, startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }));
 
   const { data: weeklyPlans, isLoading: plansLoading, error, refetch: refetchPlans } = useQuery({
-    queryKey: ['weekly-plan', format(currentWeekStart, 'yyyy-MM-dd')],
-    queryFn: () => fetchWeeklyPlan(format(currentWeekStart, 'yyyy-MM-dd')),
+    queryKey: ['weekly-plan', format(currentWeekStart, 'yyyy-MM-dd'), selectedChildId],
+    queryFn: () => fetchWeeklyPlan(format(currentWeekStart, 'yyyy-MM-dd'), selectedChildId || undefined),
     staleTime: 5 * 60 * 1000
   });
 
@@ -530,141 +533,164 @@ export default function PlansPage() {
     }));
   }, [weeklyPlans]);
 
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  
+  const categories = [
+    { value: 'all', label: '全部' },
+    { value: 'school', label: '校内作业' },
+    { value: 'advanced', label: '拔高训练' },
+    { value: 'extra', label: '课外课程' },
+    { value: 'chinese', label: '语文阅读' },
+    { value: 'english', label: '英语学习' },
+    { value: 'sports', label: '体育任务' },
+  ];
+
   return (
-    <div className="space-y-6" id="weekly-plan-view">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <CalendarDays className="w-7 h-7 text-purple-500" />
-            计划管理
-          </h1>
-          <p className="text-gray-500 mt-1">查看和管理每周学习计划</p>
-        </div>
-        <div className="flex gap-3">
-          <Button onClick={() => setTempDialogOpen(true)} className="bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white rounded-2xl px-6 h-11 shadow-lg shadow-amber-400/25 transition-all duration-300 hover:shadow-xl hover:shadow-amber-400/35 transform hover:-translate-y-0.5">
-            <Plus className="w-5 h-5 mr-2" />
-            <span>临时任务</span>
-          </Button>
-          <Button onClick={() => setAdvancedExportOpen(true)} className="bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl px-6 h-11 shadow-lg shadow-emerald-400/25 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-400/35 transform hover:-translate-y-0.5">
-            <Download className="w-5 h-5 mr-2" />
-            <span>导出</span>
-          </Button>
-          <Button onClick={() => setPublishDialogOpen(true)} className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-2xl px-6 h-11 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/35 transform hover:-translate-y-0.5">
-            <Plus className="w-5 h-5 mr-2" />
-            <span>发布计划</span>
-          </Button>
+    <div className="space-y-4" id="weekly-plan-view">
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Category Filter Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+            {categories.map((category) => (
+              <button
+                key={category.value}
+                onClick={() => setSelectedCategory(category.value)}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                  selectedCategory === category.value
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-muted text-foreground hover:bg-muted/80'
+                )}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            {/* 推送按钮 - 只在有计划数据时显示 */}
+            {weeklyPlans && weeklyPlans.length > 0 && weeklyPlans[0]?.childId !== "0" && (
+              <button
+                onClick={async () => {
+                  try {
+                    // 假设我们使用第一个计划的childId
+                    if (weeklyPlans && weeklyPlans.length > 0 && weeklyPlans[0]?.childId !== "0") {
+                      await apiClient.post('/dingtalk/push-weekly-plan', { childId: parseInt(weeklyPlans[0].childId), weekStartDate: currentWeekStart.toISOString() });
+                      toast.success('已推送至钉钉');
+                    }
+                  } catch (e: unknown) {
+                    const error = e as { response?: { data?: { message?: string } } };
+                    toast.error(error.response?.data?.message || '推送失败');
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 shadow-sm text-sm font-medium h-10"
+              >
+                <Send className="size-4" />
+                推送
+              </button>
+            )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-border shadow-sm hover:shadow transition-all duration-200 h-10">
+                  <span className="text-sm font-medium text-foreground">{weekLabel}</span>
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 border border-border shadow-md rounded-lg" align="end">
+                <div className="p-3 border-b border-border">
+                  <div className="flex gap-2">
+                    <button onClick={() => goToCurrentWeek()} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isCurrentWeek ? "bg-primary text-white" : "text-foreground hover:bg-muted")}>本周</button>
+                    <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isNextWeek ? "bg-primary text-white" : "text-foreground hover:bg-muted")}>下周</button>
+                    <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, -1))} className="flex-1 text-center py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted">上周</button>
+                  </div>
+                </div>
+                <DayPickerCalendar
+                  mode="single"
+                  selected={currentWeekStart}
+                  onSelect={(date: Date | undefined) => {
+                    if (date) {
+                      const day = date.getDay();
+                      const mondayOffset = day === 0 ? -6 : 1 - day;
+                      const monday = new Date(date);
+                      monday.setDate(monday.getDate() + mondayOffset);
+                      setCurrentWeekStart(monday);
+                    }
+                  }}
+                  className="rounded-lg p-3"
+                  classNames={{
+                    day_selected: "bg-primary text-white hover:bg-primary/90 rounded-lg",
+                    day_today: "bg-primary/10 text-primary font-bold rounded-lg",
+                    nav_button: "h-8 w-8 rounded-lg hover:bg-muted",
+                    caption: "flex justify-center pt-1 relative items-center w-full",
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Button
+              onClick={() => setTempDialogOpen(true)}
+              className="h-10 rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-sm min-w-20"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">临时任务</span>
+            </Button>
+            <Button
+              onClick={() => setAdvancedExportOpen(true)}
+              className="h-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm min-w-20"
+            >
+              <Download className="w-4 h-4 mr-1.5" />
+              <span className="text-sm">导出</span>
+            </Button>
+            <Button
+              onClick={() => setPublishDialogOpen(true)}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">发布计划</span>
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Calendar View */}
       {plansLoading ? (
-        <Card className="border-0 shadow-lg rounded-3xl">
+        <Card className="border border-border shadow-sm rounded-lg">
           <CardContent className="p-6">
             <Skeleton className="h-64" />
           </CardContent>
         </Card>
       ) : (
         <div ref={exportContainerRef} className="space-y-6">
-          {(weeklyPlans && weeklyPlans.length > 0 ? weeklyPlans : [{id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []}]).map((plan, index) => (
+          {/* 只显示当前选中的孩子的计划 */}
+          {(() => {
+            let displayPlan;
+            if (weeklyPlans && weeklyPlans.length > 0) {
+              if (selectedChildId) {
+                // 如果有选中的孩子，显示该孩子的计划
+                displayPlan = weeklyPlans.find(plan => parseInt(plan.childId) === selectedChildId);
+              } else {
+                // 如果没有选中的孩子，显示第一个计划
+                displayPlan = weeklyPlans[0];
+              }
+            }
+            
+            // 如果没有找到计划，显示空计划
+            if (!displayPlan) {
+              displayPlan = {id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []};
+            }
+            
+            return [displayPlan];
+          })().map((plan, index) => (
             <motion.div
               key={plan.id}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1, duration: 0.5, ease: "easeOut" }}
             >
-              <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden hover:shadow-xl hover:shadow-gray-200/70 transition-all duration-300">
-                <CardHeader className="pb-3 pt-6 px-6">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between gap-4">
-                      {/* 左侧：标题和图例 */}
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <CardTitle className="text-xl font-bold text-gray-900 shrink-0 flex items-center gap-2">
-                          <CalendarDays className="w-6 h-6 text-purple-500" />
-                          {plan.childName}的学习计划
-                        </CardTitle>
-                        {/* 图例 - 放在标题右边一行 */}
-                        <div className="flex flex-wrap gap-2">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />校内作业
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />拔高训练
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                            <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />课外课程
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />语文阅读
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                            <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />英语学习
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm text-[11px] font-medium text-gray-500 hover:shadow transition-shadow cursor-default">
-                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />体育任务
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
-                              <span className="text-sm font-medium text-gray-700">{weekLabel}</span>
-                              <ChevronDown className="size-4 text-gray-400" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl" align="end">
-                            <div className="p-3 border-b border-gray-100">
-                              <div className="flex gap-2">
-                                <button onClick={() => goToCurrentWeek()} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isCurrentWeek ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100")}>本周</button>
-                                <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isNextWeek ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100")}>下周</button>
-                                <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, -1))} className="flex-1 text-center py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">上周</button>
-                              </div>
-                            </div>
-                            <DayPickerCalendar
-                              mode="single"
-                              selected={currentWeekStart}
-                              onSelect={(date: Date | undefined) => {
-                                if (date) {
-                                  const day = date.getDay();
-                                  const mondayOffset = day === 0 ? -6 : 1 - day;
-                                  const monday = new Date(date);
-                                  monday.setDate(monday.getDate() + mondayOffset);
-                                  setCurrentWeekStart(monday);
-                                }
-                              }}
-                              className="rounded-2xl p-3"
-                              classNames={{
-                                day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
-                                day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
-                                nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
-                                caption: "flex justify-center pt-1 relative items-center w-full",
-                              }}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        {plan.childId !== "0" && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                await apiClient.post('/dingtalk/push-weekly-plan', { childId: parseInt(plan.childId), weekStartDate: currentWeekStart.toISOString() });
-                                toast.success('已推送至钉钉');
-                              } catch (e: unknown) {
-                                const error = e as { response?: { data?: { message?: string } } };
-                                toast.error(error.response?.data?.message || '推送失败');
-                              }
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white transition-all duration-300 shadow-md shadow-blue-400/25 hover:shadow-lg hover:shadow-blue-400/35 text-sm font-medium"
-                          >
-                            <Send className="size-4" />
-                            推送
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-4 pb-6">
+              <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300">
+                <CardContent className="px-4 py-4">
                   <div className="overflow-x-auto">
                     <div className="min-w-[600px]">
                       {/* Day headers */}
@@ -678,10 +704,12 @@ export default function PlansPage() {
                           const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(backendIndex));
                           const dayTotalMin = dayTasks.reduce((s, a) => s + a.timePerUnit, 0);
                           return (
-                            <div key={day} className={cn('p-3 text-center rounded-2xl transition-all duration-300', isTodayDate ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-gray-50 hover:bg-gray-100')}>
-                              <span className={cn('text-[10px] font-medium', isTodayDate ? 'text-white/80' : 'text-gray-500')}>{day}</span>
-                              <div className={cn('text-sm font-bold mt-1', isTodayDate ? 'text-white' : 'text-gray-700')}>{format(date, 'M/d')}</div>
-                              {dayTotalMin > 0 && <span className={cn('text-[9px] mt-1 block', isTodayDate ? 'text-white/70' : 'text-gray-400')}>{dayTotalMin}m</span>}
+                            <div key={day} className={cn('p-2 text-center rounded-lg transition-all duration-300', isTodayDate ? 'bg-primary text-white shadow-sm' : 'bg-muted hover:bg-muted/80')}>
+                              <div className={cn('flex items-center justify-center gap-1', isTodayDate ? 'text-white' : 'text-foreground')}>
+                                <span className={cn('text-xs font-medium', isTodayDate ? 'text-white/80' : 'text-muted-foreground')}>{day}</span>
+                                <span className={cn('text-sm font-semibold', isTodayDate ? 'text-white' : 'text-foreground')}>{format(date, 'M/d')}</span>
+                              </div>
+                              {dayTotalMin > 0 && <span className={cn('text-xs mt-1 block', isTodayDate ? 'text-white/70' : 'text-muted-foreground')}>{dayTotalMin}m</span>}
                             </div>
                           );
                         })}
@@ -712,15 +740,17 @@ export default function PlansPage() {
                           }
                         };
 
-                        // 按分类排序后直接渲染任务
-                        const sortedTasks = [...plan.allocations].sort((a, b) => {
-                          const orderA = categoryOrder[a.category || ''] ?? 99;
-                          const orderB = categoryOrder[b.category || ''] ?? 99;
-                          if (orderA !== orderB) return orderA - orderB;
-                          return a.taskName.localeCompare(b.taskName);
-                        });
+                        // 按分类筛选并排序任务
+                        const filteredAndSortedTasks = [...plan.allocations]
+                          .filter(task => selectedCategory === 'all' || task.category === selectedCategory)
+                          .sort((a, b) => {
+                            const orderA = categoryOrder[a.category || ''] ?? 99;
+                            const orderB = categoryOrder[b.category || ''] ?? 99;
+                            if (orderA !== orderB) return orderA - orderB;
+                            return a.taskName.localeCompare(b.taskName);
+                          });
 
-                        return sortedTasks.map((taskItem) => {
+                        return filteredAndSortedTasks.map((taskItem) => {
                           const hasAssignedDays = taskItem.assignedDays && taskItem.assignedDays.length > 0;
                           const color = getCategoryColor(taskItem.category);
 
@@ -743,18 +773,18 @@ export default function PlansPage() {
                           return (
                             <motion.div 
                               key={taskItem.taskId} 
-                              className="grid grid-cols-8 gap-2 group/row mb-1.5"
+                              className="grid grid-cols-8 gap-2 group/row mb-1"
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ duration: 0.3, ease: "easeOut" }}
                               whileHover={{ backgroundColor: 'rgba(249, 250, 251, 0.5)' }}
                             >
-                              <div className="p-2.5 flex items-center gap-2 pr-3 rounded-2xl hover:bg-gray-50 transition-all duration-300" title={taskItem.taskName}>
+                              <div className="p-2 flex items-center gap-2 pr-3 rounded-lg hover:bg-muted/50 transition-all duration-300" title={taskItem.taskName}>
                                 <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDotColor())} />
-                                <span className={cn('text-sm font-medium truncate', taskItem.isTemporary && 'text-amber-500 font-bold', !hasAssignedDays && 'text-gray-400')}>
+                                <span className={cn('text-sm font-medium truncate', taskItem.isTemporary && 'text-amber-500 font-semibold', !hasAssignedDays && 'text-muted-foreground')}>
                                   {taskItem.isTemporary && <span className="mr-0.5">⚡</span>}
                                   {taskItem.taskName}
-                                  {!hasAssignedDays && <span className="ml-1 text-xs text-gray-400">(未分配)</span>}
+                                  {!hasAssignedDays && <span className="ml-1 text-xs text-muted-foreground">(未分配)</span>}
                                 </span>
                               </div>
                               {weekDays.map((_, i) => {
@@ -763,7 +793,7 @@ export default function PlansPage() {
                                 const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
 
                                 return (
-                                  <div key={i} className={cn('p-2.5 flex items-center justify-center rounded-2xl min-h-[40px] transition-all duration-300', isToday(weekDates[i]) && 'bg-purple-50/70 hover:bg-purple-100/70')}>
+                                  <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px] transition-all duration-300', isToday(weekDates[i]) && 'bg-primary/5 hover:bg-primary/10')}>
                                     <div className="relative">
                                       {isAssigned ? (
                                         taskItem.isTemporary ? (
@@ -791,7 +821,7 @@ export default function PlansPage() {
                                           </motion.button>
                                         )
                                       ) : (
-                                        <div className="w-6 h-6 rounded-full bg-gray-200 shadow-sm"></div>
+                                        <div className="w-6 h-6 rounded-full bg-muted shadow-sm"></div>
                                       )}
                                     </div>
                                   </div>
@@ -802,7 +832,7 @@ export default function PlansPage() {
                         });
                       })()}
                       {plan.allocations.length === 0 && (
-                        <div className="py-12 text-center text-gray-400 text-sm bg-gray-50 rounded-2xl">该周暂无任务安排</div>
+                        <div className="py-8 text-center text-muted-foreground text-sm bg-muted rounded-lg">该周暂无任务安排</div>
                       )}
                     </div>
                   </div>
@@ -869,20 +899,19 @@ export default function PlansPage() {
                 
                 try {
                   // 确保获取到有效的孩子ID
-                  if (!weeklyPlans || weeklyPlans.length === 0) {
-                    toast.error('请先创建孩子账号');
+                  if (!selectedChildId) {
+                    toast.error('请先选择一个孩子');
                     return;
                   }
                   
-                  const childId = weeklyPlans[0].childId;
-                  console.log('Creating temporary task with childId:', childId);
+                  console.log('Creating temporary task with childId:', selectedChildId);
                   
                   const response = await apiClient.post('/plans/temp-task', {
                     name,
                     subject,
                     due,
                     urgency: tempUrgency,
-                    childId: parseInt(childId)
+                    childId: selectedChildId
                   });
                   
                   console.log('Temporary task created:', response);

@@ -156,6 +156,7 @@ export default function ChildrenPage() {
 
   const openCreateDialog = () => {
     setEditingChild(null);
+    setCurrentChildId(null);
     setSelectedAvatar('🦊');
     setCustomAvatar(null);
     setAvatarMode('preset');
@@ -220,19 +221,31 @@ export default function ChildrenPage() {
   };
 
   const onSubmit = (data: ChildFormData) => {
-    const currentChild = editingChild;
-    if (!currentChild || currentChild.id !== currentChildId) {
-      console.error('Child ID mismatch, aborting update');
-      return;
+    if (editingChild) {
+      // 编辑模式：检查 ID 匹配
+      const currentChild = editingChild;
+      if (!currentChild || currentChild.id !== currentChildId) {
+        console.error('Child ID mismatch, aborting update');
+        return;
+      }
+      
+      const avatar = avatarMode === 'custom' ? customAvatar : selectedAvatar;
+      const submitData = { ...data, avatar: avatar || '🦊' };
+      
+      console.log('Updating child:', currentChild.id, currentChild.name);
+      console.log('Submit data:', submitData);
+      
+      updateMutation.mutate({ id: currentChild.id, data: submitData });
+    } else {
+      // 创建模式：直接提交
+      const avatar = avatarMode === 'custom' ? customAvatar : selectedAvatar;
+      const submitData = { ...data, avatar: avatar || '🦊' };
+      
+      console.log('Creating new child');
+      console.log('Submit data:', submitData);
+      
+      createMutation.mutate(submitData);
     }
-    
-    const avatar = avatarMode === 'custom' ? customAvatar : selectedAvatar;
-    const submitData = { ...data, avatar: avatar || '🦊' };
-    
-    console.log('Updating child:', currentChild.id, currentChild.name);
-    console.log('Submit data:', submitData);
-    
-    updateMutation.mutate({ id: currentChild.id, data: submitData });
   };
 
   const handleDelete = () => childToDelete && deleteMutation.mutate(childToDelete.id);

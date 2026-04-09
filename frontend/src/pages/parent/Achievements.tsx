@@ -189,16 +189,23 @@ export default function AchievementsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">成就配置</h1>
-          <p className="text-gray-500 mt-1">设置激励孩子学习的成就系统</p>
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Empty space for alignment */}
+          <div className="flex-1"></div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              onClick={openCreateDialog}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">添加成就</span>
+            </Button>
+          </div>
         </div>
-        <Button onClick={openCreateDialog} className="gap-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl shadow-lg shadow-purple-500/25">
-          <Plus className="size-4" />
-          <span>添加成就</span>
-        </Button>
       </div>
 
       {/* Stats */}

@@ -43,6 +43,7 @@ import {
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 // Types
 interface Book {
@@ -127,8 +128,18 @@ async function fetchBookByISBN(isbn: string): Promise<any> {
 }
 
 async function searchBooksByTitle(title: string): Promise<any[]> {
-  const { data } = await apiClient.get(`/library/search-by-title/${encodeURIComponent(title)}`);
-  return data.data || [];
+  console.log('[Search] Starting search for:', title);
+  try {
+    const { data } = await apiClient.get(`/library/search-by-title/${encodeURIComponent(title)}`);
+    console.log('[Search] Success:', data);
+    if (data.message) {
+      console.log('[Search] Message:', data.message);
+    }
+    return data.data || [];
+  } catch (error) {
+    console.error('[Search] Error:', error);
+    throw error;
+  }
 }
 
 async function updateBookState(bookId: number, childId: number, status: string, finishedAt?: string): Promise<any> {
@@ -202,7 +213,6 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [sortBy, setSortBy] = useState<string>('');
-  const [selectedChildId, setSelectedChildId] = useState<number | undefined>(undefined);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -231,6 +241,7 @@ export default function LibraryPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { selectedChildId } = useSelectedChild();
 
   const {
     register,
@@ -257,12 +268,12 @@ export default function LibraryPage() {
 
   const { data: books = [], isLoading } = useQuery({
     queryKey: ['library', searchQuery, selectedType, sortBy, selectedChildId],
-    queryFn: () => fetchBooks(searchQuery, selectedType, sortBy, selectedChildId),
+    queryFn: () => fetchBooks(searchQuery, selectedType, sortBy, selectedChildId || undefined),
   });
 
   const { data: stats } = useQuery({
     queryKey: ['libraryStats', selectedChildId],
-    queryFn: () => fetchLibraryStats(selectedChildId),
+    queryFn: () => fetchLibraryStats(selectedChildId || undefined),
     enabled: !!selectedChildId,
   });
 
@@ -271,17 +282,7 @@ export default function LibraryPage() {
     queryFn: fetchChildren,
   });
 
-  // 默认选中第一个孩子
-  useEffect(() => {
-    if (children.length > 0 && !selectedChildId) {
-      const storedChildId = localStorage.getItem('selectedChildId');
-      const childToSelect = storedChildId ? parseInt(storedChildId) : children[0].id;
-      const childExists = children.some(c => c.id === childToSelect);
-      const finalChildId = childExists ? childToSelect : children[0].id;
-      setSelectedChildId(finalChildId);
-      localStorage.setItem('selectedChildId', String(finalChildId));
-    }
-  }, [children, selectedChildId]);
+
 
   // 批量选择相关
   const toggleBookSelection = (bookId: number) => {
@@ -412,10 +413,12 @@ export default function LibraryPage() {
       const results = await searchBooksByTitle(titleSearch.trim());
       setSearchResults(results);
       if (results.length === 0) {
-        toast.info('未找到相关书籍');
+        toast.info('未找到相关书籍，请尝试手动输入');
       }
     } catch (error) {
-      toast.error('搜索失败');
+      const message = getErrorMessage(error);
+      console.error('[Title Search Error]', error);
+      toast.error(`搜索暂时不可用，请手动输入: ${message}`);
     } finally {
       setIsSearching(false);
     }
@@ -598,53 +601,52 @@ export default function LibraryPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <LibraryIcon className="w-7 h-7 text-purple-500" />
-            图书馆
-          </h1>
-          <p className="text-gray-500 mt-1">管理家庭藏书，开始新的阅读之旅</p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleImportFile}
-            className="hidden"
-          />
-          {/* P1-6: 批量管理按钮 */}
-          <Button
-            variant="outline"
-            onClick={() => {
-              setBatchMode(!batchMode);
-              if (batchMode) {
-                clearSelection();
-              }
-            }}
-            className={cn("rounded-xl h-11", batchMode && "bg-indigo-50 border-indigo-300 text-indigo-700")}
-          >
-            {batchMode ? <CheckSquare className="w-5 h-5 mr-2" /> : <Square className="w-5 h-5 mr-2" />}
-            {batchMode ? '退出批量' : '批量管理'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => importInputRef.current?.click()}
-            disabled={importing}
-            className="rounded-xl h-11"
-          >
-            <Upload className="w-5 h-5 mr-2" />
-            {importing ? '处理中...' : '批量导入'}
-          </Button>
-          <Button
-            onClick={() => setShowAddForm(true)}
-            className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl px-6 h-11 shadow-lg shadow-purple-500/25"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            添加图书
-          </Button>
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Empty space for alignment */}
+          <div className="flex-1"></div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleImportFile}
+              className="hidden"
+            />
+            {/* P1-6: 批量管理按钮 */}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBatchMode(!batchMode);
+                if (batchMode) {
+                  clearSelection();
+                }
+              }}
+              className={cn("h-10 rounded-lg", batchMode && "bg-primary/10 border-primary text-primary")}
+            >
+              {batchMode ? <CheckSquare className="w-4 h-4 mr-1.5" /> : <Square className="w-4 h-4 mr-1.5" />}
+              <span className="text-sm">{batchMode ? '退出批量' : '批量管理'}</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              className="h-10 rounded-lg"
+            >
+              <Upload className="w-4 h-4 mr-1.5" />
+              <span className="text-sm">{importing ? '处理中...' : '批量导入'}</span>
+            </Button>
+            <Button
+              onClick={() => setShowAddForm(true)}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">添加图书</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -714,18 +716,18 @@ export default function LibraryPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 shadow-lg text-white"
+          className="bg-white border border-border rounded-lg p-4 shadow-sm"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-emerald-100">已读书籍</p>
-              <p className="text-4xl font-bold mt-2">
+              <p className="text-sm text-muted-foreground">已读书籍</p>
+              <p className="text-2xl font-semibold text-foreground mt-1">
                 {stats?.finishedBooks || 0}
               </p>
-              <p className="text-xs text-emerald-200 mt-1">本</p>
+              <p className="text-xs text-muted-foreground mt-1">本</p>
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-              <span className="text-3xl">📚</span>
+            <div className="w-10 h-10 rounded flex items-center justify-center bg-success/10">
+              <span className="text-xl">📚</span>
             </div>
           </div>
         </motion.div>
@@ -734,18 +736,18 @@ export default function LibraryPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-lg text-white"
+          className="bg-white border border-border rounded-lg p-4 shadow-sm"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-blue-100">总页数</p>
-              <p className="text-4xl font-bold mt-2">
+              <p className="text-sm text-muted-foreground">总页数</p>
+              <p className="text-2xl font-semibold text-foreground mt-1">
                 {stats?.totalPages || 0}
               </p>
-              <p className="text-xs text-blue-200 mt-1">页</p>
+              <p className="text-xs text-muted-foreground mt-1">页</p>
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-              <span className="text-3xl">📄</span>
+            <div className="w-10 h-10 rounded flex items-center justify-center bg-primary/10">
+              <span className="text-xl">📄</span>
             </div>
           </div>
         </motion.div>
@@ -754,18 +756,18 @@ export default function LibraryPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl p-6 shadow-lg text-white"
+          className="bg-white border border-border rounded-lg p-4 shadow-sm"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-orange-100">总字数</p>
-              <p className="text-4xl font-bold mt-2">
+              <p className="text-sm text-muted-foreground">总字数</p>
+              <p className="text-2xl font-semibold text-foreground mt-1">
                 {formatWordCount(stats?.totalWords)}
               </p>
-              <p className="text-xs text-orange-200 mt-1">字</p>
+              <p className="text-xs text-muted-foreground mt-1">字</p>
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-              <span className="text-3xl">✍️</span>
+            <div className="w-10 h-10 rounded flex items-center justify-center bg-warning/10">
+              <span className="text-xl">✍️</span>
             </div>
           </div>
         </motion.div>
@@ -774,18 +776,18 @@ export default function LibraryPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-6 shadow-lg text-white"
+          className="bg-white border border-border rounded-lg p-4 shadow-sm"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-purple-100">阅读时长</p>
-              <p className="text-4xl font-bold mt-2">
-                {stats?.totalHours || 0}<span className="text-xl">h</span> {stats?.remainingMinutes || 0}<span className="text-xl">m</span>
+              <p className="text-sm text-muted-foreground">阅读时长</p>
+              <p className="text-2xl font-semibold text-foreground mt-1">
+                {stats?.totalHours || 0}<span className="text-sm">h</span> {stats?.remainingMinutes || 0}<span className="text-sm">m</span>
               </p>
-              <p className="text-xs text-purple-200 mt-1">共 {stats?.totalMinutes || 0} 分钟</p>
+              <p className="text-xs text-muted-foreground mt-1">共 {stats?.totalMinutes || 0} 分钟</p>
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-              <span className="text-3xl">⏱️</span>
+            <div className="w-10 h-10 rounded flex items-center justify-center bg-primary/10">
+              <span className="text-xl">⏱️</span>
             </div>
           </div>
         </motion.div>
@@ -795,22 +797,22 @@ export default function LibraryPage() {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="搜索书名..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 rounded-xl h-12 bg-white border-gray-200"
+              className="pl-10 rounded-lg h-9 bg-muted border-border"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             <button
               onClick={() => setSelectedType('all')}
               className={cn(
-                'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all',
+                'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
                 selectedType === 'all'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
               )}
             >
               全部
@@ -820,10 +822,10 @@ export default function LibraryPage() {
                 key={type.value}
                 onClick={() => setSelectedType(type.value)}
                 className={cn(
-                  'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all',
+                  'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
                   selectedType === type.value
-                    ? 'bg-purple-500 text-white'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-primary text-white'
+                    : 'bg-muted text-foreground hover:bg-muted/80'
                 )}
               >
                 {type.label}
@@ -833,7 +835,7 @@ export default function LibraryPage() {
         </div>
         {/* 排序按钮 */}
         <div className="flex gap-2 flex-wrap">
-          <span className="text-sm text-gray-500 py-2">排序：</span>
+          <span className="text-sm text-muted-foreground py-2">排序：</span>
           {[
             { value: '', label: '默认' },
             { value: 'recently_finished', label: '最近读完' },
@@ -846,8 +848,8 @@ export default function LibraryPage() {
               className={cn(
                 'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                 sortBy === sort.value
-                  ? 'bg-indigo-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
               )}
             >
               {sort.label}
@@ -858,15 +860,15 @@ export default function LibraryPage() {
 
       {/* Books Grid */}
       {books.length === 0 ? (
-        <div className="text-center py-16 bg-white/50 rounded-3xl border border-dashed border-gray-200">
-          <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <LibraryIcon className="w-10 h-10 text-gray-400" />
+        <div className="text-center py-16 bg-muted rounded-lg border border-dashed border-border">
+          <div className="w-16 h-16 bg-primary/10 rounded flex items-center justify-center mx-auto mb-4">
+            <LibraryIcon className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="font-semibold text-gray-900 text-lg">图书馆还是空的</h3>
-          <p className="text-gray-500 mt-1">添加第一本书开始阅读之旅</p>
+          <h3 className="font-semibold text-foreground text-lg">图书馆还是空的</h3>
+          <p className="text-muted-foreground mt-1">添加第一本书开始阅读之旅</p>
           <Button
             onClick={() => setShowAddForm(true)}
-            className="mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+            className="mt-4 rounded-lg bg-primary text-white"
           >
             添加图书
           </Button>
@@ -891,10 +893,10 @@ export default function LibraryPage() {
                   }}
                 >
                   <div className={cn(
-                    "w-6 h-6 rounded-md border-2 flex items-center justify-center cursor-pointer transition-all",
+                    "w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all",
                     selectedBookIds.has(book.id)
-                      ? "bg-indigo-500 border-indigo-500"
-                      : "bg-white border-gray-300 hover:border-indigo-400"
+                      ? "bg-primary border-primary"
+                      : "bg-white border-border hover:border-primary"
                   )}>
                     {selectedBookIds.has(book.id) && (
                       <CheckCircle2 className="w-4 h-4 text-white" />
@@ -903,10 +905,10 @@ export default function LibraryPage() {
                 </div>
               )}
               
-              <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300">
+              <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-border hover:shadow-md transition-all duration-300">
                 {/* Cover */}
                 <div 
-                  className="aspect-[3/4] relative bg-gradient-to-br from-gray-100 to-gray-200 cursor-pointer"
+                  className="aspect-[3/4] relative bg-muted cursor-pointer"
                   onClick={() => batchMode ? toggleBookSelection(book.id) : navigate(`/parent/library/${book.id}`)}
                 >
                   {book.coverUrl ? (
@@ -918,13 +920,13 @@ export default function LibraryPage() {
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <BookOpen className="w-12 h-12 text-gray-300" />
+                      <BookOpen className="w-10 h-10 text-muted-foreground/50" />
                     </div>
                   )}
                   {/* Character Tag */}
                   {book.characterTag && (
                     <div className="absolute top-2 right-2">
-                      <span className="text-xs bg-purple-500 text-white px-2 py-1 rounded-full">
+                      <span className="text-xs bg-primary text-white px-2 py-0.5 rounded">
                         {book.characterTag}
                       </span>
                     </div>
@@ -932,7 +934,7 @@ export default function LibraryPage() {
                   {/* Reading Badge */}
                   {book.activeReadings?.length > 0 && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded-full">
+                      <span className="text-xs bg-success text-white px-2 py-0.5 rounded">
                         在读中
                       </span>
                     </div>
@@ -940,7 +942,7 @@ export default function LibraryPage() {
                   {/* Reading State Badge */}
                   {book.readState?.status === 'finished' && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded-full">
+                      <span className="text-xs bg-primary text-white px-2 py-0.5 rounded">
                         已读完
                       </span>
                     </div>
@@ -954,7 +956,7 @@ export default function LibraryPage() {
                           e.stopPropagation();
                           setStartReadingBook(book);
                         }}
-                        className="bg-white text-gray-900 hover:bg-gray-100 rounded-full text-xs"
+                        className="bg-white text-foreground hover:bg-muted rounded text-xs"
                       >
                         <Play className="w-3 h-3 mr-1" />
                         开始阅读
@@ -967,7 +969,7 @@ export default function LibraryPage() {
                             handleMarkFinished(book, selectedChildId);
                           }}
                           disabled={updateStateMutation.isPending}
-                          className="bg-emerald-500 text-white hover:bg-emerald-600 rounded-full text-xs"
+                          className="bg-success text-white hover:bg-success/90 rounded text-xs"
                         >
                           ✓ 标记读完
                         </Button>
@@ -978,17 +980,17 @@ export default function LibraryPage() {
 
                 {/* Info */}
                 <div className="p-3">
-                  <h4 className="font-semibold text-gray-900 text-sm truncate">
+                  <h4 className="font-medium text-foreground text-sm truncate">
                     {formatBookName(book.name)}
                   </h4>
-                  <p className="text-xs text-gray-500 mt-1 truncate">
+                  <p className="text-xs text-muted-foreground mt-1 truncate">
                     {book.author || '未知作者'}
                   </p>
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {book.totalPages > 0 ? `${book.totalPages}页` : '页数未知'}
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       已读{book.readLogCount || 0}次
                     </span>
                   </div>
@@ -1003,7 +1005,7 @@ export default function LibraryPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="w-8 h-8 bg-white/90 hover:bg-white rounded-full"
+                        className="w-8 h-8 bg-white/90 hover:bg-white rounded"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </Button>
@@ -1014,7 +1016,7 @@ export default function LibraryPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleDelete(book)}
-                        className="text-red-600"
+                        className="text-destructive"
                       >
                         删除
                       </DropdownMenuItem>

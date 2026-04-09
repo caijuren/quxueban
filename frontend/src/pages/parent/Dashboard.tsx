@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 // Types
 interface Child {
@@ -53,8 +54,9 @@ interface DashboardStats {
 }
 
 // API functions
-async function fetchDashboardStats(): Promise<DashboardStats> {
-  const response = await apiClient.get('/dashboard/stats');
+async function fetchDashboardStats(childId?: number): Promise<DashboardStats> {
+  const params = childId ? { childId } : {};
+  const response = await apiClient.get('/dashboard/stats', { params });
   return response.data.data;
 }
 
@@ -63,15 +65,18 @@ async function fetchChildren(): Promise<Child[]> {
   return response.data.data;
 }
 
-async function fetchActivities(): Promise<Activity[]> {
-  const response = await apiClient.get('/dashboard/activities');
+async function fetchActivities(childId?: number): Promise<Activity[]> {
+  const params = childId ? { childId } : {};
+  const response = await apiClient.get('/dashboard/activities', { params });
   return response.data.data;
 }
 
 export default function ParentDashboard() {
+  const { selectedChildId } = useSelectedChild();
+
   const { data: stats } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: fetchDashboardStats,
+    queryKey: ['dashboard-stats', selectedChildId],
+    queryFn: () => fetchDashboardStats(selectedChildId || undefined),
     staleTime: 5 * 60 * 1000
   });
 
@@ -82,8 +87,8 @@ export default function ParentDashboard() {
   });
 
   const { data: activities, isLoading: activitiesLoading } = useQuery({
-    queryKey: ['activities'],
-    queryFn: fetchActivities,
+    queryKey: ['activities', selectedChildId],
+    queryFn: () => fetchActivities(selectedChildId || undefined),
     staleTime: 60 * 1000
   });
 
@@ -92,61 +97,38 @@ export default function ParentDashboard() {
       title: '总任务数',
       value: stats?.totalTasks || 0,
       icon: Target,
-      gradient: 'from-purple-500 to-violet-500',
-      lightColor: 'bg-purple-50 text-purple-600'
+      borderColor: 'border-primary',
+      iconColor: 'bg-primary/10 text-primary'
     },
     {
       title: '本周完成率',
       value: `${stats?.weeklyCompletionRate || 0}%`,
       icon: TrendingUp,
-      gradient: 'from-blue-500 to-cyan-500',
-      lightColor: 'bg-blue-50 text-blue-600'
+      borderColor: 'border-[#0CAF60]',
+      iconColor: 'bg-[#0CAF60]/10 text-[#0CAF60]'
     },
     {
       title: '今日学习时长',
       value: `${stats?.todayStudyMinutes || 0}分钟`,
       icon: Clock,
-      gradient: 'from-emerald-500 to-teal-500',
-      lightColor: 'bg-emerald-50 text-emerald-600'
+      borderColor: 'border-[#339AF0]',
+      iconColor: 'bg-[#339AF0]/10 text-[#339AF0]'
     },
     {
       title: '阅读书籍',
       value: stats?.booksRead || 0,
       icon: BookOpen,
-      gradient: 'from-orange-500 to-amber-500',
-      lightColor: 'bg-orange-50 text-orange-600'
+      borderColor: 'border-[#17A2B8]',
+      iconColor: 'bg-[#17A2B8]/10 text-[#17A2B8]'
     }
   ];
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <LayoutDashboard className="w-7 h-7 text-purple-500" />
-            概览
-          </h1>
-          <p className="text-gray-500 mt-1">查看孩子们的学习进度和活动</p>
-        </div>
-        <div className="flex gap-3">
-          <Button asChild variant="outline" className="rounded-xl h-11 border-gray-200 hover:bg-gray-50">
-            <Link to="/parent/tasks">
-              <Plus className="size-4 mr-2" />
-              <span>添加任务</span>
-            </Link>
-          </Button>
-          <Button asChild className="rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
-            <Link to="/parent/plans">
-              <CalendarPlus className="size-4 mr-2" />
-              <span>发布下周计划</span>
-            </Link>
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, index) => (
           <motion.div
             key={stat.title}
@@ -154,15 +136,14 @@ export default function ParentDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="relative overflow-hidden border-0 shadow-lg shadow-gray-200/50 rounded-2xl">
-              <CardContent className="p-5">
-                <div className={cn("size-11 rounded-xl flex items-center justify-center mb-4 bg-gradient-to-br", stat.gradient)}>
-                  <stat.icon className="size-5 text-white" />
+            <Card className={cn("border border-border shadow-sm rounded-lg", stat.borderColor)}>
+              <CardContent className="p-4">
+                <div className={cn("size-10 rounded-lg flex items-center justify-center mb-3", stat.iconColor)}>
+                  <stat.icon className="size-5" />
                 </div>
-                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-sm text-gray-500 mt-1">{stat.title}</p>
+                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-sm text-muted-foreground mt-1">{stat.title}</p>
               </CardContent>
-              <div className={cn("absolute top-0 right-0 w-32 h-32 bg-gradient-to-br opacity-5 rounded-full -translate-y-8 translate-x-8", stat.gradient)} />
             </Card>
           </motion.div>
         ))}
@@ -171,30 +152,31 @@ export default function ParentDashboard() {
       {/* Children Overview & Recent Activity */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Children Overview */}
-        <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between pb-4 pt-6 px-6">
-            <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+        <Card className="border border-border shadow-sm rounded-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-3 pt-4 px-4">
+            <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary shadow-sm">
                 <Users className="size-4 text-white" />
               </div>
               孩子概览
             </CardTitle>
-            <Button variant="ghost" size="sm" asChild className="text-gray-500 hover:text-gray-900">
+            <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground">
               <Link to="/parent/children">
                 查看全部
                 <ChevronRight className="size-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
-          <CardContent className="px-6 pb-6 space-y-4">
+          <CardContent className="px-4 pb-4 space-y-3">
             {childrenLoading ? (
               <>
                 {[1, 2].map((i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <Skeleton className="size-12 rounded-xl" />
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg">
+                    <Skeleton className="size-10 rounded" />
                     <div className="flex-1 space-y-2">
                       <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-2 w-full" />
+                      <Skeleton className="h-2 w-3/4" />
                     </div>
                   </div>
                 ))}
@@ -206,29 +188,29 @@ export default function ParentDashboard() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50/50 hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                 >
-                  <Avatar className="size-12 ring-2 ring-white shadow-md">
+                  <Avatar className="size-10 ring-2 ring-white shadow-sm">
                     <AvatarImage src={child.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white font-semibold">
+                    <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white font-medium">
                       {child.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-gray-900">{child.name}</span>
-                      <span className="text-sm text-gray-500">
+                      <span className="font-medium text-foreground">{child.name}</span>
+                      <span className="text-xs text-muted-foreground">
                         今日 {child.todayMinutes}分钟
                       </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Progress value={child.weeklyProgress} className="flex-1 h-2 bg-gray-200" />
-                      <span className="text-sm font-medium text-gray-700 w-10">
+                    <div className="flex items-center gap-2">
+                      <Progress value={child.weeklyProgress} className="flex-1 h-2 bg-muted" />
+                      <span className="text-xs font-medium text-foreground w-8">
                         {child.weeklyProgress}%
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="secondary" className="text-xs bg-white border border-gray-100">
+                      <Badge variant="secondary" className="text-xs bg-muted text-foreground">
                         <CheckCircle2 className="size-3 mr-1" />
                         {child.completedTasks}/{child.totalTasks} 任务
                       </Badge>
@@ -241,21 +223,21 @@ export default function ParentDashboard() {
         </Card>
 
         {/* Recent Activity */}
-        <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between pb-4 pt-6 px-6">
-            <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center">
+        <Card className="border border-border shadow-sm rounded-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-3 pt-4 px-4">
+            <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-warning shadow-sm">
                 <Award className="size-4 text-white" />
               </div>
               最近活动
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-6 pb-6">
+          <CardContent className="px-4 pb-4">
             {activitiesLoading ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <Skeleton className="size-10 rounded-xl" />
+                  <div key={i} className="flex items-start gap-3 p-2 rounded-lg">
+                    <Skeleton className="size-8 rounded" />
                     <div className="flex-1 space-y-1">
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="h-3 w-1/4" />
@@ -264,22 +246,22 @@ export default function ParentDashboard() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {activities?.map((activity, index) => (
                   <motion.div
                     key={activity.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="flex items-start gap-3 p-3 rounded-2xl hover:bg-gray-50 transition-colors"
+                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
                   >
-                    <Avatar className="size-10 ring-2 ring-white shadow-sm">
+                    <Avatar className="size-8 ring-2 ring-white shadow-sm">
                       <AvatarImage src={activity.childAvatar} />
                       <AvatarFallback className={cn(
-                        'text-sm font-medium',
-                        activity.type === 'achievement' ? 'bg-gradient-to-br from-amber-400 to-orange-400 text-white' :
-                        activity.type === 'plan_published' ? 'bg-gradient-to-br from-blue-400 to-cyan-400 text-white' :
-                        'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
+                        'text-xs font-medium',
+                        activity.type === 'achievement' ? 'bg-warning text-white' :
+                        activity.type === 'plan_published' ? 'bg-info text-white' :
+                        'bg-primary text-white'
                       )}>
                         {activity.type === 'achievement' ? '🏆' :
                          activity.type === 'plan_published' ? '📅' :
@@ -287,13 +269,13 @@ export default function ParentDashboard() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">
-                        <span className="font-semibold">{activity.childName}</span>
+                      <p className="text-sm text-foreground">
+                        <span className="font-medium">{activity.childName}</span>
                         {' '}{activity.action}
-                        {activity.task && <span className="text-purple-600 font-medium"> {activity.task}</span>}
-                        {activity.book && <span className="text-purple-600 font-medium"> 《{activity.book}》</span>}
+                        {activity.task && <span className="text-primary font-medium"> {activity.task}</span>}
+                        {activity.book && <span className="text-primary font-medium"> 《{activity.book}》</span>}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{activity.time}</p>
                     </div>
                   </motion.div>
                 ))}
