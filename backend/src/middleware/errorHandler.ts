@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { ZodError } from 'zod'
-import { Prisma } from '@prisma/client'
 import { createLogger } from '../config/logger'
+import { env } from '../config/env'
 
 const logger = createLogger('ErrorHandler')
 
@@ -38,28 +38,36 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     })
   }
 
-  // Prisma errors
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    logger.error(
-      {
-        method: req.method,
-        url: req.url,
-        code: err.code,
-      },
-      'Database error'
-    )
+  // Prisma errors (only if database is configured)
+  if (env.DATABASE_URL) {
+    // Dynamically import Prisma to avoid issues in mock mode
+    try {
+      const { Prisma } = require('@prisma/client')
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        logger.error(
+          {
+            method: req.method,
+            url: req.url,
+            code: err.code,
+          },
+          'Database error'
+        )
 
-    if (err.code === 'P2002') {
-      return res.status(409).json({
-        status: 'error',
-        message: 'Resource already exists',
-      })
-    }
-    if (err.code === 'P2025') {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Resource not found',
-      })
+        if (err.code === 'P2002') {
+          return res.status(409).json({
+            status: 'error',
+            message: 'Resource already exists',
+          })
+        }
+        if (err.code === 'P2025') {
+          return res.status(404).json({
+            status: 'error',
+            message: 'Resource not found',
+          })
+        }
+      }
+    } catch (e) {
+      // Prisma not available, skip
     }
   }
 

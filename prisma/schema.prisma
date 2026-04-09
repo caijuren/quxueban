@@ -239,10 +239,13 @@ model ReadingLog {
   bookId       Int      @map("book_id")
   pages        Int      @default(0)
   minutes      Int      @default(0)
+  startPage    Int      @default(0) @map("start_page")
+  endPage      Int      @default(0) @map("end_page")
   readDate     DateTime @map("read_date")
   effect       String   @default("") @db.VarChar(50)
   performance  String   @default("") @db.VarChar(200)
   note         String   @default("") @db.VarChar(500)
+  evidenceUrl  String   @default("") @map("evidence_url") @db.Text
   readStage    String   @default("") @map("read_stage") @db.VarChar(50)
   focusRating  Int      @default(0) @map("focus_rating")
   tags         Json     @default("[]")

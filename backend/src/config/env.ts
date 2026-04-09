@@ -7,7 +7,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform(Number).default('3000'),
   API_PREFIX: z.string().default('/api'),
-  DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: z.string().optional().default(''),
   CORS_ORIGIN: z.string().refine(
     (val) => val === '*' || z.string().url().safeParse(val).success,
     { message: 'CORS_ORIGIN must be a valid URL or "*" for all origins' }
@@ -17,6 +17,10 @@ const envSchema = z.object({
   JWT_SECRET: z.string().default('dev-secret-key'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  JISU_API_KEY: z.string().default(''),
+  SUPABASE_URL: z.string().default(''),
+  SUPABASE_ANON_KEY: z.string().default(''),
+  SUPABASE_STORAGE_BUCKET: z.string().default('book-covers'),
 })
 
 const parseEnv = () => {

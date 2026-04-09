@@ -22,6 +22,7 @@ import { taskTemplatesRouter } from './modules/task-templates'
 import { childrenRouter } from './modules/children'
 import { dingtalkRouter } from './modules/dingtalk'
 import { settingsRouter } from './modules/settings'
+import { aiInsightsRouter } from './modules/ai-insights'
 
 export const createApp = (): Application => {
   const app = express()
@@ -60,6 +61,7 @@ export const createApp = (): Application => {
   app.use(`${env.API_PREFIX}/task-templates`, taskTemplatesRouter)
   app.use(`${env.API_PREFIX}/dingtalk`, dingtalkRouter)
   app.use(`${env.API_PREFIX}/settings`, settingsRouter)
+  app.use(`${env.API_PREFIX}/ai-insights`, aiInsightsRouter)
 
   // Error handling
   app.use(errorHandler)

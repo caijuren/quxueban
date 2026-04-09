@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { prisma } from '../config/database'
+import { env } from '../config/env'
 
 export const systemRouter: Router = Router()
 
@@ -34,16 +35,27 @@ systemRouter.get('/health', async (_req: Request, res: Response) => {
  */
 systemRouter.get('/health/ready', async (_req: Request, res: Response) => {
   try {
-    // Check database connection silently
-    await prisma.$queryRaw`SELECT 1`
+    if (env.DATABASE_URL) {
+      // Check database connection silently
+      await prisma.$queryRaw`SELECT 1`
 
-    res.json({
-      status: 'ready',
-      timestamp: new Date().toISOString(),
-      checks: {
-        database: 'connected',
-      },
-    })
+      res.json({
+        status: 'ready',
+        timestamp: new Date().toISOString(),
+        checks: {
+          database: 'connected',
+        },
+      })
+    } else {
+      // In mock mode, return ready without database check
+      res.json({
+        status: 'ready',
+        timestamp: new Date().toISOString(),
+        checks: {
+          database: 'mock',
+        },
+      })
+    }
   } catch (_error) {
     // Return error status without logging (handled by HTTP logger)
     res.status(503).json({

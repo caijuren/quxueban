@@ -20,6 +20,8 @@ const startServer = async () => {
           await new Promise(resolve => setTimeout(resolve, 50))
         }
       }
+    } else {
+      console.log('No DATABASE_URL provided, running in mock mode')
     }
 
     const app = createApp()

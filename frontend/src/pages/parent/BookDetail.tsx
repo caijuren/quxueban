@@ -12,6 +12,7 @@ import {
   Trash2,
   Star,
   MessageSquare,
+  Brain,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,6 +29,9 @@ interface ReadingLog {
   readStage: string;
   pages: number;
   minutes: number;
+  startPage: number;
+  endPage: number;
+  evidenceUrl: string;
   child?: {
     id: number;
     name: string;
@@ -160,6 +164,13 @@ export default function BookDetailPage() {
                 <div className="px-4 py-2 rounded-xl bg-purple-100 text-purple-700 font-medium">
                   📚 已读 {book.readCount} 次
                 </div>
+                <Button 
+                  onClick={() => navigate(`/parent/library/${id}/insights`)}
+                  className="gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                >
+                  <Brain className="size-4" />
+                  AI阅读洞察
+                </Button>
               </div>
             </div>
           </div>
@@ -207,6 +218,11 @@ export default function BookDetailPage() {
                               {log.readStage}
                             </span>
                           )}
+                          {log.startPage > 0 && log.endPage > 0 && (
+                            <span className="px-2 py-0.5 rounded-lg bg-green-100 text-green-700 text-xs">
+                              第 {log.startPage}-{log.endPage} 页
+                            </span>
+                          )}
                         </div>
                         
                         <div className="mt-3 space-y-2">
@@ -220,6 +236,12 @@ export default function BookDetailPage() {
                             <div className="flex items-center gap-2">
                               <MessageSquare className="size-4 text-purple-500" />
                               <span className="text-gray-700">表现：{log.performance}</span>
+                            </div>
+                          )}
+                          {log.evidenceUrl && (
+                            <div className="flex items-center gap-2">
+                              <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=document%20evidence%20icon&image_size=square" alt="证据" className="size-4" />
+                              <a href={log.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm">查看证据</a>
                             </div>
                           )}
                           {log.note && (
@@ -265,6 +287,9 @@ export default function BookDetailPage() {
                   performance: formData.get('performance') as string,
                   note: formData.get('note') as string,
                   readStage: formData.get('readStage') as string,
+                  startPage: parseInt(formData.get('startPage') as string) || 0,
+                  endPage: parseInt(formData.get('endPage') as string) || 0,
+                  evidenceUrl: formData.get('evidenceUrl') as string,
                 });
               }}
               className="space-y-4"
@@ -306,6 +331,37 @@ export default function BookDetailPage() {
                   type="text"
                   name="readStage"
                   placeholder="如：中班上"
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">开始页数</label>
+                  <input
+                    type="number"
+                    name="startPage"
+                    placeholder="0"
+                    min="0"
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">结束页数</label>
+                  <input
+                    type="number"
+                    name="endPage"
+                    placeholder="0"
+                    min="0"
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">证据链接（可选）</label>
+                <input
+                  type="url"
+                  name="evidenceUrl"
+                  placeholder="如：照片或视频链接"
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
                 />
               </div>

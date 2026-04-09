@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { env } from '../config/env'
 
 export const plansRouter: Router = Router()
 
@@ -370,12 +371,41 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
 plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
   const { familyId, role, userId } = req.user!
   const weekStart = req.params.weekStart as string
+  const childId = req.query.childId ? parseInt(req.query.childId as string) : null
 
   const weekNo = getWeekNo(new Date(weekStart))
 
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    const mockChildren = [
+      { id: 2, name: '小明', avatar: '👶' },
+      { id: 3, name: '小红', avatar: '🧒' }
+    ]
+
+    let children = mockChildren
+
+    if (role === 'parent') {
+      if (childId) {
+        children = mockChildren.filter(c => c.id === childId)
+      }
+    } else if (role === 'child') {
+      children = mockChildren.filter(c => c.id === userId)
+    }
+
+    // Group by child and format for frontend
+    const plansByChild = children.map(child => {
+      return {
+        child,
+        plans: []
+      }
+    })
+
+    res.json({ status: 'success', data: plansByChild })
+    return
+  }
+
   let children = []
   let weeklyPlans = []
-  const childId = req.query.childId ? parseInt(req.query.childId as string) : null
 
   if (role === 'parent') {
     if (childId) {

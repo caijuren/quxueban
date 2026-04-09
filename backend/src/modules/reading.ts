@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
+import { env } from '../config/env'
 
 export const readingRouter: Router = Router()
 
@@ -14,8 +15,50 @@ readingRouter.use(requireRole('parent'))
  * Query: ?childId=
  */
 readingRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const { familyId } = req.user!
+  const { familyId, name } = req.user!
   const childId = req.query.childId ? parseInt(req.query.childId as string) : undefined
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock active readings
+    const mockActiveReadings = [
+      {
+        id: 1,
+        familyId: familyId,
+        childId: 2,
+        bookId: 1,
+        readPages: 100,
+        readCount: 2,
+        status: 'reading',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        book: {
+          id: 1,
+          name: '哈利·波特与魔法石',
+          author: 'J.K.罗琳',
+          coverUrl: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=harry%20potter%20book%20cover&image_size=square',
+          totalPages: 223,
+        },
+        child: {
+          id: 2,
+          name: '小明',
+          avatar: '👶',
+        },
+      },
+    ]
+
+    // Apply childId filter
+    let filteredReadings = mockActiveReadings
+    if (childId) {
+      filteredReadings = filteredReadings.filter(reading => reading.childId === childId)
+    }
+
+    res.json({
+      status: 'success',
+      data: filteredReadings,
+    })
+    return
+  }
 
   let whereClause: any = {
     familyId,
@@ -54,6 +97,46 @@ readingRouter.post('/:id/progress', async (req: AuthRequest, res: Response) => {
 
   if (!pagesRead || pagesRead < 1) {
     throw new AppError(400, '请填写本次阅读的页数')
+  }
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock progress update
+    const mockActiveReading = {
+      id: id,
+      readPages: 100,
+      childId: 2,
+      bookId: 1,
+      book: {
+        totalPages: 223,
+      },
+    }
+
+    const newReadPages = mockActiveReading.readPages + pagesRead
+    const totalPages = mockActiveReading.book.totalPages
+
+    // Check if book is completed
+    const isCompleted = totalPages > 0 && newReadPages >= totalPages
+
+    if (isCompleted) {
+      res.json({
+        status: 'success',
+        message: '恭喜！这本书已读完，AI分析正在生成中',
+        data: { completed: true },
+      })
+    } else {
+      res.json({
+        status: 'success',
+        message: '阅读进度已更新',
+        data: {
+          completed: false,
+          readPages: newReadPages,
+          totalPages,
+          progress: Math.round((newReadPages / totalPages) * 100),
+        },
+      })
+    }
+    return
   }
 
   const activeReading = await prisma.activeReading.findFirst({
@@ -102,9 +185,19 @@ readingRouter.post('/:id/progress', async (req: AuthRequest, res: Response) => {
       data: { readCount: { increment: 1 } },
     })
 
+    // Create AI insight record for completed book
+    await prisma.bookAIInsight.create({
+      data: {
+        familyId,
+        bookId: activeReading.bookId,
+        childId: activeReading.childId,
+        status: 'pending',
+      },
+    })
+
     res.json({
       status: 'success',
-      message: '恭喜！这本书已读完',
+      message: '恭喜！这本书已读完，AI分析正在生成中',
       data: { completed: true },
     })
   } else {
@@ -161,6 +254,22 @@ readingRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
 readingRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = req.query.childId ? parseInt(req.query.childId as string) : undefined
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock statistics
+    const mockStats = {
+      readingCount: 2,
+      weekReadCount: 5,
+      monthReadCount: 15,
+    }
+
+    res.json({
+      status: 'success',
+      data: mockStats,
+    })
+    return
+  }
 
   let whereClause: any = { familyId, status: 'reading' }
   if (childId) {

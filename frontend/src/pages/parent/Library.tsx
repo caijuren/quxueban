@@ -51,11 +51,14 @@ interface Book {
   id: number;
   name: string;
   author: string;
+  isbn: string;
+  publisher: string;
   type: string;
   characterTag: string;
   coverUrl: string;
   totalPages: number;
   wordCount?: number;
+  suitableAge?: string;
   readCount: number;
   lastReadDate?: string | null;
   activeReadings: Array<{
@@ -103,11 +106,14 @@ interface LibraryStats {
 const bookSchema = z.object({
   name: z.string().min(1, '请输入书名'),
   author: z.string().optional(),
+  isbn: z.string().optional(),
+  publisher: z.string().optional(),
   type: z.enum(['fiction', 'nonfiction', 'science', 'history', 'biography', 'other']),
   characterTag: z.string().optional(),
   coverUrl: z.string().optional(),
   totalPages: z.number().min(0, '页数不能为负数').optional(),
   wordCount: z.number().min(0, '字数不能为负数').optional(),
+  suitableAge: z.string().optional(),
 });
 
 type BookFormData = z.infer<typeof bookSchema>;
@@ -392,6 +398,8 @@ export default function LibraryPage() {
       if (bookData) {
         setValue('name', bookData.name || '');
         setValue('author', bookData.author || '');
+        setValue('isbn', bookData.isbn || '');
+        setValue('publisher', bookData.publisher || '');
         setValue('coverUrl', bookData.coverUrl || '');
         setValue('totalPages', bookData.totalPages || 0);
         toast.success('已自动填充书籍信息');
@@ -467,11 +475,14 @@ export default function LibraryPage() {
     reset({
       name: book.name,
       author: book.author,
+      isbn: book.isbn,
+      publisher: book.publisher,
       type: book.type as any,
       characterTag: book.characterTag,
       coverUrl: book.coverUrl,
       totalPages: book.totalPages,
       wordCount: book.wordCount || 0,
+      suitableAge: book.suitableAge,
     });
     setShowAddForm(true);
   };
@@ -487,7 +498,7 @@ export default function LibraryPage() {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -501,12 +512,24 @@ export default function LibraryPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setValue('coverUrl', base64);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const formData = new FormData();
+      formData.append('cover', file);
+
+      const { data } = await apiClient.post('/library/upload-cover', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (data && data.coverUrl) {
+        setValue('coverUrl', data.coverUrl);
+        toast.success('封面上传成功');
+      }
+    } catch (error) {
+      toast.error('上传失败，请重试');
+      console.error('Cover upload error:', error);
+    }
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1298,6 +1321,26 @@ export default function LibraryPage() {
                     </div>
                   </div>
 
+                  {/* ISBN */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">ISBN</Label>
+                    <Input
+                      {...register('isbn')}
+                      placeholder="输入ISBN号"
+                      className="mt-2 rounded-xl h-12 bg-gray-50 border-0"
+                    />
+                  </div>
+
+                  {/* Publisher */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">出版社</Label>
+                    <Input
+                      {...register('publisher')}
+                      placeholder="输入出版社"
+                      className="mt-2 rounded-xl h-12 bg-gray-50 border-0"
+                    />
+                  </div>
+
                   {/* Total Pages */}
                   <div>
                     <Label className="text-sm font-medium text-gray-700">总页数</Label>
@@ -1316,6 +1359,16 @@ export default function LibraryPage() {
                       type="number"
                       {...register('wordCount', { valueAsNumber: true })}
                       placeholder="输入总字数"
+                      className="mt-2 rounded-xl h-12 bg-gray-50 border-0"
+                    />
+                  </div>
+
+                  {/* Suitable Age */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">适读年龄</Label>
+                    <Input
+                      {...register('suitableAge')}
+                      placeholder="如：3-6岁"
                       className="mt-2 rounded-xl h-12 bg-gray-50 border-0"
                     />
                   </div>
