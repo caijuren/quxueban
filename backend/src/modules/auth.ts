@@ -456,6 +456,12 @@ authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: A
 authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string)
+    
+    // Validate ID parameter
+    if (isNaN(id) || id <= 0) {
+      throw new AppError(400, '无效的孩子ID')
+    }
+    
     const { name, avatar, pin } = req.body
     const { familyId, userId } = req.user!
 
@@ -594,6 +600,12 @@ authRouter.delete('/children/all', authMiddleware, requireRole('parent'), async 
 authRouter.delete('/children/:id', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string)
+    
+    // Validate ID parameter
+    if (isNaN(id) || id <= 0) {
+      throw new AppError(400, '无效的孩子ID')
+    }
+    
     const { familyId } = req.user!
 
     console.log(`Deleting child ${id} from family ${familyId}`)
