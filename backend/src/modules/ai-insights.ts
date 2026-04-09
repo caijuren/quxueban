@@ -124,12 +124,12 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
     })
   }
 
-  // Prepare prompt for AI
-  const prompt = generateAIPrompt(book, readingLogs, childInfo)
+  // Prepare prompt for AI (not used in mock mode)
+  // const prompt = generateAIPrompt(book, readingLogs, childInfo)
 
   try {
     // Call AI API (using a placeholder for now)
-    const aiResponse = await callAIAPI(prompt)
+    const aiResponse = await callAIAPI('mock prompt')
 
     // Create or update insight record
     const insight = await prisma.bookAIInsight.create({
@@ -226,7 +226,7 @@ function calculateAge(birthDate: string) {
 /**
  * Call AI API
  */
-async function callAIAPI(prompt: string) {
+async function callAIAPI(_prompt: string) {
   // This is a placeholder for the actual AI API call
   // In a real implementation, you would call OpenAI API or another LLM
   return {
