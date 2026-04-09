@@ -36,6 +36,7 @@ model User {
   status            String           @default("active") @db.VarChar(20)
   dingtalkWebhook   String?          @default("") @map("dingtalk_webhook") @db.VarChar(500)
   dingtalkSecret    String?          @default("") @map("dingtalk_secret") @db.VarChar(100)
+  dingtalkWebhookUrl String?         @default("") @map("dingtalk_webhook_url") @db.VarChar(500)
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
   achievementLogs   AchievementLog[]

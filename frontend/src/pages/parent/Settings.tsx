@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { motion } from 'framer-motion';
 import {
   Bell,
@@ -10,7 +7,13 @@ import {
   AlertTriangle,
   Send,
   Save,
-  User
+  Users,
+  MessageCircle,
+  ExternalLink,
+  Shield,
+  Home,
+  CheckCircle2,
+  Circle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,91 +37,104 @@ import {
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 
-// Schema
-const settingsSchema = z.object({
-  familyName: z.string().min(1, '请输入家庭名称').max(30, '名称不能超过30个字符'),
-  dingtalkWebhook: z.string().url('请输入有效的URL').optional().or(z.literal('')),
-  dailyTimeLimit: z.number().min(60).max(480)
-});
-
-type SettingsFormData = z.infer<typeof settingsSchema>;
-
 // API functions
 async function getFamilySettings(): Promise<any> {
   const response = await apiClient.get('/settings');
   return response.data;
 }
 
-async function updateSettings(data: SettingsFormData): Promise<void> {
+async function updateFamilySettings(data: { familyName: string; dailyTimeLimit: number }): Promise<void> {
   await apiClient.put('/settings', data);
-}
-
-async function testWebhook(webhook: string): Promise<void> {
-  await apiClient.post('/settings/test-webhook', { webhook });
 }
 
 async function deleteFamilyData(): Promise<void> {
   await apiClient.delete('/settings/family-data');
 }
 
+async function getChildren(): Promise<any> {
+  const response = await apiClient.get('/children');
+  return response.data;
+}
+
+async function getChildDingtalkConfig(childId: number): Promise<any> {
+  const response = await apiClient.get(`/children/${childId}/dingtalk-config`);
+  return response.data;
+}
+
+async function updateChildDingtalkConfig(childId: number, webhookUrl: string, secret?: string): Promise<void> {
+  await apiClient.put(`/children/${childId}/dingtalk-config`, { webhookUrl, secret });
+}
+
+async function testChildWebhook(childId: number): Promise<void> {
+  await apiClient.post('/settings/test-webhook', { childId });
+}
+
 export default function SettingsPage() {
+  const [familyName, setFamilyName] = useState('我的家庭');
   const [dailyTimeLimit, setDailyTimeLimit] = useState(210);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<SettingsFormData>({
-    resolver: zodResolver(settingsSchema),
-    defaultValues: { familyName: '我的家庭', dingtalkWebhook: '', dailyTimeLimit: 210 }
-  });
+  const [childWebhooks, setChildWebhooks] = useState<Record<number, string>>({});
+  const [childSecrets, setChildSecrets] = useState<Record<number, string>>({});
+  const [originalChildWebhooks, setOriginalChildWebhooks] = useState<Record<number, string>>({});
+  const [originalChildSecrets, setOriginalChildSecrets] = useState<Record<number, string>>({});
+  const [savingChildId, setSavingChildId] = useState<number | null>(null);
+  const [isSavingAll, setIsSavingAll] = useState(false);
 
   // Load current settings
-  const { data: settingsData, isLoading, isError, error } = useQuery({
+  const { data: settingsData, isLoading: isLoadingSettings } = useQuery({
     queryKey: ['family-settings'],
     queryFn: getFamilySettings,
-    staleTime: 0, // 禁用缓存，确保每次都重新获取
+    staleTime: 0,
     refetchOnWindowFocus: true,
   });
 
-  // Update form when settings are loaded
-  useEffect(() => {
-    console.log('[Settings] Loading settings:', settingsData);
-    console.log('[Settings] IsLoading:', isLoading, 'IsError:', isError);
-    
-    if (isError) {
-      console.error('[Settings] Error:', error);
-      toast.error('加载设置失败');
-    }
-    
-    if (settingsData?.data) {
-      const { familyName, settings } = settingsData.data;
-      
-      console.log('[Settings] Family settings:', { familyName, settings });
-      
-      // 显示实际加载的值
-      const savedTimeLimit = settings?.dailyTimeLimit || 210;
-      console.log('[Settings] Setting dailyTimeLimit to:', savedTimeLimit);
-      
-      // 调试：显示实际加载的值
-      toast.info(`加载的时间限制: ${savedTimeLimit}分钟`, { duration: 5000 });
-      
-      setValue('familyName', familyName || '我的家庭');
-      setValue('dingtalkWebhook', settings?.dingtalkWebhook || '');
-      setValue('dailyTimeLimit', savedTimeLimit);
-      setDailyTimeLimit(savedTimeLimit);
-    }
-  }, [settingsData, setValue, isLoading, isError, error]);
-
-  const updateMutation = useMutation({
-    mutationFn: updateSettings,
-    onSuccess: () => toast.success('设置已保存'),
-    onError: (error) => toast.error(getErrorMessage(error))
+  // Load children list
+  const { data: childrenData, isLoading: isLoadingChildren } = useQuery({
+    queryKey: ['children'],
+    queryFn: getChildren,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
-  const testWebhookMutation = useMutation({
-    mutationFn: testWebhook,
-    onSuccess: () => toast.success('测试消息发送成功'),
-    onError: (error) => toast.error(getErrorMessage(error))
+  // Load settings
+  useEffect(() => {
+    if (settingsData?.data) {
+      const { familyName: name, settings } = settingsData.data;
+      setFamilyName(name || '我的家庭');
+      setDailyTimeLimit(settings?.dailyTimeLimit || 210);
+    }
+  }, [settingsData]);
+
+  // Load child dingtalk configs
+  useEffect(() => {
+    if (childrenData?.data) {
+      childrenData.data.forEach(async (child: any) => {
+        try {
+          const configData = await getChildDingtalkConfig(child.id);
+          const webhook = configData.data.webhookUrl || '';
+          const secret = configData.data.secret || '';
+          setChildWebhooks(prev => ({ ...prev, [child.id]: webhook }));
+          setChildSecrets(prev => ({ ...prev, [child.id]: secret }));
+          setOriginalChildWebhooks(prev => ({ ...prev, [child.id]: webhook }));
+          setOriginalChildSecrets(prev => ({ ...prev, [child.id]: secret }));
+        } catch (error) {
+          console.error(`Failed to load dingtalk config for child ${child.id}:`, error);
+        }
+      });
+    }
+  }, [childrenData]);
+
+  // Update family settings mutation
+  const updateFamilyMutation = useMutation({
+    mutationFn: updateFamilySettings,
+    onSuccess: () => {
+      toast.success('家庭设置已保存');
+    },
+    onError: (error) => {
+      toast.error(`保存失败：${getErrorMessage(error)}`);
+    }
   });
 
   const deleteMutation = useMutation({
@@ -129,20 +147,104 @@ export default function SettingsPage() {
     onError: (error) => toast.error(getErrorMessage(error))
   });
 
-  const onSubmit = (data: SettingsFormData) => {
-    console.log('[Settings] Submitting:', { ...data, dailyTimeLimit });
-    updateMutation.mutate({ ...data, dailyTimeLimit });
+  // Update child dingtalk config mutation
+  const updateChildWebhookMutation = useMutation({
+    mutationFn: ({ childId, webhookUrl, secret }: { childId: number; webhookUrl: string; secret?: string }) =>
+      updateChildDingtalkConfig(childId, webhookUrl, secret),
+    onSuccess: (_, variables) => {
+      toast.success(`${getChildName(variables.childId)}的钉钉配置已保存`);
+      // Update original values after successful save
+      setOriginalChildWebhooks(prev => ({ ...prev, [variables.childId]: variables.webhookUrl }));
+      setOriginalChildSecrets(prev => ({ ...prev, [variables.childId]: variables.secret || '' }));
+      setSavingChildId(null);
+    },
+    onError: (error, variables) => {
+      toast.error(`保存失败：${getErrorMessage(error)}`, {
+        description: `无法为「${getChildName(variables.childId)}」保存钉钉配置`,
+        duration: 5000,
+      });
+      setSavingChildId(null);
+    }
+  });
+
+  // Test child webhook mutation
+  const testChildWebhookMutation = useMutation({
+    mutationFn: testChildWebhook,
+    onSuccess: (_, childId) => {
+      toast.success(`测试消息已发送至「${getChildName(childId)}」的钉钉群`);
+    },
+    onError: (error, childId) => {
+      toast.error(`测试失败：${getErrorMessage(error)}`, {
+        description: `无法发送消息到「${getChildName(childId)}」的钉钉群，请检查Webhook地址和密钥是否正确`,
+        duration: 5000,
+      });
+    }
+  });
+
+  const getChildName = (childId: number) => {
+    const child = childrenData?.data?.find((c: any) => c.id === childId);
+    return child?.name || '孩子';
   };
 
-  const handleTestWebhook = () => {
-    const webhook = watch('dingtalkWebhook');
-    if (!webhook) { toast.error('请先输入钉钉Webhook地址'); return; }
-    testWebhookMutation.mutate(webhook);
+  const handleSaveAll = async () => {
+    setIsSavingAll(true);
+    
+    try {
+      // Save family settings
+      await updateFamilyMutation.mutateAsync({ familyName, dailyTimeLimit });
+      
+      // Save all child configs that have changed
+      if (childrenData?.data) {
+        for (const child of childrenData.data) {
+          const currentWebhook = childWebhooks[child.id] || '';
+          const currentSecret = childSecrets[child.id] || '';
+          const originalWebhook = originalChildWebhooks[child.id] || '';
+          const originalSecret = originalChildSecrets[child.id] || '';
+          
+          // Only save if changed
+          if (currentWebhook !== originalWebhook || currentSecret !== originalSecret) {
+            await updateChildWebhookMutation.mutateAsync({ 
+              childId: child.id, 
+              webhookUrl: currentWebhook, 
+              secret: currentSecret 
+            });
+          }
+        }
+      }
+      
+      toast.success('所有设置已保存');
+    } catch (error) {
+      console.error('Save all error:', error);
+    } finally {
+      setIsSavingAll(false);
+    }
   };
 
   const handleDeleteData = () => {
-    if (deleteConfirmText !== '删除') { toast.error('请输入"删除"确认'); return; }
+    if (deleteConfirmText !== '删除') { 
+      toast.error('请输入"删除"确认'); 
+      return; 
+    }
     deleteMutation.mutate();
+  };
+
+  const handleSaveChildWebhook = (childId: number) => {
+    const webhookUrl = childWebhooks[childId] || '';
+    const secret = childSecrets[childId] || '';
+    setSavingChildId(childId);
+    updateChildWebhookMutation.mutate({ childId, webhookUrl, secret });
+  };
+
+  const handleTestChildWebhook = (childId: number) => {
+    const webhookUrl = childWebhooks[childId] || '';
+    if (!webhookUrl || webhookUrl.trim() === '') { 
+      toast.error(`请先为「${getChildName(childId)}」配置钉钉Webhook地址后再测试`, {
+        description: '在上方输入框中填写Webhook地址并保存',
+        duration: 4000,
+      }); 
+      return; 
+    }
+    testChildWebhookMutation.mutate(childId);
   };
 
   const formatTime = (minutes: number) => {
@@ -151,42 +253,78 @@ export default function SettingsPage() {
     return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`;
   };
 
+  const getConfiguredCount = () => {
+    if (!childrenData?.data) return 0;
+    return childrenData.data.filter((child: any) => {
+      const webhook = childWebhooks[child.id];
+      return webhook && webhook.trim() !== '';
+    }).length;
+  };
+
+  const hasChanges = () => {
+    // Check family settings changes
+    if (settingsData?.data) {
+      const { familyName: originalName, settings } = settingsData.data;
+      const originalTimeLimit = settings?.dailyTimeLimit || 210;
+      if (familyName !== (originalName || '我的家庭')) return true;
+      if (dailyTimeLimit !== originalTimeLimit) return true;
+    }
+    
+    // Check child config changes
+    if (childrenData?.data) {
+      for (const child of childrenData.data) {
+        const currentWebhook = childWebhooks[child.id] || '';
+        const currentSecret = childSecrets[child.id] || '';
+        const originalWebhook = originalChildWebhooks[child.id] || '';
+        const originalSecret = originalChildSecrets[child.id] || '';
+        if (currentWebhook !== originalWebhook || currentSecret !== originalSecret) return true;
+      }
+    }
+    
+    return false;
+  };
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="-mx-6 px-6 max-w-3xl mx-auto pb-24">
       {/* Header */}
-      <div>
+      <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">设置</h1>
-        <p className="text-gray-500 mt-1">管理家庭设置和通知配置</p>
+        <p className="text-gray-500 mt-1">管理家庭信息和钉钉通知配置</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Family Settings */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
-            <CardHeader className="pb-4 pt-6 px-6">
-              <CardTitle className="text-lg flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                  <User className="size-5 text-white" />
-                </div>
-                <span className="font-bold text-gray-900">家庭设置</span>
-              </CardTitle>
-              <CardDescription className="text-gray-500 ml-[52px]">基本家庭信息配置</CardDescription>
-            </CardHeader>
-            <CardContent className="px-6 pb-6 space-y-6">
+      <div className="space-y-6">
+        {/* Family Info Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Home className="w-5 h-5 text-purple-500" />
+            <h2 className="text-lg font-semibold text-gray-900">家庭信息</h2>
+          </div>
+          
+          <Card className="border border-gray-200 rounded-2xl shadow-sm bg-gray-50/50">
+            <CardContent className="p-6 space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="familyName" className="text-sm font-medium text-gray-700">家庭名称</Label>
-                <Input id="familyName" {...register('familyName')} placeholder="例如：快乐学习之家" className="rounded-xl h-12 bg-gray-50 border-0" />
-                {errors.familyName && <p className="text-red-500 text-xs">{errors.familyName.message}</p>}
+                <Input 
+                  id="familyName" 
+                  value={familyName}
+                  onChange={(e) => setFamilyName(e.target.value)}
+                  placeholder="例如：快乐学习之家" 
+                  className="h-11 rounded-xl bg-white"
+                />
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="dailyTimeLimit" className="text-sm font-medium text-gray-700">每日学习时长上限</Label>
-                  <span className="text-lg font-bold text-gray-900">{formatTime(dailyTimeLimit)}</span>
+                  <Label className="text-sm font-medium text-gray-700">每日学习时长上限</Label>
+                  <span className="text-lg font-bold text-purple-600">{formatTime(dailyTimeLimit)}</span>
                 </div>
                 <Slider
                   value={[dailyTimeLimit]}
-                  onValueChange={([value]) => { setDailyTimeLimit(value); setValue('dailyTimeLimit', value); }}
+                  onValueChange={([value]) => setDailyTimeLimit(value)}
                   min={60} max={480} step={15}
                   className="w-full"
                 />
@@ -194,122 +332,268 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </motion.section>
 
-        {/* Notifications */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl overflow-hidden">
-            <CardHeader className="pb-4 pt-6 px-6">
-              <CardTitle className="text-lg flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                  <Bell className="size-5 text-white" />
+        {/* Notification Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bell className="w-5 h-5 text-blue-500" />
+              <h2 className="text-lg font-semibold text-gray-900">钉钉群通知</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">启用钉钉通知</span>
+              <Switch 
+                checked={notificationsEnabled} 
+                onCheckedChange={setNotificationsEnabled} 
+                className="data-[state=checked]:bg-purple-500"
+              />
+            </div>
+          </div>
+          
+          <Card className="border border-gray-200 rounded-2xl shadow-sm">
+            <CardContent className="p-6">
+              {!notificationsEnabled && (
+                <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
+                  钉钉通知已关闭，开启后才能配置和发送通知
                 </div>
-                <span className="font-bold text-gray-900">通知设置</span>
-              </CardTitle>
-              <CardDescription className="text-gray-500 ml-[52px]">配置钉钉通知推送</CardDescription>
-            </CardHeader>
-            <CardContent className="px-6 pb-6 space-y-6">
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-gray-50">
-                <div className="space-y-0.5">
-                  <Label className="font-medium text-gray-900">启用通知</Label>
-                  <p className="text-xs text-gray-500">开启后将推送学习进度通知到钉钉群</p>
+              )}
+              
+              {isLoadingChildren ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="w-8 h-8 border-2 border-gray-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-3"></div>
+                  加载孩子列表中...
                 </div>
-                <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-purple-500 data-[state=checked]:to-blue-500" />
-              </div>
+              ) : childrenData?.data && childrenData.data.length > 0 ? (
+                <div className="space-y-4">
+                  {childrenData.data.map((child: any, index: number) => (
+                    <div key={child.id}>
+                      {index > 0 && <Separator className="my-4" />}
+                      <div className="space-y-4">
+                        {/* Child Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-lg">
+                              {child.avatar || '👶'}
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-gray-900">{child.name}</h3>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {childWebhooks[child.id] ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                                    <span className="text-xs text-green-600">已配置</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Circle className="w-3.5 h-3.5 text-gray-300" />
+                                    <span className="text-xs text-gray-400">未配置</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {childWebhooks[child.id] && (
+                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+                              <MessageCircle className="w-3 h-3 mr-1" />
+                              已启用
+                            </Badge>
+                          )}
+                        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="dingtalkWebhook" className="text-sm font-medium text-gray-700">钉钉群机器人 Webhook</Label>
-                <div className="flex gap-2">
-                  <Input id="dingtalkWebhook" {...register('dingtalkWebhook')} placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." className="flex-1 rounded-xl h-12 bg-gray-50 border-0" disabled={!notificationsEnabled} />
-                  <Button type="button" variant="outline" onClick={handleTestWebhook} disabled={!notificationsEnabled || testWebhookMutation.isPending} className="rounded-xl h-12 px-5 shrink-0">
-                    <Send className="size-4 mr-2" />测试
-                  </Button>
+                        {/* Config Fields */}
+                        <div className="space-y-3 pl-1">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-gray-500">Webhook 地址</Label>
+                            <Input 
+                              value={childWebhooks[child.id] || ''} 
+                              onChange={(e) => setChildWebhooks(prev => ({ ...prev, [child.id]: e.target.value }))}
+                              placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." 
+                              className="h-10 rounded-lg text-sm"
+                              disabled={!notificationsEnabled}
+                              type="password"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs text-gray-500">加签密钥（可选）</Label>
+                              <span className="text-xs text-gray-400">如开启加签需填写</span>
+                            </div>
+                            <Input 
+                              value={childSecrets[child.id] || ''} 
+                              onChange={(e) => setChildSecrets(prev => ({ ...prev, [child.id]: e.target.value }))}
+                              placeholder="SECxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+                              className="h-10 rounded-lg text-sm"
+                              disabled={!notificationsEnabled}
+                              type="password"
+                            />
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center justify-between pt-1">
+                            <a 
+                              href="https://open.dingtalk.com/document/robots/custom-robot-access" 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-xs text-gray-400 hover:text-purple-600 flex items-center gap-1 transition-colors"
+                            >
+                              如何获取？
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleTestChildWebhook(child.id)} 
+                                disabled={!notificationsEnabled || !childWebhooks[child.id] || testChildWebhookMutation.isPending} 
+                                className="h-8 px-3 rounded-lg"
+                              >
+                                <Send className="w-3.5 h-3.5 mr-1.5" />
+                                测试
+                              </Button>
+                              <Button 
+                                size="sm"
+                                onClick={() => handleSaveChildWebhook(child.id)} 
+                                disabled={!notificationsEnabled || savingChildId === child.id} 
+                                variant={savingChildId === child.id ? "outline" : "default"}
+                                className="h-8 px-3 rounded-lg"
+                              >
+                                {savingChildId === child.id ? (
+                                  <>
+                                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1.5"></div>
+                                    保存中
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="w-3.5 h-3.5 mr-1.5" />
+                                    保存
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                {errors.dingtalkWebhook && <p className="text-red-500 text-xs">{errors.dingtalkWebhook.message}</p>}
-                <p className="text-xs text-gray-400">在钉钉群设置中添加自定义机器人，获取Webhook地址</p>
+              ) : (
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500">暂无孩子信息</p>
+                  <p className="text-sm text-gray-400 mt-1">请先添加孩子账户</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.section>
+
+        {/* Danger Zone Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-red-500" />
+            <h2 className="text-lg font-semibold text-red-600">危险区域</h2>
+          </div>
+          
+          <Card className="border border-red-200 rounded-2xl shadow-sm bg-red-50/50">
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-gray-900">删除所有数据</h3>
+                  <p className="text-sm text-gray-500 mt-1">永久删除所有家庭成员、任务、计划和学习记录。此操作不可撤销！</p>
+                </div>
+                <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="shrink-0 rounded-lg bg-red-500 hover:bg-red-600">
+                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      删除数据
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-red-600">确认删除所有数据？</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        此操作将永久删除所有数据，包括：
+                        <ul className="list-disc list-inside mt-2 text-sm space-y-1">
+                          <li>所有孩子账户和学习记录</li>
+                          <li>所有任务和周计划</li>
+                          <li>所有图书和阅读记录</li>
+                          <li>所有成就和解锁记录</li>
+                        </ul>
+                        <p className="mt-3 font-medium text-red-600">此操作无法撤销！</p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="my-4">
+                      <Label htmlFor="confirmDelete">请输入"删除"确认</Label>
+                      <Input 
+                        id="confirmDelete" 
+                        value={deleteConfirmText} 
+                        onChange={(e) => setDeleteConfirmText(e.target.value)} 
+                        placeholder="删除" 
+                        className="mt-2 h-11 rounded-lg"
+                      />
+                    </div>
+                    <AlertDialogFooter className="gap-2">
+                      <AlertDialogCancel onClick={() => setDeleteConfirmText('')} className="rounded-lg">
+                        取消
+                      </AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleDeleteData} 
+                        disabled={deleteMutation.isPending || deleteConfirmText !== '删除'} 
+                        className="bg-red-500 hover:bg-red-600 rounded-lg"
+                      >
+                        确认删除
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </motion.section>
+      </div>
 
-        {/* Save Button */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Button type="submit" disabled={updateMutation.isPending} className="w-full sm:w-auto h-12 px-8 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
-            <Save className="size-4 mr-2" />
-            {updateMutation.isPending ? '保存中...' : '保存设置'}
+      {/* Global Save Button - Fixed at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
+          <div className="text-sm text-gray-500">
+            {hasChanges() ? (
+              <span className="text-purple-600 font-medium">有未保存的更改</span>
+            ) : (
+              <span>所有更改已保存</span>
+            )}
+          </div>
+          <Button 
+            onClick={handleSaveAll}
+            disabled={isSavingAll || !hasChanges()}
+            className="h-11 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+          >
+            {isSavingAll ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                保存中...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                保存设置
+              </>
+            )}
           </Button>
-        </motion.div>
-      </form>
-
-      {/* Danger Zone */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <Card className="border-0 shadow-lg shadow-red-200/50 rounded-3xl overflow-hidden">
-          <CardHeader className="pb-4 pt-6 px-6">
-            <CardTitle className="text-lg flex items-center gap-3 text-red-600">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
-                <AlertTriangle className="size-5 text-white" />
-              </div>
-              <span className="font-bold">危险区域</span>
-            </CardTitle>
-            <CardDescription className="text-gray-500 ml-[52px]">以下操作不可撤销，请谨慎操作</CardDescription>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-red-50 border border-red-100">
-              <div>
-                <h4 className="font-semibold text-gray-900">删除所有数据</h4>
-                <p className="text-sm text-gray-500 mt-0.5">永久删除所有家庭成员、任务、计划和学习记录</p>
-              </div>
-              <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="shrink-0 rounded-xl h-11 bg-red-500 hover:bg-red-600">
-                    <Trash2 className="size-4 mr-2" />删除数据
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-xl text-red-600">确认删除所有数据？</AlertDialogTitle>
-                    <AlertDialogDescription className="text-gray-500">
-                      此操作将永久删除所有数据，包括：
-                      <ul className="list-disc list-inside mt-3 text-sm space-y-1">
-                        <li>所有孩子账户和学习记录</li>
-                        <li>所有任务和周计划</li>
-                        <li>所有图书和阅读记录</li>
-                        <li>所有成就和解锁记录</li>
-                      </ul>
-                      <p className="mt-3 font-medium text-red-600">此操作无法撤销！</p>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <div className="my-4">
-                    <Label htmlFor="confirmDelete">请输入"删除"确认</Label>
-                    <Input id="confirmDelete" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} placeholder="删除" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                  </div>
-                  <AlertDialogFooter className="gap-3">
-                    <AlertDialogCancel onClick={() => setDeleteConfirmText('')} className="rounded-xl h-11">取消</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteData} disabled={deleteMutation.isPending || deleteConfirmText !== '删除'} className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-11">
-                      确认删除
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* App Info */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-        <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-3xl">
-          <CardContent className="py-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/25">
-                <span className="text-3xl">🐛</span>
-              </div>
-              <p className="font-bold text-gray-900 text-lg">趣学伴学习助手</p>
-              <p className="text-sm text-gray-400 mt-1">v1.0.0 · 帮助家长科学管理孩子的学习计划</p>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

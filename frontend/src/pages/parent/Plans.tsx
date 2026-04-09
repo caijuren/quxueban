@@ -26,7 +26,6 @@ interface TaskAllocation {
   progress: number;
   subject: string | null;
   difficulty: string | null;
-  isTemporary: boolean;
   scheduleRule: string;
 }
 
@@ -186,7 +185,6 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
           {/* 简洁标题栏 */}
           <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white'>
             <div className='flex items-center gap-3'>
-              {task.isTemporary && <span className='text-amber-500 text-lg'>⚡</span>}
               <h2 className='text-lg font-semibold text-gray-900'>{task.taskName}</h2>
             </div>
             <button 
@@ -211,11 +209,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
                   {diffLabel(task.difficulty)}
                 </span>
               )}
-              {task.isTemporary && (
-                <span className='text-sm px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200'>
-                  临时任务
-                </span>
-              )}
+
             </div>
 
             {/* 信息列表 */}
@@ -477,8 +471,6 @@ export default function PlansPage() {
   );
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskAllocation | null>(null);
-  const [tempDialogOpen, setTempDialogOpen] = useState(false);
-  const [tempUrgency, setTempUrgency] = useState('normal');
   const [isExporting, setIsExporting] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<{[key: string]: boolean}>({});
   const [advancedExportOpen, setAdvancedExportOpen] = useState(false);
@@ -535,6 +527,21 @@ export default function PlansPage() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
+  // Calculate display plan
+  const displayPlan = useMemo(() => {
+    if (weeklyPlans && weeklyPlans.length > 0) {
+      if (selectedChildId) {
+        // If there's a selected child, show that child's plan
+        const plan = weeklyPlans.find(plan => parseInt(plan.childId) === selectedChildId);
+        if (plan) return plan;
+      }
+      // If no selected child or child not found, show the first plan
+      return weeklyPlans[0];
+    }
+    // If no plans, show empty plan
+    return {id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []};
+  }, [weeklyPlans, selectedChildId]);
+  
   const categories = [
     { value: 'all', label: '全部' },
     { value: 'school', label: '校内作业' },
@@ -571,13 +578,15 @@ export default function PlansPage() {
           {/* Action Buttons */}
           <div className="flex gap-2">
             {/* 推送按钮 - 只在有计划数据时显示 */}
-            {weeklyPlans && weeklyPlans.length > 0 && weeklyPlans[0]?.childId !== "0" && (
+            {displayPlan && displayPlan.childId !== "0" && (
               <button
                 onClick={async () => {
                   try {
-                    // 假设我们使用第一个计划的childId
-                    if (weeklyPlans && weeklyPlans.length > 0 && weeklyPlans[0]?.childId !== "0") {
-                      await apiClient.post('/dingtalk/push-weekly-plan', { childId: parseInt(weeklyPlans[0].childId), weekStartDate: currentWeekStart.toISOString() });
+                    if (displayPlan && displayPlan.childId !== "0") {
+                      await apiClient.post('/dingtalk/push-weekly-plan', { 
+                        childId: parseInt(displayPlan.childId), 
+                        weekStartDate: currentWeekStart.toISOString() 
+                      });
                       toast.success('已推送至钉钉');
                     }
                   } catch (e: unknown) {
@@ -629,13 +638,7 @@ export default function PlansPage() {
               </PopoverContent>
             </Popover>
 
-            <Button
-              onClick={() => setTempDialogOpen(true)}
-              className="h-10 rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-sm min-w-20"
-            >
-              <Plus className="size-4 mr-1.5" />
-              <span className="text-sm">临时任务</span>
-            </Button>
+
             <Button
               onClick={() => setAdvancedExportOpen(true)}
               className="h-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm min-w-20"
@@ -664,25 +667,7 @@ export default function PlansPage() {
       ) : (
         <div ref={exportContainerRef} className="space-y-6">
           {/* 只显示当前选中的孩子的计划 */}
-          {(() => {
-            let displayPlan;
-            if (weeklyPlans && weeklyPlans.length > 0) {
-              if (selectedChildId) {
-                // 如果有选中的孩子，显示该孩子的计划
-                displayPlan = weeklyPlans.find(plan => parseInt(plan.childId) === selectedChildId);
-              } else {
-                // 如果没有选中的孩子，显示第一个计划
-                displayPlan = weeklyPlans[0];
-              }
-            }
-            
-            // 如果没有找到计划，显示空计划
-            if (!displayPlan) {
-              displayPlan = {id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []};
-            }
-            
-            return [displayPlan];
-          })().map((plan, index) => (
+          {[displayPlan].map((plan, index) => (
             <motion.div
               key={plan.id}
               initial={{ opacity: 0, y: 30 }}
@@ -781,8 +766,7 @@ export default function PlansPage() {
                             >
                               <div className="p-2 flex items-center gap-2 pr-3 rounded-lg hover:bg-muted/50 transition-all duration-300" title={taskItem.taskName}>
                                 <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDotColor())} />
-                                <span className={cn('text-sm font-medium truncate', taskItem.isTemporary && 'text-amber-500 font-semibold', !hasAssignedDays && 'text-muted-foreground')}>
-                                  {taskItem.isTemporary && <span className="mr-0.5">⚡</span>}
+                                <span className={cn('text-sm font-medium truncate', !hasAssignedDays && 'text-muted-foreground')}>
                                   {taskItem.taskName}
                                   {!hasAssignedDays && <span className="ml-1 text-xs text-muted-foreground">(未分配)</span>}
                                 </span>
@@ -796,30 +780,18 @@ export default function PlansPage() {
                                   <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px] transition-all duration-300', isToday(weekDates[i]) && 'bg-primary/5 hover:bg-primary/10')}>
                                     <div className="relative">
                                       {isAssigned ? (
-                                        taskItem.isTemporary ? (
-                                          <motion.button 
-                                            onClick={() => setSelectedTask(taskItem)} 
-                                            className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm bg-amber-500')} 
-                                            title={`${taskItem.taskName} - 临时任务`}
-                                            whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' }}
-                                            whileTap={{ scale: 0.95 }}
-                                          >
-                                            <span className="text-white text-xs">⚡</span>
-                                          </motion.button>
-                                        ) : (
-                                          <motion.button 
-                                            onClick={() => setSelectedTask(taskItem)} 
-                                            className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} 
-                                            title={`${taskItem.taskName} - 点击查看详情`}
-                                            whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
-                                            whileTap={{ scale: 0.95 }}
-                                          >
-                                            {isCompleted && <span className="text-white text-xs">✓</span>}
-                                            {taskItem.difficulty === 'challenge' && !isCompleted && (
-                                              <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
-                                            )}
-                                          </motion.button>
-                                        )
+                                        <motion.button 
+                                          onClick={() => setSelectedTask(taskItem)} 
+                                          className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} 
+                                          title={`${taskItem.taskName} - 点击查看详情`}
+                                          whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                                          whileTap={{ scale: 0.95 }}
+                                        >
+                                          {isCompleted && <span className="text-white text-xs">✓</span>}
+                                          {taskItem.difficulty === 'challenge' && !isCompleted && (
+                                            <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
+                                          )}
+                                        </motion.button>
                                       ) : (
                                         <div className="w-6 h-6 rounded-full bg-muted shadow-sm"></div>
                                       )}
@@ -843,91 +815,7 @@ export default function PlansPage() {
         </div>
       )}
 
-      {/* Temp Task Dialog */}
-      {tempDialogOpen && (
-        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4'>
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className='bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden'>
-            <div className='px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-between'>
-              <h3 className='text-lg font-semibold text-white'>临时任务</h3>
-              <button onClick={() => setTempDialogOpen(false)} className='w-8 h-8 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors'><X className='w-5 h-5' /></button>
-            </div>
-            <div className='p-6 space-y-4'>
-              <div>
-                <label className='block text-sm font-semibold text-gray-700 mb-1.5'>任务名称 <span className='text-red-500'>*</span></label>
-                <input id='temp-task-name' type='text' className='w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 outline-none text-gray-900 text-sm' placeholder='例如：今天多练2页口算' />
-              </div>
-              <div className='grid grid-cols-2 gap-4'>
-                <div>
-                  <label className='block text-xs font-medium text-gray-500 mb-1.5 ml-1'>学科</label>
-                  <select id='temp-task-subject' className='w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 outline-none'>
-                    <option value=''>未设置</option>
-                    <option value='chinese'>语文</option>
-                    <option value='math'>数学</option>
-                    <option value='english'>英语</option>
-                    <option value='sports'>体育</option>
-                  </select>
-                </div>
-                <div>
-                  <label className='block text-xs font-medium text-gray-500 mb-1.5 ml-1'>期望完成</label>
-                  <select id='temp-task-due' className='w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-gray-700 text-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 outline-none'>
-                    <option value='today'>今天</option>
-                    <option value='tomorrow'>明天</option>
-                    <option value='weekend'>本周末</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className='block text-xs font-medium text-gray-500 mb-1.5 ml-1'>紧急程度</label>
-                <div className='flex gap-2'>
-                  {['normal','urgent'].map(u => (
-                    <button key={u} onClick={() => setTempUrgency(u)} className={cn('flex-1 px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all',
-                      tempUrgency === u ? 'border-amber-500 bg-amber-500 text-white shadow-sm' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300')}>
-                      {u === 'normal' ? '普通' : '紧急'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className='px-6 py-3.5 bg-gray-50/80 border-t border-gray-100 flex justify-end gap-2.5'>
-              <button onClick={() => setTempDialogOpen(false)} className='rounded-xl px-5 h-10 text-sm font-medium border border-gray-200 hover:bg-gray-100'>取消</button>
-              <button onClick={async () => {
-                const name = (document.getElementById('temp-task-name') as HTMLInputElement)?.value?.trim();
-                const subject = (document.getElementById('temp-task-subject') as HTMLSelectElement)?.value;
-                const due = (document.getElementById('temp-task-due') as HTMLSelectElement)?.value;
-                
-                if (!name) { toast.error('请输入任务名称'); return; }
-                
-                try {
-                  // 确保获取到有效的孩子ID
-                  if (!selectedChildId) {
-                    toast.error('请先选择一个孩子');
-                    return;
-                  }
-                  
-                  console.log('Creating temporary task with childId:', selectedChildId);
-                  
-                  const response = await apiClient.post('/plans/temp-task', {
-                    name,
-                    subject,
-                    due,
-                    urgency: tempUrgency,
-                    childId: selectedChildId
-                  });
-                  
-                  console.log('Temporary task created:', response);
-                  toast.success('临时任务已创建！');
-                  setTempDialogOpen(false);
-                  refetchPlans(); // 刷新计划数据
-                } catch (error: unknown) {
-                  console.error('Error creating temporary task:', error);
-                  const err = error as { response?: { data?: { message?: string } } };
-                  toast.error(err.response?.data?.message || '创建临时任务失败，请重试');
-                }
-              }} className='bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl px-6 h-10 text-sm font-medium shadow-lg shadow-amber-500/20'>创建任务</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+
 
       {/* Task Detail Modal */}
       {selectedTask && (
