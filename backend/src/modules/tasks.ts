@@ -121,12 +121,30 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
 
 tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
+  const childId = req.query.childId ? parseInt(req.query.childId as string) : null
   try {
-    const tasks = await prisma.$queryRaw`
-      SELECT id, family_id, name, category, type, time_per_unit, 
-             weekly_rule, sort_order, is_active, tags, applies_to, created_at, updated_at
-      FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
-    `
+    let tasks = []
+    if (childId) {
+      // 如果提供了 childId，只返回适用于该孩子的任务
+      tasks = await prisma.$queryRaw`
+        SELECT id, family_id, name, category, type, time_per_unit, 
+               weekly_rule, sort_order, is_active, tags, applies_to, created_at, updated_at
+        FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
+      `
+      
+      // 过滤适用于该孩子的任务
+      tasks = (tasks as any[]).filter(task => {
+        const appliesTo = task.applies_to as number[] || []
+        return appliesTo.includes(childId)
+      })
+    } else {
+      // 如果没有提供 childId，返回所有任务
+      tasks = await prisma.$queryRaw`
+        SELECT id, family_id, name, category, type, time_per_unit, 
+               weekly_rule, sort_order, is_active, tags, applies_to, created_at, updated_at
+        FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
+      `
+    }
     
     const formattedTasks = (tasks as any[]).map(task => {
       // 从 tags 中提取 scheduleRule
@@ -169,7 +187,7 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
 tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const { name, category, type, timePerUnit, tags } = req.body
+  const { name, category, type, timePerUnit, tags, appliesTo } = req.body
   
   const mappedCategory = category ? (CATEGORY_MAP[category] || category) : undefined
   const mappedType = type ? (TYPE_MAP[type] || type) : undefined
@@ -192,6 +210,7 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
       ...(mappedType && { type: mappedType }),
       ...(timePerUnit !== undefined && { timePerUnit }),
       ...(Object.keys(validatedTags).length > 0 && { tags: validatedTags }),
+      ...(appliesTo !== undefined && { appliesTo }),
       updatedAt: new Date()
     }
   })

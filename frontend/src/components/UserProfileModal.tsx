@@ -44,29 +44,33 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
           throw new Error('两次输入的密码不一致');
         }
         // 调用修改密码接口
-        const passwordResponse = await fetch('/api/user/password', {
+        const passwordResponse = await fetch('/api/auth/password', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
           },
           body: JSON.stringify({ oldPassword, newPassword }),
         });
         if (!passwordResponse.ok) {
-          throw new Error('修改密码失败');
+          const errorData = await passwordResponse.json();
+          throw new Error(errorData.message || '修改密码失败');
         }
       }
 
       // 上传头像
       if (avatar !== user?.avatar) {
-        const avatarResponse = await fetch('/api/user/avatar', {
+        const avatarResponse = await fetch('/api/auth/avatar', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
           },
           body: JSON.stringify({ avatar }),
         });
         if (!avatarResponse.ok) {
-          throw new Error('上传头像失败');
+          const errorData = await avatarResponse.json();
+          throw new Error(errorData.message || '上传头像失败');
         }
       }
 
@@ -86,85 +90,86 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-sm border border-border rounded-lg shadow-lg">
         <DialogHeader>
-          <DialogTitle>个人设置</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-center text-foreground">个人设置</DialogTitle>
         </DialogHeader>
-        <div className="space-y-6 py-4">
+        <div className="space-y-4 py-4">
           {/* 头像设置 */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <h3 className="text-sm font-medium text-foreground">头像设置</h3>
-            <div className="flex items-center gap-4">
-              <Avatar className="size-20">
+            <div className="flex flex-col items-center gap-3">
+              <Avatar className="size-20 ring-2 ring-white shadow-sm">
                 <AvatarImage src={avatar} />
                 <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-xl font-medium">
                   {user?.name?.charAt(0) || 'P'}
                 </AvatarFallback>
               </Avatar>
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    id="avatar-upload"
-                    onChange={handleAvatarUpload}
-                  />
-                  <label htmlFor="avatar-upload" className="cursor-pointer w-full">
-                    上传头像
-                  </label>
-                </Button>
-                <p className="text-xs text-muted-foreground">支持 JPG、PNG 格式</p>
-              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full max-w-xs py-1.5"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="avatar-upload"
+                  onChange={handleAvatarUpload}
+                />
+                <label htmlFor="avatar-upload" className="cursor-pointer w-full">
+                  上传头像
+                </label>
+              </Button>
+              <p className="text-xs text-muted-foreground">支持 JPG、PNG 格式</p>
             </div>
           </div>
 
           {/* 密码修改 */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             <h3 className="text-sm font-medium text-foreground">密码修改</h3>
             <div className="space-y-2">
               <div className="space-y-1">
-                <Label htmlFor="old-password">原密码</Label>
+                <Label htmlFor="old-password" className="text-xs">原密码</Label>
                 <Input
                   id="old-password"
                   type="password"
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
                   placeholder="请输入原密码"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="new-password">新密码</Label>
+                <Label htmlFor="new-password" className="text-xs">新密码</Label>
                 <Input
                   id="new-password"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="请输入新密码"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="confirm-password">确认新密码</Label>
+                <Label htmlFor="confirm-password" className="text-xs">确认新密码</Label>
                 <Input
                   id="confirm-password"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="请再次输入新密码"
+                  className="w-full"
                 />
               </div>
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="flex justify-between border-t border-border pt-3">
+          <Button variant="secondary" onClick={() => onOpenChange(false)} className="px-3 text-sm">
             取消
           </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
+          <Button onClick={handleSave} disabled={isLoading} className="px-4 text-sm bg-primary hover:bg-primary/90">
             {isLoading ? '保存中...' : '保存'}
           </Button>
         </DialogFooter>

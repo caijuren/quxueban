@@ -165,22 +165,21 @@ export default function ParentLayout() {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 p-1 rounded-lg hover:bg-muted transition-colors">
+                <button className="p-1 rounded-lg hover:bg-muted transition-colors">
                   <Avatar className="size-8 ring-2 ring-white shadow-sm">
                     <AvatarImage src={user?.avatar} />
                     <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
                       {user?.name?.charAt(0) || 'P'}
                     </AvatarFallback>
                   </Avatar>
-                  <ChevronDown className="size-4 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem className="cursor-pointer" onClick={handleProfileSettings}>
+              <DropdownMenuContent align="end" className="w-48 border border-border rounded-lg shadow-lg p-1">
+                <DropdownMenuItem className="cursor-pointer rounded-md hover:bg-muted transition-colors" onClick={handleProfileSettings}>
                   <Settings className="size-4 mr-2" />
                   <span>个人设置</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer text-destructive" onClick={handleLogout}>
+                <DropdownMenuItem className="cursor-pointer text-destructive rounded-md hover:bg-muted transition-colors" onClick={handleLogout}>
                   <LogOut className="size-4 mr-2" />
                   <span>退出登录</span>
                 </DropdownMenuItem>
