@@ -375,39 +375,81 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
 
   let children = []
   let weeklyPlans = []
+  const childId = req.query.childId ? parseInt(req.query.childId as string) : null
 
   if (role === 'parent') {
-    // Parents can view all children in the family
-    children = await prisma.user.findMany({
-      where: {
-        familyId,
-        role: 'child',
-        status: 'active',
-      },
-      select: {
-        id: true,
-        name: true,
-        avatar: true,
-      },
-    })
+    if (childId) {
+      // Parents can view specific child's plans
+      const child = await prisma.user.findUnique({
+        where: {
+          id: childId,
+          familyId,
+          role: 'child',
+          status: 'active',
+        },
+        select: {
+          id: true,
+          name: true,
+          avatar: true,
+        },
+      })
 
-    // Get weekly plans for all children
-    weeklyPlans = await prisma.weeklyPlan.findMany({
-      where: {
-        familyId,
-        weekNo,
-      },
-      include: {
-        task: true,
-        child: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
+      if (!child) {
+        throw new AppError(404, 'Child not found')
+      }
+
+      children = [child]
+
+      // Get weekly plans only for the specific child
+      weeklyPlans = await prisma.weeklyPlan.findMany({
+        where: {
+          childId,
+          weekNo,
+        },
+        include: {
+          task: true,
+          child: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
           },
         },
-      },
-    })
+      })
+    } else {
+      // Parents can view all children in the family
+      children = await prisma.user.findMany({
+        where: {
+          familyId,
+          role: 'child',
+          status: 'active',
+        },
+        select: {
+          id: true,
+          name: true,
+          avatar: true,
+        },
+      })
+
+      // Get weekly plans for all children
+      weeklyPlans = await prisma.weeklyPlan.findMany({
+        where: {
+          familyId,
+          weekNo,
+        },
+        include: {
+          task: true,
+          child: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
+          },
+        },
+      })
+    }
   } else if (role === 'child') {
     // Children can only view their own plans
     const child = await prisma.user.findUnique({

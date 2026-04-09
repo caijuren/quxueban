@@ -71,8 +71,9 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
   '家长主导': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
 };
 
-async function fetchTasks(): Promise<Task[]> {
-  const r = await apiClient.get('/tasks');
+async function fetchTasks(childId?: number): Promise<Task[]> {
+  const params = childId ? { childId } : {};
+  const r = await apiClient.get('/tasks', { params });
   return r.data.data || [];
 }
 async function deleteTask(id: number): Promise<void> {
@@ -122,7 +123,10 @@ export default function TasksPage() {
   }, [activeTab]);
 
   const queryClient = useQueryClient();
-  const { data: tasks = [], isLoading } = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks });
+  const { data: tasks = [], isLoading } = useQuery({ 
+    queryKey: ['tasks', selectedChildId], 
+    queryFn: () => fetchTasks(selectedChildId) 
+  });
 
   const deleteMutation = useMutation({
     mutationFn: deleteTask,
@@ -258,6 +262,7 @@ export default function TasksPage() {
         scheduleRule: formData.scheduleRule,
         weeklyFrequency: formData.weeklyFrequency,
       },
+      appliesTo: selectedChildId ? [selectedChildId] : [],
       // 精细化记录字段
       trackingType: formData.trackingType,
       trackingUnit: formData.trackingUnit,
@@ -300,6 +305,7 @@ export default function TasksPage() {
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
         },
+        appliesTo: selectedChildId ? [selectedChildId] : [],
         // 精细化记录字段
         trackingType: formData.trackingType,
         trackingUnit: formData.trackingUnit,
