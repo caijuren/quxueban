@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -220,8 +221,9 @@ export default function LibraryPage() {
   const [startReadingBook, setStartReadingBook] = useState<Book | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
-  const [importPreview, setImportPreview] = useState<any>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importProgress, setImportProgress] = useState<number>(0);
+  const [importStats, setImportStats] = useState({ imported: 0, skipped: 0 });
   
   // 智能添加相关状态
   const [addMode, setAddMode] = useState<'manual' | 'isbn' | 'search'>('manual');
@@ -519,50 +521,82 @@ export default function LibraryPage() {
     setImporting(true);
     setImportPreview(null);
     setImportResult(null);
+    setImportProgress(0);
+    setImportStats({ imported: 0, skipped: 0 });
 
     try {
       const formData = new FormData();
       formData.append('file', file);
       
-      const { data } = await apiClient.post('/library/import-logs/preview', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      // 使用fetch API来支持流式响应
+      const response = await fetch('http://localhost:3000/api/library/import', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
       });
-      
-      setImportPreview(data.data);
-      setShowImportDialog(true);
+
+      if (!response.ok) {
+        throw new Error('导入失败');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('无法读取响应');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // 处理每一行JSON数据
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const data = JSON.parse(line);
+              if (data.status === 'progress') {
+                // 更新进度
+                setImportProgress(data.data.progress);
+                setImportStats({ 
+                  imported: data.data.imported, 
+                  skipped: data.data.skipped 
+                });
+              } else if (data.status === 'success') {
+                // 导入完成
+                setImportResult(data.data);
+                queryClient.invalidateQueries({ queryKey: ['library'] });
+                queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+                toast.success(data.message);
+              } else if (data.status === 'error') {
+                // 导入错误
+                throw new Error(data.message);
+              }
+            } catch (error) {
+              console.error('解析响应失败:', error);
+            }
+          }
+        }
+
+        // 保留最后一行（可能不完整）
+        buffer = lines[lines.length - 1];
+      }
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
       setImporting(false);
+      setImportProgress(0);
       if (importInputRef.current) {
         importInputRef.current.value = '';
       }
     }
   };
 
-  const executeImport = async () => {
-    if (!importPreview || !selectedChildId) return;
-    
-    setImporting(true);
-    try {
-      const { data } = await apiClient.post('/library/import-logs/execute', {
-        childId: selectedChildId,
-        records: importPreview.records,
-        createNewBooks: true
-      });
-      
-      setImportResult(data.data);
-      setImportPreview(null);
-      setShowImportDialog(false);
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
-      toast.success(`成功导入 ${data.data.imported} 条记录，创建 ${data.data.createdBooks} 本新书`);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setImporting(false);
-    }
-  };
+
 
   // 执行批量标记已读完
   const executeBatchFinish = () => {
@@ -603,12 +637,73 @@ export default function LibraryPage() {
     <div className="space-y-6">
       {/* Page Control Bar */}
       <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Empty space for alignment */}
-          <div className="flex-1"></div>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索书名..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 rounded-lg h-10 bg-muted border-border"
+            />
+          </div>
+          
+          {/* Book Types */}
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-shrink-0">
+            <button
+              onClick={() => setSelectedType('all')}
+              className={cn(
+                'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                selectedType === 'all'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              全部
+            </button>
+            {bookTypes.map((type) => (
+              <button
+                key={type.value}
+                onClick={() => setSelectedType(type.value)}
+                className={cn(
+                  'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                  selectedType === type.value
+                    ? 'bg-primary text-white'
+                    : 'bg-muted text-foreground hover:bg-muted/80'
+                )}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+          
+          {/* Sort */}
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-shrink-0">
+            <span className="text-sm text-muted-foreground py-2">排序：</span>
+            {[
+              { value: '', label: '默认' },
+              { value: 'recently_finished', label: '最近读完' },
+              { value: 'most_pages', label: '页数最多' },
+              { value: 'most_minutes', label: '时长最长' },
+            ].map((sort) => (
+              <button
+                key={sort.value}
+                onClick={() => setSortBy(sort.value)}
+                className={cn(
+                  'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                  sortBy === sort.value
+                    ? 'bg-primary text-white'
+                    : 'bg-muted text-foreground hover:bg-muted/80'
+                )}
+              >
+                {sort.label}
+              </button>
+            ))}
+          </div>
           
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             <input
               ref={importInputRef}
               type="file"
@@ -631,17 +726,30 @@ export default function LibraryPage() {
               <span className="text-sm">{batchMode ? '退出批量' : '批量管理'}</span>
             </Button>
             <Button
-              variant="outline"
-              onClick={() => importInputRef.current?.click()}
-              disabled={importing}
-              className="h-10 rounded-lg"
-            >
-              <Upload className="w-4 h-4 mr-1.5" />
-              <span className="text-sm">{importing ? '处理中...' : '批量导入'}</span>
-            </Button>
+                variant="outline"
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+                className="h-10 rounded-lg relative"
+              >
+                <Upload className="w-4 h-4 mr-1.5" />
+                <span className="text-sm">{importing ? '处理中...' : '批量导入'}</span>
+                {importing && (
+                  <div className="absolute -bottom-1 left-0 right-0 h-1 bg-primary/20 rounded-b-lg">
+                    <div 
+                      className="h-full bg-primary transition-all duration-300 rounded-b-lg" 
+                      style={{ width: `${importProgress}%` }}
+                    />
+                  </div>
+                )}
+              </Button>
+              {importing && (
+                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                  进度: {importProgress}% ({importStats.imported} 导入, {importStats.skipped} 跳过)
+                </div>
+              )}
             <Button
               onClick={() => setShowAddForm(true)}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm"
             >
               <Plus className="size-4 mr-1.5" />
               <span className="text-sm">添加图书</span>
@@ -672,7 +780,7 @@ export default function LibraryPage() {
 
       {/* P1-6: 批量操作栏 */}
       {batchMode && (
-        <Card className="border-2 border-indigo-200 bg-indigo-50 rounded-2xl">
+        <Card className="border-2 border-indigo-200 bg-indigo-50 rounded-lg">
           <CardContent className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -700,7 +808,7 @@ export default function LibraryPage() {
                 <Button
                   onClick={() => setShowBatchDialog(true)}
                   disabled={selectedBookIds.size === 0 && !batchReadStage}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg"
                 >
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                   标记已读完
@@ -712,167 +820,89 @@ export default function LibraryPage() {
       )}
 
       {/* Stats Cards - 阅读成长中心 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-3">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white border border-border rounded-lg p-4 shadow-sm"
+          transition={{ delay: 0 * 0.1 }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">已读书籍</p>
-              <p className="text-2xl font-semibold text-foreground mt-1">
-                {stats?.finishedBooks || 0}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">本</p>
-            </div>
-            <div className="w-10 h-10 rounded flex items-center justify-center bg-success/10">
-              <span className="text-xl">📚</span>
-            </div>
-          </div>
+          <Card className="border border-border shadow-sm rounded-lg border-success h-full">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+              <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-success/10 text-success">
+                <span className="text-lg">📚</span>
+              </div>
+              <p className="text-xl font-bold text-foreground">{stats?.finishedBooks || 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">已读书籍</p>
+            </CardContent>
+          </Card>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white border border-border rounded-lg p-4 shadow-sm"
+          transition={{ delay: 1 * 0.1 }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">总页数</p>
-              <p className="text-2xl font-semibold text-foreground mt-1">
-                {stats?.totalPages || 0}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">页</p>
-            </div>
-            <div className="w-10 h-10 rounded flex items-center justify-center bg-primary/10">
-              <span className="text-xl">📄</span>
-            </div>
-          </div>
+          <Card className="border border-border shadow-sm rounded-lg border-primary h-full">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+              <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-primary/10 text-primary">
+                <span className="text-lg">📄</span>
+              </div>
+              <p className="text-xl font-bold text-foreground">{stats?.totalPages || 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">总页数</p>
+            </CardContent>
+          </Card>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white border border-border rounded-lg p-4 shadow-sm"
+          transition={{ delay: 2 * 0.1 }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">总字数</p>
-              <p className="text-2xl font-semibold text-foreground mt-1">
-                {formatWordCount(stats?.totalWords)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">字</p>
-            </div>
-            <div className="w-10 h-10 rounded flex items-center justify-center bg-warning/10">
-              <span className="text-xl">✍️</span>
-            </div>
-          </div>
+          <Card className="border border-border shadow-sm rounded-lg border-warning h-full">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+              <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-warning/10 text-warning">
+                <span className="text-lg">✍️</span>
+              </div>
+              <p className="text-xl font-bold text-foreground">{formatWordCount(stats?.totalWords)}</p>
+              <p className="text-xs text-muted-foreground mt-1">总字数</p>
+            </CardContent>
+          </Card>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white border border-border rounded-lg p-4 shadow-sm"
+          transition={{ delay: 3 * 0.1 }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">阅读时长</p>
-              <p className="text-2xl font-semibold text-foreground mt-1">
-                {stats?.totalHours || 0}<span className="text-sm">h</span> {stats?.remainingMinutes || 0}<span className="text-sm">m</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">共 {stats?.totalMinutes || 0} 分钟</p>
-            </div>
-            <div className="w-10 h-10 rounded flex items-center justify-center bg-primary/10">
-              <span className="text-xl">⏱️</span>
-            </div>
-          </div>
+          <Card className="border border-border shadow-sm rounded-lg border-info h-full">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+              <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-info/10 text-info">
+                <span className="text-lg">⏱️</span>
+              </div>
+              <p className="text-sm font-bold text-foreground">{stats?.totalHours || 0}h {stats?.remainingMinutes || 0}m</p>
+              <p className="text-xs text-muted-foreground mt-1">阅读时长</p>
+            </CardContent>
+          </Card>
         </motion.div>
-      </div>
-
-      {/* Search, Filter and Sort */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="搜索书名..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 rounded-lg h-9 bg-muted border-border"
-            />
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <button
-              onClick={() => setSelectedType('all')}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
-                selectedType === 'all'
-                  ? 'bg-primary text-white'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              全部
-            </button>
-            {bookTypes.map((type) => (
-              <button
-                key={type.value}
-                onClick={() => setSelectedType(type.value)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
-                  selectedType === type.value
-                    ? 'bg-primary text-white'
-                    : 'bg-muted text-foreground hover:bg-muted/80'
-                )}
-              >
-                {type.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* 排序按钮 */}
-        <div className="flex gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground py-2">排序：</span>
-          {[
-            { value: '', label: '默认' },
-            { value: 'recently_finished', label: '最近读完' },
-            { value: 'most_pages', label: '页数最多' },
-            { value: 'most_minutes', label: '时长最长' },
-          ].map((sort) => (
-            <button
-              key={sort.value}
-              onClick={() => setSortBy(sort.value)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-                sortBy === sort.value
-                  ? 'bg-primary text-white'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              {sort.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Books Grid */}
       {books.length === 0 ? (
-        <div className="text-center py-16 bg-muted rounded-lg border border-dashed border-border">
-          <div className="w-16 h-16 bg-primary/10 rounded flex items-center justify-center mx-auto mb-4">
-            <LibraryIcon className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <h3 className="font-semibold text-foreground text-lg">图书馆还是空的</h3>
-          <p className="text-muted-foreground mt-1">添加第一本书开始阅读之旅</p>
-          <Button
-            onClick={() => setShowAddForm(true)}
-            className="mt-4 rounded-lg bg-primary text-white"
-          >
-            添加图书
-          </Button>
-        </div>
+        <Card className="border border-dashed border-border rounded-lg overflow-hidden">
+          <CardContent className="text-center py-16 bg-muted">
+            <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <LibraryIcon className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="font-semibold text-foreground text-lg">图书馆还是空的</h3>
+            <p className="text-muted-foreground mt-1">添加第一本书开始阅读之旅</p>
+            <Button
+              onClick={() => setShowAddForm(true)}
+              className="mt-4 rounded-lg bg-primary text-white"
+            >
+              添加图书
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {books.map((book, index) => (
@@ -905,7 +935,7 @@ export default function LibraryPage() {
                 </div>
               )}
               
-              <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-border hover:shadow-md transition-all duration-300">
+              <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300">
                 {/* Cover */}
                 <div 
                   className="aspect-[3/4] relative bg-muted cursor-pointer"
@@ -926,25 +956,25 @@ export default function LibraryPage() {
                   {/* Character Tag */}
                   {book.characterTag && (
                     <div className="absolute top-2 right-2">
-                      <span className="text-xs bg-primary text-white px-2 py-0.5 rounded">
+                      <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded">
                         {book.characterTag}
-                      </span>
+                      </Badge>
                     </div>
                   )}
                   {/* Reading Badge */}
                   {book.activeReadings?.length > 0 && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="text-xs bg-success text-white px-2 py-0.5 rounded">
+                      <Badge className="text-xs bg-success text-white px-2 py-0.5 rounded">
                         在读中
-                      </span>
+                      </Badge>
                     </div>
                   )}
                   {/* Reading State Badge */}
                   {book.readState?.status === 'finished' && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="text-xs bg-primary text-white px-2 py-0.5 rounded">
+                      <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded">
                         已读完
-                      </span>
+                      </Badge>
                     </div>
                   )}
                   {/* Hover Actions - 非批量模式才显示 */}
@@ -979,7 +1009,7 @@ export default function LibraryPage() {
                 </div>
 
                 {/* Info */}
-                <div className="p-3">
+                <CardContent className="p-3">
                   <h4 className="font-medium text-foreground text-sm truncate">
                     {formatBookName(book.name)}
                   </h4>
@@ -994,8 +1024,8 @@ export default function LibraryPage() {
                       已读{book.readLogCount || 0}次
                     </span>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
               {/* More Actions - 非批量模式才显示 */}
               {!batchMode && (
@@ -1374,37 +1404,7 @@ export default function LibraryPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Import Preview Dialog */}
-      <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <AlertDialogContent className="max-w-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>导入预览</AlertDialogTitle>
-            <AlertDialogDescription>
-              找到 {importPreview?.totalRecords || 0} 条记录，其中 {importPreview?.matchedCount || 0} 条可匹配现有书籍，{importPreview?.willCreateCount || 0} 条将创建新书
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="max-h-60 overflow-auto my-4">
-            {importPreview?.records?.slice(0, 20).map((record: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-2 py-2 border-b border-gray-100 text-sm">
-                <span className={cn(
-                  "px-2 py-0.5 rounded text-xs",
-                  record.matchStatus === 'matched' ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                )}>
-                  {record.matchStatus === 'matched' ? '匹配' : '新建'}
-                </span>
-                <span className="font-medium">{record.bookName}</span>
-                <span className="text-gray-400">{record.pages}页</span>
-              </div>
-            ))}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowImportDialog(false)}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={executeImport} disabled={importing}>
-              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : '确认导入'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
 
       {/* P1-6: Batch Finish Dialog */}
       <AlertDialog open={showBatchDialog} onOpenChange={setShowBatchDialog}>

@@ -27,6 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import { ChildTabs } from './ChildTabs';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import UserProfileModal from '@/components/UserProfileModal';
 
 const navItems = [
   { path: '/parent', label: '概览', icon: LayoutDashboard },
@@ -52,6 +53,7 @@ const overlayVariants = {
 export default function ParentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const { user, logout, isAuthenticated, isInitializing } = useAuth();
   const { selectedChild } = useSelectedChild();
   const navigate = useNavigate();
@@ -93,6 +95,10 @@ export default function ParentLayout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleProfileSettings = () => {
+    setProfileModalOpen(true);
   };
 
   const closeSidebar = () => setSidebarOpen(false);
@@ -159,25 +165,18 @@ export default function ParentLayout() {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 p-1 rounded-lg hover:bg-muted transition-colors">
+                <button className="flex items-center gap-1 p-1 rounded-lg hover:bg-muted transition-colors">
                   <Avatar className="size-8 ring-2 ring-white shadow-sm">
                     <AvatarImage src={user?.avatar} />
                     <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-sm font-medium">
                       {user?.name?.charAt(0) || 'P'}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-medium text-foreground hidden md:inline">
-                    {user?.name || '家长'}
-                  </span>
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <div className="p-2 border-b border-border">
-                  <p className="font-medium text-foreground text-sm">{user?.name || '家长'}</p>
-                  <p className="text-xs text-muted-foreground">在线</p>
-                </div>
-                <DropdownMenuItem className="cursor-pointer">
+                <DropdownMenuItem className="cursor-pointer" onClick={handleProfileSettings}>
                   <Settings className="size-4 mr-2" />
                   <span>个人设置</span>
                 </DropdownMenuItem>
@@ -271,6 +270,12 @@ export default function ParentLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* User Profile Modal */}
+      <UserProfileModal 
+        open={profileModalOpen} 
+        onOpenChange={setProfileModalOpen} 
+      />
     </div>
   );
 }

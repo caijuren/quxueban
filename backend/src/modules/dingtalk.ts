@@ -178,7 +178,7 @@ dingtalkRouter.post('/tasks/:taskId/push-to-dingtalk', async (req: AuthRequest, 
 
   // Get task information
   const task = await prisma.task.findFirst({
-    where: { id: parseInt(taskId), familyId },
+    where: { id: parseInt(taskId as string), familyId },
   })
 
   if (!task) {

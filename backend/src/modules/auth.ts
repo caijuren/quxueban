@@ -703,3 +703,76 @@ authRouter.post('/config', authMiddleware, requireRole('parent'), async (req: Au
     },
   })
 })
+
+/**
+ * POST /avatar - Upload user avatar
+ * Auth required
+ */
+authRouter.post('/avatar', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!
+  const { avatar } = req.body
+
+  if (!avatar) {
+    throw new AppError(400, '头像不能为空')
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { avatar },
+  })
+
+  res.json({
+    status: 'success',
+    message: '头像上传成功',
+    data: {
+      avatar: updatedUser.avatar,
+    },
+  })
+})
+
+/**
+ * PUT /password - Update user password
+ * Auth required
+ */
+authRouter.put('/password', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!
+  const { oldPassword, newPassword } = req.body
+
+  if (!oldPassword || !newPassword) {
+    throw new AppError(400, '原密码和新密码不能为空')
+  }
+
+  if (newPassword.length < 6) {
+    throw new AppError(400, '密码至少6位')
+  }
+
+  // Find user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  })
+
+  if (!user) {
+    throw new AppError(404, '用户不存在')
+  }
+
+  // Verify old password
+  const isPasswordValid = await bcrypt.compare(oldPassword, user.passwordHash)
+
+  if (!isPasswordValid) {
+    throw new AppError(401, '原密码错误')
+  }
+
+  // Hash new password
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+
+  // Update password
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  })
+
+  res.json({
+    status: 'success',
+    message: '密码修改成功',
+  })
+})
