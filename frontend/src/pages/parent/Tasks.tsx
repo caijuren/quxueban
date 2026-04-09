@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send } from 'lucide-react';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -77,6 +78,9 @@ async function fetchTasks(): Promise<Task[]> {
 async function deleteTask(id: number): Promise<void> {
   await apiClient.delete('/tasks/' + id);
 }
+async function pushTaskToDingtalk(taskId: number, childId: number): Promise<void> {
+  await apiClient.post(`/dingtalk/tasks/${taskId}/push-to-dingtalk`, { childId });
+}
 
 export default function TasksPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -86,6 +90,7 @@ export default function TasksPage() {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  const { selectedChildId, selectedChild } = useSelectedChild();
   const [formData, setFormData] = useState({
     name: '',
     category: '校内巩固' as TaskCategory,
@@ -154,6 +159,14 @@ export default function TasksPage() {
       setEditDialogOpen(false);
     },
     onError: (e: any) => toast.error(getErrorMessage(e))
+  });
+
+  // Push task to DingTalk mutation
+  const pushTaskToDingtalkMutation = useMutation({
+    mutationFn: ({ taskId, childId }: { taskId: number; childId: number }) =>
+      pushTaskToDingtalk(taskId, childId),
+    onSuccess: () => toast.success('任务已推送至钉钉'),
+    onError: (error) => toast.error(getErrorMessage(error))
   });
 
   const resetForm = () => {
@@ -342,6 +355,14 @@ export default function TasksPage() {
       });
       return { type, tasks: typeTasks };
     }).filter(group => group.tasks.length > 0);
+  };
+
+  const handlePushTaskToDingtalk = (taskId: number) => {
+    if (!selectedChildId) {
+      toast.error('请先选择一个孩子');
+      return;
+    }
+    pushTaskToDingtalkMutation.mutate({ taskId, childId: selectedChildId });
   };
 
   const renderTags = (task: Task) => {
@@ -582,6 +603,12 @@ export default function TasksPage() {
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => handlePushTaskToDingtalk(task.id)}
+                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600"
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
                                 className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
                               >
@@ -655,6 +682,12 @@ export default function TasksPage() {
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => handlePushTaskToDingtalk(task.id)}
+                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600"
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
                                 className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
                               >
@@ -726,6 +759,12 @@ export default function TasksPage() {
                                 className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
                               >
                                 <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handlePushTaskToDingtalk(task.id)}
+                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600"
+                              >
+                                <Send className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}

@@ -156,7 +156,7 @@ export function AdvancedExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg rounded-3xl border-0 shadow-2xl">
+      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <Download className="w-5 h-5 text-purple-500" />
@@ -174,21 +174,21 @@ export function AdvancedExportDialog({
                 <Users className="w-4 h-4" />
                 选择孩子
               </Label>
-              <Select
-                value={config.childId?.toString() || ''}
-                onValueChange={(value) => setConfig({ ...config, childId: parseInt(value) })}
-              >
-                <SelectTrigger className="rounded-xl h-11 border-gray-200">
-                  <SelectValue placeholder="选择孩子" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  {childOptions.map((child) => (
-                    <SelectItem key={child.id} value={child.id.toString()}>
-                      {child.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                {childOptions.map((child) => (
+                  <button
+                    key={child.id}
+                    onClick={() => setConfig({ ...config, childId: child.id })}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      config.childId === child.id
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {child.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -200,28 +200,23 @@ export function AdvancedExportDialog({
             <RadioGroup
               value={config.range}
               onValueChange={(value) => setConfig({ ...config, range: value as 'current' | 'last' | 'custom' })}
-              className="space-y-2"
+              className="grid grid-cols-3 gap-3"
             >
               <div>
                 <RadioGroupItem value="current" id="range-current" className="peer sr-only" />
                 <Label
                   htmlFor="range-current"
-                  className="flex items-center justify-between rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all h-full"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                      <FileSpreadsheet className="w-4 h-4 text-purple-600" />
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <FileSpreadsheet className="w-3 h-3 text-purple-600" />
                     </div>
-                    <div>
-                      <span className="text-sm font-medium block">本周</span>
-                      <span className="text-xs text-gray-500">
-                        {currentWeekStart ? getWeekLabel(currentWeekStart) : ''}
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium">本周</span>
                   </div>
-                  <div className="w-5 h-5 rounded-full border-2 border-gray-300 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-500 flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 rounded-full bg-white hidden peer-data-[state=checked]:block" />
-                  </div>
+                  <span className="text-xs text-gray-500 text-center w-full">
+                    {currentWeekStart ? getWeekLabel(currentWeekStart) : ''}
+                  </span>
                 </Label>
               </div>
 
@@ -229,22 +224,17 @@ export function AdvancedExportDialog({
                 <RadioGroupItem value="last" id="range-last" className="peer sr-only" />
                 <Label
                   htmlFor="range-last"
-                  className="flex items-center justify-between rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all h-full"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                      <FileSpreadsheet className="w-4 h-4 text-gray-600" />
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <FileSpreadsheet className="w-3 h-3 text-gray-600" />
                     </div>
-                    <div>
-                      <span className="text-sm font-medium block">上周</span>
-                      <span className="text-xs text-gray-500">
-                        {currentWeekStart ? getWeekLabel(addWeeks(currentWeekStart, -1)) : ''}
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium">上周</span>
                   </div>
-                  <div className="w-5 h-5 rounded-full border-2 border-gray-300 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-500 flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 rounded-full bg-white hidden peer-data-[state=checked]:block" />
-                  </div>
+                  <span className="text-xs text-gray-500 text-center w-full">
+                    {currentWeekStart ? getWeekLabel(addWeeks(currentWeekStart, -1)) : ''}
+                  </span>
                 </Label>
               </div>
 
@@ -252,100 +242,93 @@ export function AdvancedExportDialog({
                 <RadioGroupItem value="custom" id="range-custom" className="peer sr-only" />
                 <Label
                   htmlFor="range-custom"
-                  className="flex items-center justify-between rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all h-full relative"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                      <Calendar className="w-4 h-4 text-blue-600" />
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <Calendar className="w-3 h-3 text-blue-600" />
                     </div>
-                    <div>
-                      <span className="text-sm font-medium block">自定义日期</span>
-                      <span className="text-xs text-gray-500">
-                        {config.customStartDate && config.customEndDate
-                          ? `${format(config.customStartDate, 'M月d日')} - ${format(config.customEndDate, 'M月d日')}`
-                          : '选择日期范围'}
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium">自定义</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full border-2 border-gray-300 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-500 flex items-center justify-center">
-                      <div className="w-2.5 h-2.5 rounded-full bg-white hidden peer-data-[state=checked]:block" />
-                    </div>
-                    {config.range === 'custom' && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <ChevronDown className="w-4 h-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl" align="end">
-                          <div className="p-3">
-                            <div className="space-y-3">
-                              <div>
-                                <Label className="text-xs text-gray-500 mb-1 block">开始日期</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className="w-full justify-start text-left font-normal"
-                                    >
-                                      {config.customStartDate ? format(config.customStartDate, 'yyyy-MM-dd') : '选择日期'}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl">
-                                    <DayPickerCalendar
-                                      mode="single"
-                                      selected={config.customStartDate}
-                                      onSelect={(date) => setConfig({ ...config, customStartDate: date })}
-                                      locale={zhCN}
-                                      className="p-3"
-                                      classNames={{
-                                        day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
-                                        day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
-                                        nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
-                                      }}
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                              <div>
-                                <Label className="text-xs text-gray-500 mb-1 block">结束日期</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className="w-full justify-start text-left font-normal"
-                                    >
-                                      {config.customEndDate ? format(config.customEndDate, 'yyyy-MM-dd') : '选择日期'}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl">
-                                    <DayPickerCalendar
-                                      mode="single"
-                                      selected={config.customEndDate}
-                                      onSelect={(date) => setConfig({ ...config, customEndDate: date })}
-                                      locale={zhCN}
-                                      className="p-3"
-                                      classNames={{
-                                        day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
-                                        day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
-                                        nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
-                                      }}
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
+                  <span className="text-xs text-gray-500 text-center w-full">
+                    {config.customStartDate && config.customEndDate
+                      ? `${format(config.customStartDate, 'M月d日')} - ${format(config.customEndDate, 'M月d日')}`
+                      : '选择日期'}
+                  </span>
+                  {config.range === 'custom' && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute top-2 right-2 h-6 w-6 p-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl" align="end">
+                        <div className="p-3">
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-xs text-gray-500 mb-1 block">开始日期</Label>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className="w-full justify-start text-left font-normal"
+                                  >
+                                    {config.customStartDate ? format(config.customStartDate, 'yyyy-MM-dd') : '选择日期'}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl">
+                                  <DayPickerCalendar
+                                    mode="single"
+                                    selected={config.customStartDate}
+                                    onSelect={(date) => setConfig({ ...config, customStartDate: date })}
+                                    locale={zhCN}
+                                    className="p-3"
+                                    classNames={{
+                                      day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
+                                      day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
+                                      nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
+                                    }}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-gray-500 mb-1 block">结束日期</Label>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className="w-full justify-start text-left font-normal"
+                                  >
+                                    {config.customEndDate ? format(config.customEndDate, 'yyyy-MM-dd') : '选择日期'}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-0 shadow-xl rounded-2xl">
+                                  <DayPickerCalendar
+                                    mode="single"
+                                    selected={config.customEndDate}
+                                    onSelect={(date) => setConfig({ ...config, customEndDate: date })}
+                                    locale={zhCN}
+                                    className="p-3"
+                                    classNames={{
+                                      day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
+                                      day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
+                                      nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
+                                    }}
+                                  />
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </div>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </Label>
               </div>
             </RadioGroup>

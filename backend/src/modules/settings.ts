@@ -3,8 +3,38 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import fetch from 'node-fetch'
+import crypto from 'crypto'
 
 export const settingsRouter: Router = Router()
+
+/**
+ * Generate DingTalk signature
+ * @param timestamp - Current timestamp in milliseconds
+ * @param secret - DingTalk robot secret
+ * @returns Base64 encoded signature
+ */
+function generateDingTalkSignature(timestamp: number, secret: string): string {
+  const stringToSign = `${timestamp}\n${secret}`
+  const hmac = crypto.createHmac('sha256', secret)
+  hmac.update(stringToSign)
+  return encodeURIComponent(hmac.digest('base64'))
+}
+
+/**
+ * Append signature to webhook URL
+ * @param webhookUrl - Original webhook URL
+ * @param secret - DingTalk robot secret
+ * @returns URL with signature parameters
+ */
+function appendSignatureToUrl(webhookUrl: string, secret: string): string {
+  if (!secret) return webhookUrl
+  
+  const timestamp = Date.now()
+  const sign = generateDingTalkSignature(timestamp, secret)
+  
+  const separator = webhookUrl.includes('?') ? '&' : '?'
+  return `${webhookUrl}${separator}timestamp=${timestamp}&sign=${sign}`
+}
 
 // All routes require authentication and parent role
 settingsRouter.use(authMiddleware)
@@ -84,33 +114,80 @@ settingsRouter.put('/', async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /test-webhook - Test DingTalk webhook
- * Body: { webhook }
+ * Body: { webhook } or { childId }
  */
 settingsRouter.post('/test-webhook', async (req: AuthRequest, res: Response) => {
-  const { webhook } = req.body
+  const { familyId } = req.user!
+  const { webhook, childId } = req.body
 
-  if (!webhook) {
+  let webhookUrl = webhook
+  let dingtalkSecret = ''
+
+  // If childId is provided, get webhook from child's config
+  if (childId && !webhook) {
+    const child = await prisma.user.findFirst({
+      where: { id: childId, familyId, role: 'child' },
+    })
+
+    if (!child) {
+      throw new AppError(404, '孩子不存在')
+    }
+
+    webhookUrl = child.dingtalkWebhookUrl
+    dingtalkSecret = child.dingtalkSecret || ''
+
+    if (!webhookUrl) {
+      throw new AppError(400, '该孩子尚未配置钉钉Webhook地址')
+    }
+  }
+
+  if (!webhookUrl) {
     throw new AppError(400, '请输入webhook地址')
   }
 
+  // Append signature if secret is available
+  const signedUrl = appendSignatureToUrl(webhookUrl, dingtalkSecret)
+
   // Test webhook by sending a test message
   try {
-    const response = await fetch(webhook, {
+    console.log('[Test Webhook] Sending to:', webhookUrl)
+    console.log('[Test Webhook] With signature:', signedUrl !== webhookUrl)
+    
+    const requestBody = {
+      msgtype: 'markdown',
+      markdown: {
+        title: '测试消息',
+        text: '# 测试消息\n> 这是一条测试消息，用于验证钉钉机器人配置是否正确\n\n测试成功！✅',
+      },
+    }
+    console.log('[Test Webhook] Request body:', JSON.stringify(requestBody))
+    
+    const response = await fetch(signedUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        msgtype: 'markdown',
-        markdown: {
-          title: '测试消息',
-          text: '# 测试消息\n> 这是一条测试消息，用于验证钉钉机器人配置是否正确\n\n测试成功！✅',
-        },
-      }),
+      body: JSON.stringify(requestBody),
     })
 
+    const responseText = await response.text()
+    console.log('[Test Webhook] Response status:', response.status)
+    console.log('[Test Webhook] Response body:', responseText)
+
     if (!response.ok) {
-      throw new Error(`DingTalk API error: ${await response.text()}`)
+      throw new Error(`钉钉API返回错误: ${responseText}`)
+    }
+
+    // Parse response to check if DingTalk returned an error code
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+    } catch (e) {
+      responseData = null
+    }
+    
+    if (responseData && responseData.errcode !== 0) {
+      throw new Error(`钉钉API错误: ${responseData.errmsg || '未知错误'} (错误码: ${responseData.errcode})`)
     }
 
     res.json({
@@ -118,7 +195,7 @@ settingsRouter.post('/test-webhook', async (req: AuthRequest, res: Response) => 
       message: '测试消息发送成功',
     })
   } catch (error: any) {
-    console.error('Test webhook error:', error)
+    console.error('[Test Webhook] Error:', error)
     throw new AppError(500, `测试失败: ${error.message}`)
   }
 })

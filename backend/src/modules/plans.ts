@@ -498,7 +498,6 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           assignedDays: assignedDays,
           subject:subject,
           difficulty: (p.task.tags as any)?.difficulty || 'basic',
-          isTemporary: (p.task.tags as any)?.isTemporary || false,
           scheduleRule: scheduleRule,
           target: p.target,
           progress: p.progress,
@@ -655,131 +654,7 @@ plansRouter.get('/history', async (req: AuthRequest, res: Response) => {
   })
 })
 
-/**
- * POST /temp-task - Create a temporary task
- * Body: { name, subject, due, urgency, childId }
- */
-plansRouter.post('/temp-task', async (req: AuthRequest, res: Response) => {
-  try {
-    const { familyId, role } = req.user!
-    const { name, subject, due, urgency, childId } = req.body
 
-    console.log('Creating temporary task:', { name, subject, due, urgency, childId })
-
-    // Only parents can create temporary tasks
-    if (role !== 'parent') {
-      throw new AppError(403, 'Only parents can create temporary tasks')
-    }
-
-    if (!name || !childId) {
-      throw new AppError(400, 'Missing required fields: name, childId')
-    }
-
-    // Validate child exists
-    console.log('Finding child with id:', childId, 'and familyId:', familyId)
-    const child = await prisma.user.findFirst({
-      where: { id: childId, familyId, role: 'child' },
-    })
-
-    console.log('Found child:', child)
-    if (!child) {
-      throw new AppError(404, 'Child not found')
-    }
-
-    // Create temporary task
-    console.log('Creating task...')
-    try {
-      const task = await prisma.task.create({
-        data: {
-          familyId,
-          name,
-          category: '临时任务',
-          type: 'flexible',
-          timePerUnit: 30, // Default duration
-          weeklyRule: JSON.stringify({ scheduleRule: 'flexible' }),
-          tags: JSON.stringify({
-            subject: subject || 'other',
-            urgency: urgency || 'normal',
-            isTemporary: true,
-          }),
-          isActive: true,
-        },
-      })
-
-      console.log('Created task:', task)
-
-      // Create weekly plan for the task
-      const today = new Date()
-      const weekNo = getWeekNo(today)
-
-      // Determine assigned days based on due date
-      let assignedDays: number[] = []
-      const dayOfWeek = today.getDay() // 0=Sunday, 6=Saturday
-
-      switch (due) {
-        case 'today':
-          assignedDays = [dayOfWeek]
-          break
-        case 'tomorrow':
-          assignedDays = [(dayOfWeek + 1) % 7]
-          break
-        case 'weekend':
-          // This weekend (Saturday and Sunday)
-          if (dayOfWeek === 0) { // Sunday
-            assignedDays = [0, 6] // Sunday and Saturday
-          } else if (dayOfWeek === 6) { // Saturday
-            assignedDays = [6, 0] // Saturday and Sunday
-          } else {
-            // Find next Saturday and Sunday
-            assignedDays = [6, 0] // Saturday and Sunday
-          }
-          break
-        default:
-          assignedDays = [dayOfWeek] // Default to today
-      }
-
-      console.log('Assigned days:', assignedDays)
-
-      console.log('Creating weekly plan...')
-      try {
-        const weeklyPlan = await prisma.weeklyPlan.create({
-        data: {
-          familyId,
-          childId,
-          taskId: task.id,
-          target: 1,
-          progress: 0,
-          weekNo,
-          status: 'active',
-        },
-      })
-
-        console.log('Created weekly plan:', weeklyPlan)
-
-        res.status(201).json({
-          status: 'success',
-          message: '临时任务已创建',
-          data: {
-            task,
-            weeklyPlan,
-          },
-        })
-      } catch (weekPlanError: any) {
-        console.error('Error creating weekly plan:', weekPlanError)
-        throw new AppError(500, `创建周计划失败: ${weekPlanError.message}`)
-      }
-    } catch (taskError: any) {
-      console.error('Error creating task:', taskError)
-      throw new AppError(500, `创建任务失败: ${taskError.message}`)
-    }
-  } catch (error: any) {
-    console.error('Error creating temporary task:', error)
-    if (error instanceof AppError) {
-      throw error
-    }
-    throw new AppError(500, `创建临时任务失败: ${error.message}`)
-  }
-})
 
 /**
  * POST /modify - Modify weekly plan (remove/move task on specific day)

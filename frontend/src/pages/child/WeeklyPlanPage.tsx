@@ -23,7 +23,6 @@ interface TaskAllocation {
   progress: number;
   subject: string | null;
   difficulty: string | null;
-  isTemporary: boolean;
   scheduleRule: string;
 }
 
@@ -85,7 +84,6 @@ function TaskDetailModal({ task, weekStartDate, onClose }: TaskDetailProps) {
         {/* 简洁标题栏 */}
         <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white'>
           <div className='flex items-center gap-3'>
-            {task.isTemporary && <span className='text-amber-500 text-lg'>⚡</span>}
             <h2 className='text-lg font-semibold text-gray-900'>{task.taskName}</h2>
           </div>
           <button 
@@ -110,11 +108,7 @@ function TaskDetailModal({ task, weekStartDate, onClose }: TaskDetailProps) {
                 {diffLabel(task.difficulty)}
               </span>
             )}
-            {task.isTemporary && (
-              <span className='text-sm px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200'>
-                临时任务
-              </span>
-            )}
+
           </div>
 
           {/* 信息列表 */}
@@ -423,8 +417,7 @@ export default function WeeklyPlanPage() {
                             >
                               <div className="p-2.5 flex items-center gap-2 pr-3 rounded-2xl hover:bg-gray-50 transition-all duration-300" title={taskItem.taskName}>
                                 <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDotColor())} />
-                                <span className={cn('text-sm font-medium truncate', taskItem.isTemporary && 'text-amber-500 font-bold', !hasAssignedDays && 'text-gray-400')}>
-                                  {taskItem.isTemporary && <span className="mr-0.5">⚡</span>}
+                                <span className={cn('text-sm font-medium truncate', !hasAssignedDays && 'text-gray-400')}>
                                   {taskItem.taskName}
                                   {!hasAssignedDays && <span className="ml-1 text-xs text-gray-400">(未分配)</span>}
                                 </span>
@@ -438,30 +431,18 @@ export default function WeeklyPlanPage() {
                                   <div key={i} className={cn('p-2.5 flex items-center justify-center rounded-2xl min-h-[40px] transition-all duration-300', isToday(weekDates[i]) && 'bg-purple-50/70 hover:bg-purple-100/70')}>
                                     <div className="relative">
                                       {isAssigned ? (
-                                        taskItem.isTemporary ? (
-                                          <motion.button 
-                                            onClick={() => setSelectedTask(taskItem)} 
-                                            className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm bg-amber-500')} 
-                                            title={`${taskItem.taskName} - 临时任务`}
-                                            whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' }}
-                                            whileTap={{ scale: 0.95 }}
-                                          >
-                                            <span className="text-white text-xs">⚡</span>
-                                          </motion.button>
-                                        ) : (
-                                          <motion.button 
-                                            onClick={() => setSelectedTask(taskItem)} 
-                                            className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} 
-                                            title={`${taskItem.taskName} - 点击查看详情`}
-                                            whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
-                                            whileTap={{ scale: 0.95 }}
-                                          >
-                                            {isCompleted && <span className="text-white text-xs">✓</span>}
-                                            {taskItem.difficulty === 'challenge' && !isCompleted && (
-                                              <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
-                                            )}
-                                          </motion.button>
-                                        )
+                                        <motion.button 
+                                          onClick={() => setSelectedTask(taskItem)} 
+                                          className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} 
+                                          title={`${taskItem.taskName} - 点击查看详情`}
+                                          whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                                          whileTap={{ scale: 0.95 }}
+                                        >
+                                          {isCompleted && <span className="text-white text-xs">✓</span>}
+                                          {taskItem.difficulty === 'challenge' && !isCompleted && (
+                                            <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
+                                          )}
+                                        </motion.button>
                                       ) : (
                                         <div className="w-6 h-6 rounded-full bg-gray-200 shadow-sm"></div>
                                       )}
