@@ -367,32 +367,51 @@ libraryRouter.post('/import', upload.single('file'), async (req: AuthRequest, re
 })
 
 /**
- * GET /fetch-by-isbn/:isbn - Fetch book info by ISBN from Douban API
+ * GET /fetch-by-isbn/:isbn - Fetch book info by ISBN from Google Books API
  */
 libraryRouter.get('/fetch-by-isbn/:isbn', async (req: AuthRequest, res: Response) => {
   const { isbn } = req.params
 
   try {
-    // Call Douban API to get book info
-    const response = await fetch(`https://api.douban.com/v2/book/isbn/${isbn}`)
-    if (!response.ok) {
-      throw new Error('Failed to fetch book info from Douban')
+    // Add timeout to fetch - 5 seconds
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+    try {
+      // Call Google Books API to get book info
+      const response = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&langRestrict=zh`,
+        { signal: controller.signal }
+      )
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch book info from Google Books')
+      }
+
+      const searchData = await response.json() as any
+      const bookData = searchData.items?.[0]?.volumeInfo
+
+      if (!bookData) {
+        throw new Error('Book not found')
+      }
+
+      // Transform the data to match our Book model
+      const transformedData = {
+        name: bookData.title || '',
+        author: bookData.authors?.join(', ') || '',
+        coverUrl: bookData.imageLinks?.thumbnail || bookData.imageLinks?.smallThumbnail || '',
+        totalPages: bookData.pageCount || 0,
+      }
+
+      res.json({
+        status: 'success',
+        data: transformedData,
+      })
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      throw fetchError
     }
-
-    const bookData = await response.json() as any
-
-    // Transform the data to match our Book model
-    const transformedData = {
-      name: bookData.title || '',
-      author: bookData.author?.join(', ') || '',
-      coverUrl: bookData.image || '',
-      totalPages: bookData.pages ? parseInt(bookData.pages) : 0,
-    }
-
-    res.json({
-      status: 'success',
-      data: transformedData,
-    })
   } catch (error: any) {
     console.error('[ISBN Fetch] Error:', error)
     throw new AppError(500, `ISBN查询失败: ${error.message}`)
@@ -400,34 +419,67 @@ libraryRouter.get('/fetch-by-isbn/:isbn', async (req: AuthRequest, res: Response
 })
 
 /**
- * GET /search-by-title/:title - Search books by title from Douban API
+ * GET /search-by-title/:title - Search books by title from Google Books API
  */
 libraryRouter.get('/search-by-title/:title', async (req: AuthRequest, res: Response) => {
   const { title } = req.params
 
   try {
-    // Call Douban API to search books
-    const response = await fetch(`https://api.douban.com/v2/book/search?q=${encodeURIComponent(title as string)}&count=10`)
-    if (!response.ok) {
-      throw new Error('Failed to search books from Douban')
+    // Add timeout to fetch - 5 seconds
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+    try {
+      // Call Google Books API to search books
+      const response = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title as string)}&maxResults=10&langRestrict=zh`,
+        { signal: controller.signal }
+      )
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error('Failed to search books from Google Books')
+      }
+
+      const searchData = await response.json() as any
+
+      // Transform the data to match our expected format
+      const transformedResults = (searchData.items || []).map((item: any) => {
+        const book = item.volumeInfo || {}
+        return {
+          name: book.title || '',
+          author: book.authors?.join(', ') || '',
+          coverUrl: book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '',
+          totalPages: book.pageCount || 0,
+        }
+      })
+
+      res.json({
+        status: 'success',
+        data: transformedResults,
+      })
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      
+      // If timeout or network error, return empty results with warning
+      if (fetchError.name === 'AbortError' || fetchError.message?.includes('Failed to fetch') || fetchError.message?.includes('network')) {
+        console.warn('[Title Search] Network timeout or error, returning empty results')
+        res.json({
+          status: 'success',
+          data: [],
+          message: '网络连接较慢，请稍后重试或手动输入'
+        })
+      } else {
+        throw fetchError
+      }
     }
-
-    const searchData = await response.json() as any
-
-    // Transform the data to match our expected format
-    const transformedResults = (searchData.books || []).map((book: any) => ({
-      name: book.title || '',
-      author: book.author?.join(', ') || '',
-      coverUrl: book.image || '',
-      totalPages: book.pages ? parseInt(book.pages) : 0,
-    }))
-
-    res.json({
-      status: 'success',
-      data: transformedResults,
-    })
   } catch (error: any) {
     console.error('[Title Search] Error:', error)
-    throw new AppError(500, `书名搜索失败: ${error.message}`)
+    // Return empty results instead of error to allow manual input
+    res.json({
+      status: 'success',
+      data: [],
+      message: '搜索服务暂时不可用，请手动输入'
+    })
   }
 })
