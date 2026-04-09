@@ -13,7 +13,7 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ open, onOpenChange }: UserProfileModalProps) {
-  const { user, updateUser } = useAuth();
+  const { user, updateAuth } = useAuth();
   const [avatar, setAvatar] = useState<string>(user?.avatar || '');
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -71,8 +71,8 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
       }
 
       // 更新本地用户信息
-      if (updateUser) {
-        updateUser({ ...user, avatar });
+      if (updateAuth && user) {
+        updateAuth({ token: localStorage.getItem('auth_token') || '', user: { ...user, avatar } });
       }
 
       toast.success('保存成功');

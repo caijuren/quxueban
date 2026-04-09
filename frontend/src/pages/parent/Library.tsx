@@ -519,7 +519,6 @@ export default function LibraryPage() {
     }
 
     setImporting(true);
-    setImportPreview(null);
     setImportResult(null);
     setImportProgress(0);
     setImportStats({ imported: 0, skipped: 0 });
