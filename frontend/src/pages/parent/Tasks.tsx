@@ -378,103 +378,115 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="space-y-8" ref={pageRef}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ListTodo className="w-7 h-7 text-purple-500" />
-            任务配置
-          </h1>
-          <p className="text-gray-500 mt-1">管理学习任务的模板和分类</p>
+    <div className="space-y-6" ref={pageRef}>
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                activeTab === 'all'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              全部任务
+            </button>
+            <button
+              onClick={() => setActiveTab('subject')}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                activeTab === 'subject'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              按学科
+            </button>
+            <button
+              onClick={() => setActiveTab('type')}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                activeTab === 'type'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              按类型
+            </button>
+            <button
+              onClick={() => setActiveTab('completion')}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                activeTab === 'completion'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              完成方式
+            </button>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setExportDialogOpen(true)}
+              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
+            >
+              <Download className="w-4 h-4 mr-1.5 text-primary" />
+              <span className="text-sm">导出</span>
+            </Button>
+            <Button
+              onClick={() => { resetForm(); setCreateDialogOpen(true); }}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">新建任务</span>
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setExportDialogOpen(true)}
-            className="rounded-xl border-gray-200 hover:bg-purple-50 hover:border-purple-200"
-          >
-            <Download className="w-4 h-4 mr-2 text-purple-500" />
-            导出
-          </Button>
-          <Button
-            onClick={() => { resetForm(); setCreateDialogOpen(true); }}
-            className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
-          >
-            <Plus className="size-4 mr-2" />
-            新建任务
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-4 mb-6">
-        <Button
-          variant="default"
-          onClick={() => setActiveTab('all')}
-          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'all' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
-        >
-          全部任务
-        </Button>
-        <Button
-          variant="default"
-          onClick={() => setActiveTab('subject')}
-          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'subject' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
-        >
-          按学科
-        </Button>
-        <Button
-          variant="default"
-          onClick={() => setActiveTab('type')}
-          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'type' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
-        >
-          按类型
-        </Button>
-        <Button
-          variant="default"
-          onClick={() => setActiveTab('completion')}
-          className={`rounded-full px-6 py-2 font-medium ${activeTab === 'completion' ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/25' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
-        >
-          完成方式
-        </Button>
       </div>
       {/* Task Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <Skeleton key={i} className="h-40 rounded-2xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+            <Skeleton key={i} className="h-40 rounded-lg" />
           ))}
         </div>
       ) : (
         <div>
           {/* All Tasks */}
           {activeTab === 'all' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {tasks.map(task => (
                 <motion.div
                   key={task.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
                 >
                   <div className="p-4">
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-3">
                       {/* 左侧图标 */}
-                      <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
-                        {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                        {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                        {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                        {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                        {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                        {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                      <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
+                        {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                        {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                        {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                        {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                        {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                        {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
                       </div>
                       
                       {/* 任务内容 */}
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
-                        <div className="flex flex-wrap gap-2">
+                        <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
+                        <div className="flex flex-wrap gap-1.5">
                           {task.category && (
-                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
                               {task.category}
                             </span>
                           )}
@@ -495,13 +507,13 @@ export default function TasksPage() {
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => handleEdit(task)}
-                          className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                          className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                          className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                          className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -515,36 +527,36 @@ export default function TasksPage() {
 
           {/* By Subject */}
           {activeTab === 'subject' && (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {getSubjectGroups().map(group => (
                 <div key={group.subject}>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">{group.subject} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.subject} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {group.tasks.map(task => (
                       <motion.div
                         key={task.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                        className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
                       >
                         <div className="p-4">
-                          <div className="flex items-start gap-4">
+                          <div className="flex items-start gap-3">
                             {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
                             </div>
                             
                             {/* 任务内容 */}
                             <div className="flex-1">
-                              <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-2">
+                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-1.5">
                                 {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
                                     {task.category}
                                   </span>
                                 )}
@@ -565,13 +577,13 @@ export default function TasksPage() {
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => handleEdit(task)}
-                                className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -588,36 +600,36 @@ export default function TasksPage() {
 
           {/* By Type */}
           {activeTab === 'type' && (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {getTypeGroups().map(group => (
                 <div key={group.type}>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">{group.type} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.type} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {group.tasks.map(task => (
                       <motion.div
                         key={task.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                        className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
                       >
                         <div className="p-4">
-                          <div className="flex items-start gap-4">
+                          <div className="flex items-start gap-3">
                             {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
                             </div>
                             
                             {/* 任务内容 */}
                             <div className="flex-1">
-                              <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-2">
+                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-1.5">
                                 {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
                                     {task.category}
                                   </span>
                                 )}
@@ -638,13 +650,13 @@ export default function TasksPage() {
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => handleEdit(task)}
-                                className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -661,36 +673,36 @@ export default function TasksPage() {
 
           {/* By Completion */}
           {activeTab === 'completion' && (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {getCompletionGroups().map(group => (
                 <div key={group.type}>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">{group.type} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.type} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {group.tasks.map(task => (
                       <motion.div
                         key={task.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow group"
+                        className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
                       >
                         <div className="p-4">
-                          <div className="flex items-start gap-4">
+                          <div className="flex items-start gap-3">
                             {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
                             </div>
                             
                             {/* 任务内容 */}
                             <div className="flex-1">
-                              <h3 className="font-semibold text-lg text-gray-900 mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-2">
+                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-1.5">
                                 {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
                                     {task.category}
                                   </span>
                                 )}
@@ -711,13 +723,13 @@ export default function TasksPage() {
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => handleEdit(task)}
-                                className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500"
+                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"
+                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

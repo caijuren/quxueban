@@ -34,12 +34,15 @@ export default function ChildLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 路由守卫：未登录时跳转到登录页
+  // 路由守卫：未登录时跳转到登录页，家长用户跳转到家长页面
   useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
       navigate('/login', { replace: true, state: { from: location } });
+    } else if (!isInitializing && isAuthenticated && user?.role !== 'child') {
+      // 家长用户访问孩子页面，重定向到家长首页
+      navigate('/parent', { replace: true });
     }
-  }, [isInitializing, isAuthenticated, navigate, location]);
+  }, [isInitializing, isAuthenticated, user, navigate, location]);
 
   // 初始化中显示加载状态，避免子组件访问未定义数据
   if (isInitializing) {

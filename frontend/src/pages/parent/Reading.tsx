@@ -25,6 +25,7 @@ import {
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 // Types
 interface ActiveReading {
@@ -87,7 +88,6 @@ async function stopReading(id: number): Promise<void> {
 }
 
 export default function ReadingPage() {
-  const [selectedChild, setSelectedChild] = useState<number | 'all'>('all');
   const [progressDialogOpen, setProgressDialogOpen] = useState(false);
   const [selectedReading, setSelectedReading] = useState<ActiveReading | null>(null);
   const [pagesRead, setPagesRead] = useState('');
@@ -95,6 +95,7 @@ export default function ReadingPage() {
   const [readingToStop, setReadingToStop] = useState<ActiveReading | null>(null);
 
   const queryClient = useQueryClient();
+  const { selectedChildId } = useSelectedChild();
 
   const { data: children = [] } = useQuery({
     queryKey: ['children'],
@@ -102,15 +103,15 @@ export default function ReadingPage() {
   });
 
   const { data: readings = [], isLoading } = useQuery({
-    queryKey: ['reading', selectedChild],
+    queryKey: ['reading', selectedChildId],
     queryFn: () =>
-      fetchActiveReadings(selectedChild === 'all' ? undefined : selectedChild),
+      fetchActiveReadings(selectedChildId || undefined),
   });
 
   const { data: stats } = useQuery({
-    queryKey: ['readingStats', selectedChild],
+    queryKey: ['readingStats', selectedChildId],
     queryFn: () =>
-      fetchReadingStats(selectedChild === 'all' ? undefined : selectedChild),
+      fetchReadingStats(selectedChildId || undefined),
   });
 
   const progressMutation = useMutation({
@@ -193,14 +194,22 @@ export default function ReadingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen className="w-7 h-7 text-purple-500" />
-            阅读管理
-          </h1>
-          <p className="text-gray-500 mt-1">跟踪孩子的阅读进度</p>
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Empty space for alignment */}
+          <div className="flex-1"></div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => (window.location.href = '/parent/library')}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+            >
+              <BookOpen className="size-4 mr-1.5" />
+              <span className="text-sm">去图书馆</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -263,38 +272,7 @@ export default function ReadingPage() {
         </motion.div>
       </div>
 
-      {/* Child Filter */}
-      {children.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          <span className="text-sm text-gray-500 whitespace-nowrap">查看:</span>
-          <button
-            onClick={() => setSelectedChild('all')}
-            className={cn(
-              'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all',
-              selectedChild === 'all'
-                ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-            )}
-          >
-            全部
-          </button>
-          {children.map((child) => (
-            <button
-              key={child.id}
-              onClick={() => setSelectedChild(child.id)}
-              className={cn(
-                'px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap',
-                selectedChild === child.id
-                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-              )}
-            >
-              <span>{child.avatar}</span>
-              <span>{child.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+
 
       {/* Reading List */}
       {readings.length === 0 ? (

@@ -357,92 +357,93 @@ export default function StatisticsPage() {
   
   return (
     <div className="space-y-6 pb-8">
-      {/* ==================== 顶部控制栏 ==================== */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">学习分析仪表盘</h1>
-          <p className="text-gray-500 mt-1">多维度洞察学习情况，助力高效成长</p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3">
-          {/* 全局时间筛选器 - 核心功能 */}
-          <div className="flex items-center bg-gray-100 rounded-xl p-1">
-            {TIME_FILTERS.map(filter => (
-              <button
-                key={filter.value}
-                onClick={() => setTimeFilter(filter.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  timeFilter === filter.value
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Empty space for alignment */}
+          <div className="flex-1"></div>
           
-          {/* 孩子选择 */}
-          {stats?.children && stats.children.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">选择孩子:</span>
-              <div className="flex gap-1.5">
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* 全局时间筛选器 - 核心功能 */}
+            <div className="flex items-center bg-white rounded-lg p-0.5 shadow-sm">
+              {TIME_FILTERS.map(filter => (
                 <button
-                  onClick={() => setSelectedChild(undefined)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    !selectedChild
-                      ? 'bg-purple-500 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  key={filter.value}
+                  onClick={() => setTimeFilter(filter.value)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    timeFilter === filter.value
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-foreground hover:bg-muted/50'
                   }`}
                 >
-                  全部
+                  {filter.label}
                 </button>
-                {stats.children.map(child => (
+              ))}
+            </div>
+            
+            {/* 孩子选择 */}
+            {stats?.children && stats.children.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">选择孩子:</span>
+                <div className="flex gap-1.5">
                   <button
-                    key={child.id}
-                    onClick={() => setSelectedChild(child.id)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
-                      selectedChild === child.id
-                        ? 'bg-purple-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    onClick={() => setSelectedChild(undefined)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      !selectedChild
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'bg-muted text-foreground hover:bg-muted/80'
                     }`}
                   >
-                    <span>{child.avatar}</span>
-                    <span>{child.name}</span>
+                    全部
                   </button>
-                ))}
+                  {stats.children.map(child => (
+                    <button
+                      key={child.id}
+                      onClick={() => setSelectedChild(child.id)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                        selectedChild === child.id
+                          ? 'bg-primary text-white shadow-sm'
+                          : 'bg-muted text-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      <span>{child.avatar}</span>
+                      <span>{child.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          
-          {/* 导出按钮 */}
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              导出周报
-              <ChevronDown className="w-4 h-4" />
-            </button>
+            )}
             
-            <AnimatePresence>
-              {showExportMenu && (
-                <motion.div
-            initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50"
-                >
-                  <button className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50">
-                    导出为 PNG
-                  </button>
-                  <button className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50">
-                    导出为 PDF
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* 导出按钮 */}
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted/50 transition-colors shadow-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span>导出周报</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              
+              <AnimatePresence>
+                {showExportMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 mt-2 w-40 bg-white border border-border rounded-lg shadow-lg overflow-hidden z-50"
+                  >
+                    <button className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50">
+                      导出为 PNG
+                    </button>
+                    <button className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50">
+                      导出为 PDF
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface Child {
   id: number;
@@ -24,6 +25,7 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
   const [childrenList, setChildrenList] = useState<Child[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { isAuthenticated, isInitializing, user } = useAuth();
 
   // 初始化时从localStorage恢复
   useEffect(() => {
@@ -38,6 +40,11 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
 
   // 获取孩子列表
   const refreshChildren = useCallback(async () => {
+    // 只有家长用户且已认证才能获取孩子列表
+    if (!isAuthenticated || isInitializing || user?.role !== 'parent') {
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await apiClient.get('/auth/children');
@@ -61,7 +68,7 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAuthenticated, isInitializing, user]);
 
   const selectChild = useCallback((childId: number | null) => {
     setSelectedChildId(childId);
