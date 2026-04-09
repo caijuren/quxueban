@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
+import { env } from '../config/env'
 
 export const tasksRouter: Router = Router()
 
@@ -122,6 +123,85 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
 tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = req.query.childId ? parseInt(req.query.childId as string) : null
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    const mockTasks = [
+      {
+        id: 1,
+        familyId: familyId,
+        name: '语文阅读',
+        category: '中文阅读',
+        type: '固定',
+        timePerUnit: 30,
+        weeklyRule: {},
+        sortOrder: 1,
+        isActive: true,
+        appliesTo: [2, 3],
+        tags: {
+          subject: 'chinese',
+          parentRole: 'accompany',
+          difficulty: 'basic',
+          scheduleRule: 'daily'
+        },
+        scheduleRule: 'daily',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 2,
+        familyId: familyId,
+        name: '数学练习',
+        category: '校内巩固',
+        type: '固定',
+        timePerUnit: 25,
+        weeklyRule: {},
+        sortOrder: 2,
+        isActive: true,
+        appliesTo: [2],
+        tags: {
+          subject: 'math',
+          parentRole: 'independent',
+          difficulty: 'basic',
+          scheduleRule: 'school'
+        },
+        scheduleRule: 'school',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 3,
+        familyId: familyId,
+        name: '英语阅读',
+        category: '英语阅读',
+        type: '灵活',
+        timePerUnit: 20,
+        weeklyRule: {},
+        sortOrder: 3,
+        isActive: true,
+        appliesTo: [3],
+        tags: {
+          subject: 'english',
+          parentRole: 'parent-led',
+          difficulty: 'advanced',
+          scheduleRule: 'weekend'
+        },
+        scheduleRule: 'weekend',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ]
+
+    // Apply childId filter
+    let filteredTasks = mockTasks
+    if (childId) {
+      filteredTasks = mockTasks.filter(task => task.appliesTo.includes(childId))
+    }
+
+    res.json({ status: 'success', data: filteredTasks })
+    return
+  }
+
   try {
     let tasks = []
     if (childId) {

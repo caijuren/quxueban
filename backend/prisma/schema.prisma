@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgres://d85c813d7c54c587dac1d1374409a8a30a0085b57ddda7ab32e7a0a830e29e20:sk_oapFAA1xYpwI846nSd1RU@db.prisma.io:5432/postgres?sslmode=require"
 }
 
 model Family {
@@ -23,31 +23,33 @@ model Family {
   tasks          Task[]
   users          User[]
   weeklyPlans    WeeklyPlan[]
+  bookAIInsights BookAIInsight[]
 
   @@map("families")
 }
 
 model User {
-  id              Int              @id @default(autoincrement())
-  name            String           @db.VarChar(50)
-  role            String           @db.VarChar(20)
-  avatar          String           @default("🐛")
-  passwordHash    String           @map("password_hash") @db.VarChar(255)
-  familyId        Int              @map("family_id")
-  status          String           @default("active") @db.VarChar(20)
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
+  id                 Int              @id @default(autoincrement())
+  name               String           @db.VarChar(50)
+  role               String           @db.VarChar(20)
+  avatar             String           @default("🐛")
+  passwordHash       String           @map("password_hash") @db.VarChar(255)
+  familyId           Int              @map("family_id")
+  status             String           @default("active") @db.VarChar(20)
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
   dingtalkSecret     String?          @default("") @map("dingtalk_secret") @db.VarChar(100)
   dingtalkWebhook    String?          @default("") @map("dingtalk_webhook") @db.VarChar(500)
   dingtalkWebhookUrl String?          @default("") @map("dingtalk_webhook_url") @db.VarChar(500)
   achievementLogs    AchievementLog[]
-  activeReadings  ActiveReading[]
-  bookReadStates  BookReadState[]
-  childTasks      ChildTask[]
-  dailyCheckins   DailyCheckin[]
-  readingLogs     ReadingLog[]
-  family          Family           @relation(fields: [familyId], references: [id])
-  weeklyPlans     WeeklyPlan[]
+  activeReadings     ActiveReading[]
+  bookReadStates     BookReadState[]
+  childTasks         ChildTask[]
+  dailyCheckins      DailyCheckin[]
+  readingLogs        ReadingLog[]
+  family             Family           @relation(fields: [familyId], references: [id])
+  weeklyPlans        WeeklyPlan[]
+  bookAIInsights     BookAIInsight[]
 
   @@map("users")
 }
@@ -182,6 +184,7 @@ model Book {
   bookReadStates BookReadState[]
   family         Family          @relation(fields: [familyId], references: [id])
   readingLogs    ReadingLog[]
+  bookAIInsights BookAIInsight[]
 
   @@map("books")
 }
@@ -258,6 +261,23 @@ model BookReadState {
 
   @@unique([childId, bookId])
   @@map("book_read_states")
+}
+
+model BookAIInsight {
+  id        Int      @id @default(autoincrement())
+  familyId  Int      @map("family_id")
+  bookId    Int      @map("book_id")
+  childId   Int?     @map("child_id")
+  insights  Json     @default("{}")
+  reportUrl String   @default("") @map("report_url") @db.Text
+  status    String   @default("pending") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  book      Book     @relation(fields: [bookId], references: [id])
+  child     User?    @relation(fields: [childId], references: [id])
+  family    Family   @relation(fields: [familyId], references: [id])
+
+  @@map("book_ai_insights")
 }
 
 model Achievement {

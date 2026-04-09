@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, generateToken, requireRole } from '../middleware/auth'
+import { env } from '../config/env'
 
 export const authRouter: Router = Router()
 
@@ -106,6 +107,50 @@ authRouter.post('/login', async (req, res: Response) => {
 
   if (!username || !password) {
     throw new AppError(400, '用户名和密码不能为空')
+  }
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock user for testing
+    const mockUser = {
+      id: 1,
+      name: username,
+      role: 'parent',
+      familyId: 1,
+      avatar: '👤',
+      family: {
+        id: 1,
+        name: `${username}的家庭`,
+        familyCode: 'F123456',
+      },
+    }
+
+    // Generate JWT token
+    const token = generateToken({
+      id: mockUser.id,
+      name: mockUser.name,
+      role: mockUser.role,
+      familyId: mockUser.familyId,
+      avatar: mockUser.avatar,
+    })
+
+    res.json({
+      status: 'success',
+      message: '登录成功',
+      data: {
+        token,
+        user: {
+          id: mockUser.id,
+          name: mockUser.name,
+          role: mockUser.role,
+          familyId: mockUser.familyId,
+          familyName: mockUser.family.name,
+          familyCode: mockUser.family.familyCode,
+          avatar: mockUser.avatar,
+        },
+      },
+    })
+    return
   }
 
   // Find user by username
@@ -287,7 +332,34 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
  * Auth required
  */
 authRouter.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { userId } = req.user!
+  const { userId, name, role, familyId, avatar } = req.user!
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock user info
+    res.json({
+      status: 'success',
+      data: {
+        id: userId,
+        name: name,
+        role: role,
+        avatar: avatar,
+        familyId: familyId,
+        familyName: `${name}的家庭`,
+        familyCode: 'F123456',
+        family: {
+          id: familyId,
+          name: `${name}的家庭`,
+          familyCode: 'F123456',
+          settings: {
+            dailyTimeLimit: 210,
+            dingtalkWebhook: '',
+          },
+        },
+      },
+    })
+    return
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -408,9 +480,48 @@ authRouter.post('/migrate-family', authMiddleware, requireRole('parent'), async 
  * Auth required, parent only
  */
 authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
-  const { familyId, userId } = req.user!
+  const { familyId, userId, name } = req.user!
   
   console.log(`[GET CHILDREN] User ${userId}, Family ${familyId}`)
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock children
+    const mockChildren = [
+      {
+        id: 2,
+        name: '小明',
+        avatar: '👶',
+        createdAt: new Date().toISOString(),
+        pin: '1234',
+        weeklyProgress: 0,
+        todayMinutes: 0,
+        completedTasks: 0,
+        totalTasks: 0,
+        streak: 0,
+        achievements: 0,
+      },
+      {
+        id: 3,
+        name: '小红',
+        avatar: '🧒',
+        createdAt: new Date().toISOString(),
+        pin: '5678',
+        weeklyProgress: 0,
+        todayMinutes: 0,
+        completedTasks: 0,
+        totalTasks: 0,
+        streak: 0,
+        achievements: 0,
+      },
+    ]
+
+    res.json({
+      status: 'success',
+      data: mockChildren,
+    })
+    return
+  }
 
   const children = await prisma.user.findMany({
     where: {

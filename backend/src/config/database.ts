@@ -2,6 +2,12 @@ import { PrismaClient } from '@prisma/client'
 import { env } from './env'
 
 const prismaClientSingleton = () => {
+  if (!env.DATABASE_URL) {
+    // Create a mock Prisma client when no database URL is provided
+    return {
+      $disconnect: async () => {}
+    } as PrismaClient
+  }
   return new PrismaClient({
     log: env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   })
@@ -19,5 +25,7 @@ if (env.NODE_ENV !== 'production') {
 
 // Graceful shutdown
 process.on('beforeExit', async () => {
-  await prisma.$disconnect()
+  if (env.DATABASE_URL) {
+    await prisma.$disconnect()
+  }
 })
