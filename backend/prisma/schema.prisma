@@ -16,6 +16,7 @@ model Family {
   updatedAt      DateTime        @updatedAt @map("updated_at")
   achievements   Achievement[]
   activeReadings ActiveReading[]
+  bookAIInsights BookAIInsight[]
   bookReadStates BookReadState[]
   books          Book[]
   childTasks     ChildTask[]
@@ -23,7 +24,6 @@ model Family {
   tasks          Task[]
   users          User[]
   weeklyPlans    WeeklyPlan[]
-  bookAIInsights BookAIInsight[]
 
   @@map("families")
 }
@@ -43,13 +43,13 @@ model User {
   dingtalkWebhookUrl String?          @default("") @map("dingtalk_webhook_url") @db.VarChar(500)
   achievementLogs    AchievementLog[]
   activeReadings     ActiveReading[]
+  bookAIInsights     BookAIInsight[]
   bookReadStates     BookReadState[]
   childTasks         ChildTask[]
   dailyCheckins      DailyCheckin[]
   readingLogs        ReadingLog[]
   family             Family           @relation(fields: [familyId], references: [id])
   weeklyPlans        WeeklyPlan[]
-  bookAIInsights     BookAIInsight[]
 
   @@map("users")
 }
@@ -115,14 +115,17 @@ model Task {
   tags            Json?        @default("{}")
   appliesTo       Json?        @default("[]") @map("applies_to")
   scheduleRule    String       @default("daily") @map("schedule_rule") @db.VarChar(20)
-  weeklyFrequency Int?         @map("weekly_frequency")
   targetValue     Int?         @map("target_value")
   trackingType    String       @default("simple") @map("tracking_type") @db.VarChar(20)
   trackingUnit    String?      @map("tracking_unit") @db.VarChar(20)
+  weeklyFrequency Int?         @map("weekly_frequency")
   family          Family       @relation(fields: [familyId], references: [id])
   weeklyPlans     WeeklyPlan[]
 
   @@map("tasks")
+  @@index([familyId])
+  @@index([isActive])
+  @@index([familyId, isActive])
 }
 
 model WeeklyPlan {
@@ -143,6 +146,9 @@ model WeeklyPlan {
   task         Task           @relation(fields: [taskId], references: [id])
 
   @@map("weekly_plans")
+  @@index([childId])
+  @@index([weekNo])
+  @@index([childId, weekNo])
 }
 
 model DailyCheckin {
@@ -161,6 +167,10 @@ model DailyCheckin {
   plan           WeeklyPlan? @relation(fields: [planId], references: [id])
 
   @@map("daily_checkins")
+  @@index([childId])
+  @@index([checkDate])
+  @@index([childId, checkDate])
+  @@index([planId])
 }
 
 model Book {
@@ -181,10 +191,10 @@ model Book {
   publisher      String          @default("") @db.VarChar(100)
   wordCount      Int?            @map("word_count")
   activeReadings ActiveReading[]
+  bookAIInsights BookAIInsight[]
   bookReadStates BookReadState[]
   family         Family          @relation(fields: [familyId], references: [id])
   readingLogs    ReadingLog[]
-  bookAIInsights BookAIInsight[]
 
   @@map("books")
 }
@@ -233,16 +243,16 @@ model ReadingLog {
   pages       Int      @default(0)
   minutes     Int      @default(0)
   readDate    DateTime @map("read_date")
+  createdAt   DateTime @default(now()) @map("created_at")
   effect      String   @default("") @db.VarChar(50)
   performance String   @default("") @db.VarChar(200)
   note        String   @default("") @db.VarChar(500)
   readStage   String   @default("") @map("read_stage") @db.VarChar(50)
-  createdAt   DateTime @default(now()) @map("created_at")
   focusRating Int      @default(0) @map("focus_rating")
   tags        Json     @default("[]")
-  startPage   Int      @default(0) @map("start_page")
   endPage     Int      @default(0) @map("end_page")
   evidenceUrl String   @default("") @map("evidence_url") @db.VarChar(255)
+  startPage   Int      @default(0) @map("start_page")
   book        Book     @relation(fields: [bookId], references: [id])
   child       User?    @relation(fields: [childId], references: [id])
 
@@ -272,7 +282,7 @@ model BookAIInsight {
   bookId    Int      @map("book_id")
   childId   Int?     @map("child_id")
   insights  Json     @default("{}")
-  reportUrl String   @default("") @map("report_url") @db.Text
+  reportUrl String   @default("") @map("report_url")
   status    String   @default("pending") @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
