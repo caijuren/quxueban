@@ -23,11 +23,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { ChildTabs } from './ChildTabs';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
-import UserProfileModal from '@/components/UserProfileModal';
+
 
 const navItems = [
   { path: '/parent', label: '概览', icon: LayoutDashboard },
@@ -53,9 +52,8 @@ const overlayVariants = {
 export default function ParentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const { user, logout, isAuthenticated, isInitializing } = useAuth();
-  const { selectedChild } = useSelectedChild();
+  const { children, selectedChild, selectChild, isLoading } = useSelectedChild();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -95,10 +93,6 @@ export default function ParentLayout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
-  };
-
-  const handleProfileSettings = () => {
-    setProfileModalOpen(true);
   };
 
   const closeSidebar = () => setSidebarOpen(false);
@@ -153,16 +147,68 @@ export default function ParentLayout() {
                 );
               })}
             </nav>
-            <div className="hidden lg:flex ml-6">
-              <ChildTabs />
-            </div>
           </div>
 
-          {/* Right: Notifications + User */}
+          {/* Right: Notifications + Child Switcher + User */}
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="text-foreground hover:bg-muted">
               <Bell className="size-5" />
             </Button>
+            
+            {/* Child Switcher */}
+            {children.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">
+                    <Avatar className="size-7 ring-2 ring-white shadow-sm">
+                      <AvatarImage src={selectedChild?.avatar} />
+                      <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-xs font-medium">
+                        {selectedChild?.name?.charAt(0) || 'C'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium text-foreground">{selectedChild?.name || '选择孩子'}</span>
+                    <ChevronDown className="size-4 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 border border-border rounded-lg shadow-lg p-1">
+                  {/* Child List */}
+                  {children.map((child) => {
+                    const isSelected = selectedChild?.id === child.id;
+                    return (
+                      <DropdownMenuItem 
+                        key={child.id} 
+                        className={cn(
+                          "cursor-pointer rounded-md hover:bg-muted transition-colors",
+                          isSelected && "bg-primary/10 text-primary"
+                        )} 
+                        onClick={() => selectChild(child.id)}
+                      >
+                        <Avatar className="size-5 mr-2">
+                          <AvatarImage src={child.avatar} />
+                          <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-xs">
+                            {child.name?.charAt(0) || 'C'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{child.name}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                  
+                  <DropdownMenuSeparator className="my-1" />
+                  
+                  {/* Manage Children */}
+                  <DropdownMenuItem 
+                    className="cursor-pointer rounded-md hover:bg-muted transition-colors" 
+                    onClick={() => navigate('/parent/children')}
+                  >
+                    <Users className="size-4 mr-2" />
+                    <span>管理孩子…</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            
+            {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="p-1 rounded-lg hover:bg-muted transition-colors">
@@ -175,10 +221,6 @@ export default function ParentLayout() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 border border-border rounded-lg shadow-lg p-1">
-                <DropdownMenuItem className="cursor-pointer rounded-md hover:bg-muted transition-colors" onClick={handleProfileSettings}>
-                  <Settings className="size-4 mr-2" />
-                  <span>个人设置</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem className="cursor-pointer text-destructive rounded-md hover:bg-muted transition-colors" onClick={handleLogout}>
                   <LogOut className="size-4 mr-2" />
                   <span>退出登录</span>
@@ -265,16 +307,11 @@ export default function ParentLayout() {
       {/* Mobile Main Content */}
       <main className="lg:hidden pt-28 min-h-screen overflow-auto relative z-10">
         <div className="p-5">
-          <ChildTabs />
           <Outlet />
         </div>
       </main>
 
-      {/* User Profile Modal */}
-      <UserProfileModal 
-        open={profileModalOpen} 
-        onOpenChange={setProfileModalOpen} 
-      />
+
     </div>
   );
 }

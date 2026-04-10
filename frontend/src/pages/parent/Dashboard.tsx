@@ -182,7 +182,7 @@ export default function ParentDashboard() {
                 ))}
               </>
             ) : (
-              children?.map((child, index) => (
+              Array.isArray(children) && children.map((child, index) => (
                 <motion.div
                   key={child.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -247,7 +247,7 @@ export default function ParentDashboard() {
               </div>
             ) : (
               <div className="space-y-2">
-                {activities?.map((activity, index) => (
+                {Array.isArray(activities) && activities.map((activity, index) => (
                   <motion.div
                     key={activity.id}
                     initial={{ opacity: 0, y: 10 }}

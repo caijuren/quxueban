@@ -68,8 +68,18 @@ const presetAvatars = ['🦊', '🐼', '🐨', '🦁', '🐯', '🐰', '🐻', '
 
 // API functions
 async function fetchChildren(): Promise<Child[]> {
-  const { data } = await apiClient.get('/auth/children');
-  return data.data || [];
+  try {
+    const { data } = await apiClient.get('/auth/children');
+    // 确保返回的数据是数组
+    if (Array.isArray(data.data)) {
+      return data.data;
+    }
+    console.error('Invalid data structure from API:', data);
+    return [];
+  } catch (error) {
+    console.error('Error fetching children:', error);
+    return [];
+  }
 }
 
 async function addChild(child: ChildFormData): Promise<Child> {
@@ -104,7 +114,7 @@ export default function ChildrenPage() {
     defaultValues: { name: '', avatar: '🦊', pin: '' }
   });
 
-  const { data: children = [], isLoading, error: queryError } = useQuery({
+  const { data: fetchedChildren, isLoading, error: queryError } = useQuery({
     queryKey: ['children'],
     queryFn: fetchChildren,
     staleTime: 0,
@@ -114,6 +124,9 @@ export default function ChildrenPage() {
     retry: 2,
     retryDelay: 1000,
   });
+
+  // 确保children始终是一个数组
+  const children = Array.isArray(fetchedChildren) ? fetchedChildren : [];
 
   // Show error toast if query fails
   useEffect(() => {
@@ -271,16 +284,20 @@ export default function ChildrenPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">孩子管理</h1>
-          <p className="text-gray-500 mt-1">管理孩子的账户和查看学习进度</p>
+      {/* Page Control Bar */}
+      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {/* Action Buttons */}
+          <div className="flex gap-2 flex-shrink-0">
+            <Button
+              onClick={openCreateDialog}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">添加孩子</span>
+            </Button>
+          </div>
         </div>
-        <Button onClick={openCreateDialog} className="gap-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl shadow-lg shadow-purple-500/25">
-          <Plus className="size-4" />
-          <span>添加孩子</span>
-        </Button>
       </div>
 
       {/* Children Cards */}
@@ -302,7 +319,7 @@ export default function ChildrenPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {children?.map((child, index) => (
+          {Array.isArray(children) && children.map((child, index) => (
             <motion.div key={child.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
               <Card className="overflow-hidden border-0 shadow-lg shadow-gray-200/50 rounded-3xl hover:shadow-xl transition-all duration-300">
                 <div className="h-2 bg-gradient-to-r from-purple-500 via-blue-500 to-emerald-500" />
@@ -373,7 +390,7 @@ export default function ChildrenPage() {
       )}
 
       {/* Empty State */}
-      {!isLoading && (!children || children.length === 0) && (
+      {!isLoading && (!Array.isArray(children) || children.length === 0) && (
         <Card className="border-0 shadow-lg rounded-3xl">
           <CardContent className="py-16 text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-3xl flex items-center justify-center mx-auto mb-4">

@@ -35,10 +35,10 @@ apiClient.interceptors.request.use(
     }
 
     // 自动注入 selectedChildId 到请求参数
-    // 只对非 /auth/children 路径注入，避免干扰获取孩子列表的请求
+    // 只对非 /auth/ 和 /settings/ 路径注入，避免干扰获取用户信息和设置的请求
     const selectedChildId = localStorage.getItem('selected_child_id');
     const url = config.url || '';
-    if (selectedChildId && !url.includes('/auth/children') && !url.includes('/children')) {
+    if (selectedChildId && !url.includes('/auth/') && !url.includes('/settings/')) {
       if (config.method?.toLowerCase() === 'get') {
         // GET 请求：添加到 query 参数
         config.params = {

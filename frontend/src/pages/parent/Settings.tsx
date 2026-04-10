@@ -13,7 +13,9 @@ import {
   Shield,
   Home,
   CheckCircle2,
-  Circle
+  Circle,
+  User,
+  Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,7 +54,7 @@ async function deleteFamilyData(): Promise<void> {
 }
 
 async function getChildren(): Promise<any> {
-  const response = await apiClient.get('/children');
+  const response = await apiClient.get('/auth/children');
   return response.data;
 }
 
@@ -69,6 +71,19 @@ async function testChildWebhook(childId: number): Promise<void> {
   await apiClient.post('/settings/test-webhook', { childId });
 }
 
+async function getUserInfo(): Promise<any> {
+  const response = await apiClient.get('/auth/me');
+  return response.data;
+}
+
+async function updateAvatar(avatar: string): Promise<void> {
+  await apiClient.post('/auth/avatar', { avatar });
+}
+
+async function updatePassword(oldPassword: string, newPassword: string): Promise<void> {
+  await apiClient.put('/auth/password', { oldPassword, newPassword });
+}
+
 export default function SettingsPage() {
   const [familyName, setFamilyName] = useState('我的家庭');
   const [dailyTimeLimit, setDailyTimeLimit] = useState(210);
@@ -81,6 +96,14 @@ export default function SettingsPage() {
   const [originalChildSecrets, setOriginalChildSecrets] = useState<Record<number, string>>({});
   const [savingChildId, setSavingChildId] = useState<number | null>(null);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  
+  // Account settings state
+  const [avatar, setAvatar] = useState<string>('');
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
   // Load current settings
   const { data: settingsData, isLoading: isLoadingSettings } = useQuery({
@@ -98,6 +121,14 @@ export default function SettingsPage() {
     refetchOnWindowFocus: true,
   });
 
+  // Load user info
+  const { data: userInfoData, isLoading: isLoadingUserInfo } = useQuery({
+    queryKey: ['user-info'],
+    queryFn: getUserInfo,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+
   // Load settings
   useEffect(() => {
     if (settingsData?.data) {
@@ -106,6 +137,13 @@ export default function SettingsPage() {
       setDailyTimeLimit(settings?.dailyTimeLimit || 210);
     }
   }, [settingsData]);
+
+  // Load user info
+  useEffect(() => {
+    if (userInfoData?.data) {
+      setAvatar(userInfoData.data.avatar || '');
+    }
+  }, [userInfoData]);
 
   // Load child dingtalk configs
   useEffect(() => {
@@ -181,9 +219,55 @@ export default function SettingsPage() {
     }
   });
 
+  // Update avatar mutation
+  const updateAvatarMutation = useMutation({
+    mutationFn: updateAvatar,
+    onSuccess: () => {
+      toast.success('头像已更新');
+      setAvatarChanged(false);
+    },
+    onError: (error) => {
+      toast.error(`更新头像失败：${getErrorMessage(error)}`);
+    }
+  });
+
+  // Update password mutation
+  const updatePasswordMutation = useMutation({
+    mutationFn: ({ oldPassword, newPassword }: { oldPassword: string; newPassword: string }) =>
+      updatePassword(oldPassword, newPassword),
+    onSuccess: () => {
+      toast.success('密码已修改，请妥善保管');
+      setPasswordChanged(false);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    },
+    onError: (error) => {
+      toast.error(`修改密码失败：${getErrorMessage(error)}`);
+    }
+  });
+
   const getChildName = (childId: number) => {
     const child = childrenData?.data?.find((c: any) => c.id === childId);
     return child?.name || '孩子';
+  };
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setAvatar(base64);
+        setAvatarChanged(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatar('');
+    setAvatarChanged(true);
   };
 
   const handleSaveAll = async () => {
@@ -212,9 +296,26 @@ export default function SettingsPage() {
         }
       }
       
+      // Save account settings
+      if (avatarChanged) {
+        await updateAvatarMutation.mutateAsync(avatar);
+      }
+      
+      if (passwordChanged) {
+        // Validate password
+        if (newPassword.length < 8) {
+          throw new Error('密码长度至少8位');
+        }
+        if (newPassword !== confirmPassword) {
+          throw new Error('两次输入的密码不一致');
+        }
+        await updatePasswordMutation.mutateAsync({ oldPassword, newPassword });
+      }
+      
       toast.success('所有设置已保存');
     } catch (error) {
       console.error('Save all error:', error);
+      toast.error(`保存失败：${getErrorMessage(error)}`);
     } finally {
       setIsSavingAll(false);
     }
@@ -280,6 +381,9 @@ export default function SettingsPage() {
         if (currentWebhook !== originalWebhook || currentSecret !== originalSecret) return true;
       }
     }
+    
+    // Check account settings changes
+    if (avatarChanged || passwordChanged) return true;
     
     return false;
   };
@@ -496,11 +600,128 @@ export default function SettingsPage() {
           </Card>
         </motion.section>
 
-        {/* Danger Zone Section */}
+        {/* Account Settings Section */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-5 h-5 text-green-500" />
+            <h2 className="text-lg font-semibold text-gray-900">账户设置</h2>
+          </div>
+          
+          <Card className="border border-gray-200 rounded-2xl shadow-sm bg-gray-50/50">
+            <CardContent className="p-6 space-y-6">
+              {/* Avatar Settings */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-700">头像设置</h3>
+                <div className="flex flex-col items-center gap-4">
+                  <div className="relative">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-2xl font-medium shadow-lg">
+                      {avatar ? (
+                        <img src={avatar} alt="头像" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        userInfoData?.data?.name?.charAt(0) || 'P'
+                      )}
+                    </div>
+                    <button
+                      onClick={handleRemoveAvatar}
+                      className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center shadow-md hover:bg-gray-100 transition-colors"
+                      title="移除头像"
+                    >
+                      <Trash2 className="w-4 h-4 text-gray-500" />
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="rounded-lg"
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        id="avatar-upload"
+                        onChange={handleAvatarUpload}
+                      />
+                      <label htmlFor="avatar-upload" className="cursor-pointer flex items-center gap-2">
+                        <Camera className="w-4 h-4" />
+                        上传新头像
+                      </label>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleRemoveAvatar}
+                      className="rounded-lg"
+                    >
+                      移除头像
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-400">支持 JPG、PNG 格式，最大 2MB</p>
+                </div>
+              </div>
+
+              {/* Password Settings */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-700">密码修改</h3>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="old-password" className="text-sm font-medium text-gray-700">当前密码</Label>
+                    <Input 
+                      id="old-password"
+                      type="password"
+                      value={oldPassword}
+                      onChange={(e) => {
+                        setOldPassword(e.target.value);
+                        setPasswordChanged(true);
+                      }}
+                      placeholder="请输入当前密码"
+                      className="h-11 rounded-xl bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-password" className="text-sm font-medium text-gray-700">新密码</Label>
+                    <Input 
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        setPasswordChanged(true);
+                      }}
+                      placeholder="请输入新密码"
+                      className="h-11 rounded-xl bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="confirm-password" className="text-sm font-medium text-gray-700">确认新密码</Label>
+                    <Input 
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        setPasswordChanged(true);
+                      }}
+                      placeholder="请再次输入新密码"
+                      className="h-11 rounded-xl bg-white"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">密码需包含字母和数字，长度至少8位</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.section>
+
+        {/* Danger Zone Section */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.3 }}
         >
           <div className="flex items-center gap-2 mb-4">
             <Shield className="w-5 h-5 text-red-500" />
