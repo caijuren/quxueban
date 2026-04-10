@@ -240,6 +240,9 @@ model ReadingLog {
   createdAt   DateTime @default(now()) @map("created_at")
   focusRating Int      @default(0) @map("focus_rating")
   tags        Json     @default("[]")
+  startPage   Int      @default(0) @map("start_page")
+  endPage     Int      @default(0) @map("end_page")
+  evidenceUrl String   @default("") @map("evidence_url") @db.VarChar(255)
   book        Book     @relation(fields: [bookId], references: [id])
   child       User?    @relation(fields: [childId], references: [id])
 

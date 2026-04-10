@@ -226,7 +226,7 @@ function calculateAge(birthDate: string) {
 /**
  * Call AI API
  */
-async function callAIAPI(prompt: string) {
+async function callAIAPI(_prompt: string) {
   // This is a placeholder for the actual AI API call
   // In a real implementation, you would call OpenAI API or another LLM
   return {

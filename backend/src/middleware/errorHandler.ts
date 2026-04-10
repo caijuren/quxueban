@@ -44,22 +44,23 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     try {
       const { Prisma } = require('@prisma/client')
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        const prismaError = err as any
         logger.error(
           {
             method: req.method,
             url: req.url,
-            code: err.code,
+            code: prismaError.code,
           },
           'Database error'
         )
 
-        if (err.code === 'P2002') {
+        if (prismaError.code === 'P2002') {
           return res.status(409).json({
             status: 'error',
             message: 'Resource already exists',
           })
         }
-        if (err.code === 'P2025') {
+        if (prismaError.code === 'P2025') {
           return res.status(404).json({
             status: 'error',
             message: 'Resource not found',
