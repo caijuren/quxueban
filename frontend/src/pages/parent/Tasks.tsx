@@ -72,7 +72,11 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
 };
 
 async function fetchTasks(childId?: number): Promise<Task[]> {
-  const params = childId ? { childId } : {};
+  // 强制传递childId，确保数据隔离
+  if (!childId) {
+    return [];
+  }
+  const params = { childId };
   const r = await apiClient.get('/tasks', { params });
   return r.data.data || [];
 }
@@ -125,7 +129,8 @@ export default function TasksPage() {
   const queryClient = useQueryClient();
   const { data: tasks = [], isLoading } = useQuery({ 
     queryKey: ['tasks', selectedChildId], 
-    queryFn: () => fetchTasks(selectedChildId || undefined) 
+    queryFn: () => fetchTasks(selectedChildId || undefined),
+    enabled: !!selectedChildId // 只有在选择了孩子时才查询
   });
 
   const deleteMutation = useMutation({

@@ -485,12 +485,17 @@ export default function PlansPage() {
   };
 
   const { data: planTasks = [] } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', selectedChildId],
     queryFn: async () => {
-      const res = await apiClient.get('/tasks');
+      // 强制传递childId，确保数据隔离
+      if (!selectedChildId) {
+        return [];
+      }
+      const res = await apiClient.get('/tasks', { params: { childId: selectedChildId } });
       return res.data.data || [];
     },
     staleTime: 60 * 1000,
+    enabled: !!selectedChildId, // 只有在选择了孩子时才查询
   });
 
   const isCurrentWeek = isSameDay(currentWeekStart, startOfWeek(new Date(), { weekStartsOn: 1 }));

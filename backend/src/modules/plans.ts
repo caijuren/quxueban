@@ -375,6 +375,11 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
 
   const weekNo = getWeekNo(new Date(weekStart))
 
+  // 强制要求提供childId参数，确保数据隔离
+  if (role === 'parent' && !childId) {
+    throw new AppError(400, 'Missing required parameter: childId. Data isolation is mandatory for parents.')
+  }
+
   // Handle mock mode
   if (!env.DATABASE_URL) {
     const mockChildren = [
@@ -385,9 +390,8 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
     let children = mockChildren
 
     if (role === 'parent') {
-      if (childId) {
-        children = mockChildren.filter(c => c.id === childId)
-      }
+      // 强制过滤：家长必须指定childId
+      children = mockChildren.filter(c => c.id === childId)
     } else if (role === 'child') {
       children = mockChildren.filter(c => c.id === userId)
     }
@@ -408,78 +412,49 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
   let weeklyPlans = []
 
   if (role === 'parent') {
-    if (childId) {
-      // Parents can view specific child's plans
-      const child = await prisma.user.findUnique({
-        where: {
-          id: childId,
-          familyId,
-          role: 'child',
-          status: 'active',
-        },
-        select: {
-          id: true,
-          name: true,
-          avatar: true,
-        },
-      })
-
-      if (!child) {
-        throw new AppError(404, 'Child not found')
-      }
-
-      children = [child]
-
-      // Get weekly plans only for the specific child
-      weeklyPlans = await prisma.weeklyPlan.findMany({
-        where: {
-          childId,
-          weekNo,
-        },
-        include: {
-          task: true,
-          child: {
-            select: {
-              id: true,
-              name: true,
-              avatar: true,
-            },
-          },
-        },
-      })
-    } else {
-      // Parents can view all children in the family
-      children = await prisma.user.findMany({
-        where: {
-          familyId,
-          role: 'child',
-          status: 'active',
-        },
-        select: {
-          id: true,
-          name: true,
-          avatar: true,
-        },
-      })
-
-      // Get weekly plans for all children
-      weeklyPlans = await prisma.weeklyPlan.findMany({
-        where: {
-          familyId,
-          weekNo,
-        },
-        include: {
-          task: true,
-          child: {
-            select: {
-              id: true,
-              name: true,
-              avatar: true,
-            },
-          },
-        },
-      })
+    // 强制要求childId，确保数据隔离
+    if (!childId) {
+      throw new AppError(400, 'Missing required parameter: childId. Data isolation is mandatory.')
     }
+    
+    // Parents can view specific child's plans only
+    const child = await prisma.user.findUnique({
+      where: {
+        id: childId,
+        familyId,
+        role: 'child',
+        status: 'active',
+      },
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+      },
+    })
+
+    if (!child) {
+      throw new AppError(404, 'Child not found')
+    }
+
+    children = [child]
+
+    // Get weekly plans only for the specific child - 严格隔离
+    weeklyPlans = await prisma.weeklyPlan.findMany({
+      where: {
+        childId,  // 强制使用childId过滤
+        weekNo,
+      },
+      include: {
+        task: true,
+        child: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+      },
+    })
   } else if (role === 'child') {
     // Children can only view their own plans
     const child = await prisma.user.findUnique({

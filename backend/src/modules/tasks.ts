@@ -99,6 +99,7 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo } = req.body
   const { familyId } = req.user!
   if (!name || !category || !type) throw new AppError(400, 'Missing required fields: name, category, type')
+  if (!appliesTo || !Array.isArray(appliesTo) || appliesTo.length === 0) throw new AppError(400, 'Task must be assigned to at least one child (appliesTo is required)')
 
   const mappedCategory = CATEGORY_MAP[category] || category
   if (!['school', 'extra', 'advanced', 'english', 'sports', 'chinese'].includes(mappedCategory)) throw new AppError(400, 'Invalid category')
@@ -123,6 +124,11 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
 tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = req.query.childId ? parseInt(req.query.childId as string) : null
+
+  // 强制要求提供childId参数，确保数据隔离
+  if (!childId) {
+    throw new AppError(400, 'Missing required parameter: childId. Data isolation is mandatory.')
+  }
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -192,39 +198,27 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
       }
     ]
 
-    // Apply childId filter
-    let filteredTasks = mockTasks
-    if (childId) {
-      filteredTasks = mockTasks.filter(task => task.appliesTo.includes(childId))
-    }
+    // Apply childId filter - 强制过滤
+    const filteredTasks = mockTasks.filter(task => task.appliesTo.includes(childId))
 
     res.json({ status: 'success', data: filteredTasks })
     return
   }
 
   try {
-    let tasks = []
-    if (childId) {
-      // 如果提供了 childId，只返回适用于该孩子的任务
-      tasks = await prisma.$queryRaw`
-        SELECT id, family_id, name, category, type, time_per_unit, 
-               weekly_rule, sort_order, is_active, tags, applies_to, created_at, updated_at
-        FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
-      `
-      
-      // 过滤适用于该孩子的任务
-      tasks = (tasks as any[]).filter(task => {
-        const appliesTo = task.applies_to as number[] || []
-        return appliesTo.includes(childId)
-      })
-    } else {
-      // 如果没有提供 childId，返回所有任务
-      tasks = await prisma.$queryRaw`
-        SELECT id, family_id, name, category, type, time_per_unit, 
-               weekly_rule, sort_order, is_active, tags, applies_to, created_at, updated_at
-        FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
-      `
-    }
+    // 强制使用childId过滤，确保数据隔离
+    let tasks = await prisma.$queryRaw`
+      SELECT id, family_id, name, category, type, time_per_unit, 
+             weekly_rule, sort_order, is_active, tags, applies_to, created_at, updated_at
+      FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
+    `
+    
+    // 严格过滤：只返回明确分配给该孩子的任务
+    tasks = (tasks as any[]).filter(task => {
+      const appliesTo = task.applies_to as number[] || []
+      // 如果appliesTo为空数组，说明任务未分配，不应该显示给任何孩子
+      return appliesTo.includes(childId)
+    })
     
     const formattedTasks = (tasks as any[]).map(task => {
       // 从 tags 中提取 scheduleRule
@@ -268,6 +262,11 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
   const { name, category, type, timePerUnit, tags, appliesTo } = req.body
+  if (appliesTo !== undefined) {
+    if (!Array.isArray(appliesTo) || appliesTo.length === 0) {
+      throw new AppError(400, 'Task must be assigned to at least one child (appliesTo cannot be empty)')
+    }
+  }
   
   const mappedCategory = category ? (CATEGORY_MAP[category] || category) : undefined
   const mappedType = type ? (TYPE_MAP[type] || type) : undefined
@@ -381,10 +380,10 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
       const allocation: any[] = []
       const dayTimeUsed = [0, 0, 0, 0, 0, 0, 0]
 
-      // 过滤适用于该孩子的任务
+      // 过滤适用于该孩子的任务 - 严格隔离：只包含明确分配给该孩子的任务
       const childTasks = tasks.filter(task => {
-        const appliesTo = task.appliesTo as number[] | null
-        return !appliesTo || appliesTo.length === 0 || appliesTo.includes(child.id)
+        const appliesTo = task.appliesTo as number[] || []
+        return appliesTo.includes(child.id)
       })
 
       // 排序：固定任务优先

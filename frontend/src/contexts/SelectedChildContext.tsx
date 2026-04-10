@@ -83,10 +83,10 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
 
   const selectedChild = childrenList.find(c => c.id === selectedChildId) || null;
 
-  // 初始加载孩子列表
+  // 初始加载孩子列表，以及当用户状态变化时重新加载
   useEffect(() => {
     refreshChildren();
-  }, [refreshChildren]);
+  }, [refreshChildren, isAuthenticated, user]);
 
   return (
     <SelectedChildContext.Provider value={{
