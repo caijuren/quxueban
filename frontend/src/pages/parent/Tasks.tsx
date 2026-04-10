@@ -125,7 +125,7 @@ export default function TasksPage() {
   const queryClient = useQueryClient();
   const { data: tasks = [], isLoading } = useQuery({ 
     queryKey: ['tasks', selectedChildId], 
-    queryFn: () => fetchTasks(selectedChildId) 
+    queryFn: () => fetchTasks(selectedChildId || undefined) 
   });
 
   const deleteMutation = useMutation({
