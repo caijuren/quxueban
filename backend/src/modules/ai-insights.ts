@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import fetch from 'node-fetch'
+import axios from 'axios'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
@@ -73,6 +74,12 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
   const { familyId } = req.user!
   const { childId } = req.body
 
+  // Validate childId if provided
+  const parsedChildId = childId ? parseInt(childId) : null
+  if (childId && isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
+
   // Handle mock mode
   if (!env.DATABASE_URL) {
     // Return mock AI insight
@@ -80,7 +87,7 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
       id: Math.floor(Math.random() * 10000),
       familyId: familyId,
       bookId: bookId,
-      childId: childId || 2,
+      childId: parsedChildId || 2,
       insights: {
         contentAnalysis: "这是一本关于友谊和勇气的儿童故事书，通过主人公的冒险经历，传递了积极向上的价值观。",
         readingProgress: "孩子的阅读速度适中，能够理解书中的主要内容，建议增加阅读时间以提高阅读流畅度。",
@@ -112,20 +119,26 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
 
   // Get reading logs for the book
   const readingLogs = await prisma.readingLog.findMany({
-    where: { bookId, familyId, childId },
+    where: { bookId, familyId, childId: parsedChildId },
     orderBy: { readDate: 'asc' }
   })
 
   // Get child information
   let childInfo = null
-  if (childId) {
+  if (parsedChildId) {
     childInfo = await prisma.user.findFirst({
-      where: { id: childId, familyId }
+      where: { id: parsedChildId, familyId }
     })
   }
 
+  // Calculate reading statistics
+  const readingStats = calculateReadingStats(readingLogs)
+
+  // Get book content description (from ISBN API or database)
+  const bookDescription = await getBookDescription(book.isbn, book.name, book.id)
+
   // Prepare prompt for AI
-  const prompt = generateAIPrompt(book, readingLogs, childInfo)
+  const prompt = generateAIPrompt(book, bookDescription, readingLogs, readingStats, childInfo)
 
   try {
     // Call AI API (using a placeholder for now)
@@ -136,7 +149,7 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
       data: {
         familyId,
         bookId,
-        childId,
+        childId: parsedChildId,
         insights: aiResponse,
         status: 'completed',
       }
@@ -157,47 +170,133 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
 })
 
 /**
+ * Calculate reading statistics from reading logs
+ */
+function calculateReadingStats(readingLogs: any[]) {
+  if (readingLogs.length === 0) {
+    return {
+      totalDays: 0,
+      totalTimes: 0,
+      totalMinutes: 0,
+      totalPages: 0,
+      averageMinutesPerSession: 0,
+      averagePagesPerSession: 0
+    }
+  }
+
+  const totalMinutes = readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0)
+  const totalPages = readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0)
+  const uniqueDays = new Set(readingLogs.map(log => new Date(log.readDate).toDateString())).size
+
+  return {
+    totalDays: uniqueDays,
+    totalTimes: readingLogs.length,
+    totalMinutes,
+    totalPages,
+    averageMinutesPerSession: Math.round(totalMinutes / readingLogs.length),
+    averagePagesPerSession: Math.round(totalPages / readingLogs.length)
+  }
+}
+
+/**
+ * Get book description from ISBN API or database
+ */
+async function getBookDescription(isbn: string, bookName: string, bookId: number): Promise<string> {
+  if (!isbn) {
+    return '暂无内容简介'
+  }
+
+  try {
+    // Call ISBN API to get book description
+    // Using Jisu API as an example (you may need to adjust based on your actual API)
+    const API_KEY = env.JISU_API_KEY || 'your_api_key';
+    const API_URL = `https://api.jisuapi.com/isbn/query?appkey=${API_KEY}&isbn=${isbn}`;
+    
+    console.log('Fetching book description from API:', API_URL);
+    
+    const response = await axios.get(API_URL);
+    const data = response.data;
+    
+    if (data.status === '0' && data.result) {
+      const description = data.result.summary || `这是《${bookName}》的内容简介，描述了书籍的主要内容和主题思想。`;
+      
+      // Update book description in database
+      await prisma.book.update({
+        where: { id: bookId },
+        data: { description }
+      });
+      
+      console.log('Book description updated in database for book:', bookName);
+      return description;
+    } else {
+      console.log('No description found for ISBN:', isbn);
+      return `这是《${bookName}》的内容简介，描述了书籍的主要内容和主题思想。`;
+    }
+  } catch (error) {
+    console.error('Error fetching book description:', error);
+    return `这是《${bookName}》的内容简介，描述了书籍的主要内容和主题思想。`;
+  }
+}
+
+/**
  * Generate AI prompt for book analysis
  */
-function generateAIPrompt(book: any, readingLogs: any[], childInfo: any) {
-  let prompt = `你是一位专业的儿童阅读分析专家，请根据以下信息为这本书生成一份详细的阅读分析报告：\n\n`
+function generateAIPrompt(book: any, bookDescription: string, readingLogs: any[], readingStats: any, childInfo: any) {
+  let prompt = `你是一位资深儿童阅读导师。请基于以下信息，为${childInfo?.name || '孩子'}生成一份专属阅读报告。\n\n`
 
   // Book information
-  prompt += `**书籍信息**\n`
-  prompt += `书名：${book.name}\n`
+  prompt += `【书籍信息】\n`
+  prompt += `书名：《${book.name}》\n`
   prompt += `作者：${book.author}\n`
   prompt += `出版社：${book.publisher || '未知'}\n`
+  prompt += `ISBN：${book.isbn || '未知'}\n`
   prompt += `总页数：${book.totalPages}\n`
-  prompt += `ISBN：${book.isbn || '未知'}\n\n`
+  prompt += `内容简介：${bookDescription}\n\n`
 
   // Child information
   if (childInfo) {
-    prompt += `**孩子信息**\n`
-    prompt += `姓名：${childInfo.name}\n`
-    prompt += `年龄：${calculateAge(childInfo.birthDate)}岁\n\n`
+    prompt += `【${childInfo.name}的基本信息】\n`
+    prompt += `昵称：${childInfo.name}\n`
+    prompt += `年龄：${calculateAge(childInfo.birthDate || new Date())}岁\n\n`
   }
 
-  // Reading logs
-  if (readingLogs.length > 0) {
-    prompt += `**阅读记录**\n`
-    readingLogs.forEach((log, index) => {
-      prompt += `阅读 ${index + 1}：${new Date(log.readDate).toLocaleDateString('zh-CN')}\n`
-      prompt += `页码：第 ${log.startPage}-${log.endPage} 页\n`
-      if (log.note) {
-        prompt += `备注：${log.note}\n`
-      }
+  // Reading statistics
+  if (readingStats.totalTimes > 0) {
+    prompt += `【${childInfo?.name || '孩子'}的阅读数据】\n`
+    prompt += `总用时：${readingStats.totalMinutes}分钟\n`
+    prompt += `阅读天数：${readingStats.totalDays}天\n`
+    prompt += `阅读次数：${readingStats.totalTimes}次\n`
+    prompt += `阅读页数：${readingStats.totalPages}页\n`
+    prompt += `平均每次阅读：${readingStats.averageMinutesPerSession}分钟，${readingStats.averagePagesPerSession}页\n\n`
+
+    // Detailed reading process
+    if (readingLogs.length > 0) {
+      prompt += `阅读过程：分${readingLogs.length}次读完，详细记录如下：\n`
+      readingLogs.forEach((log, index) => {
+        prompt += `${index + 1}. ${new Date(log.readDate).toLocaleDateString('zh-CN')}：第${log.startPage}-${log.endPage}页`
+        if (log.minutes) {
+          prompt += `，用时${log.minutes}分钟`
+        }
+        prompt += `\n`
+      })
       prompt += `\n`
-    })
+
+      // Child notes
+      const notes = readingLogs.filter(log => log.note).map(log => log.note).join('\n')
+      if (notes) {
+        prompt += `孩子笔记："${notes}"\n\n`
+      }
+    }
   }
 
   // Analysis requirements
-  prompt += `**分析要求**\n`
-  prompt += `1. 书籍内容分析：总结书籍的主要内容、主题思想和教育价值\n`
-  prompt += `2. 阅读进度分析：分析孩子的阅读速度和习惯\n`
-  prompt += `3. 能力发展分析：基于阅读内容，分析对孩子语言、认知、情感等方面的发展影响\n`
-  prompt += `4. 阅读建议：提供针对性的阅读建议和延伸活动\n`
-  prompt += `5. 家长指导：给家长的具体指导建议\n`
-  prompt += `\n请以JSON格式返回分析结果，包含以下字段：\n`
+  prompt += `【请生成报告】\n`
+  prompt += `请确保所有分析严格基于上方提供的【书籍信息】和【阅读数据】，不得使用通用模板。\n\n`
+  prompt += `1. **内容提炼**：用孩子听得懂的话，提炼本书最特别的2个核心情节或道理。\n`
+  prompt += `2. **行为画像**：根据上述数据，描述孩子的阅读习惯（如"你展现了很好的坚持力，尤其在周末读得更多"）。\n`
+  prompt += `3. **亲子互动建议**：基于本书具体内容，设计2个可以问孩子的具体问题。\n`
+  prompt += `4. **延伸推荐**：推荐1本在主题或难度上相关的书，并简单说明理由。\n\n`
+  prompt += `请以JSON格式返回分析结果，包含以下字段：\n`
   prompt += `{\n`
   prompt += `  "contentAnalysis": "",\n`
   prompt += `  "readingProgress": "",\n`
@@ -226,14 +325,45 @@ function calculateAge(birthDate: string) {
 /**
  * Call AI API
  */
-async function callAIAPI(_prompt: string) {
-  // This is a placeholder for the actual AI API call
-  // In a real implementation, you would call OpenAI API or another LLM
-  return {
-    contentAnalysis: "这是一本关于友谊和勇气的儿童故事书，通过主人公的冒险经历，传递了积极向上的价值观。",
-    readingProgress: "孩子的阅读速度适中，能够理解书中的主要内容，建议增加阅读时间以提高阅读流畅度。",
-    abilityDevelopment: "阅读这本书有助于培养孩子的语言表达能力、想象力和情感认知能力。",
-    readingSuggestions: "建议家长与孩子一起阅读，鼓励孩子分享书中的故事和感受，还可以进行角色扮演等延伸活动。",
-    parentGuidance: "家长可以通过提问的方式帮助孩子理解书中的道理，培养孩子的思考能力和表达能力。"
+async function callAIAPI(prompt: string) {
+  console.log('Sending prompt to AI API:', prompt);
+  
+  const ACCESS_TOKEN = process.env.BAIDU_ACCESS_TOKEN; // 从环境变量获取
+  
+  if (!ACCESS_TOKEN) {
+    throw new Error('BAIDU_ACCESS_TOKEN is not set in environment variables');
+  }
+  
+  const API_URL = `https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions?access_token=${ACCESS_TOKEN}`;
+  
+  try {
+    const response = await axios.post(API_URL, {
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      model: 'ERNIE-4.0-8K' // 指定模型
+    });
+    
+    console.log('AI API response:', response.data);
+    
+    // 文心一言返回格式需解析
+    const aiResponseText = response.data.result;
+    console.log('AI response text:', aiResponseText);
+    
+    // 1. 首先，尝试将返回的文本解析为JSON对象
+    // 2. 如果解析失败，说明模型没有遵循指令，需要记录错误并降级处理
+    try {
+      return JSON.parse(aiResponseText);
+    } catch (e) {
+      console.error('AI返回结果非JSON格式:', aiResponseText);
+      // 降级：返回一个包含原始文本的错误结构，或抛出异常
+      throw new Error('AI响应格式错误，请检查提示词。');
+    }
+  } catch (error) {
+    console.error('Error calling AI API:', error);
+    throw new Error('调用AI API失败，请稍后重试。');
   }
 }

@@ -266,7 +266,7 @@ authRouter.post('/child/login', async (req, res: Response) => {
  */
 authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   try {
-    const { name, avatar, pin } = req.body
+    const { name, avatar, pin, age, grade, gender, birthday, interests, personality } = req.body
     const { familyId, userId } = req.user!
 
     console.log(`[ADD CHILD] User ${userId}, Family ${familyId}, Name: ${name}`)
@@ -306,6 +306,14 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
         passwordHash,
         familyId,
         status: 'active',
+        settings: {
+          age,
+          grade,
+          gender,
+          birthday,
+          interests,
+          personality
+        }
       },
     })
 
@@ -573,7 +581,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       throw new AppError(400, '无效的孩子ID')
     }
     
-    const { name, avatar, pin } = req.body
+    const { name, avatar, pin, age, grade, gender, birthday, interests, personality } = req.body
     const { familyId, userId } = req.user!
 
     console.log(`[UPDATE CHILD] User ${userId}, Family ${familyId}, Child ${id}, Body:`, JSON.stringify(req.body))
@@ -594,7 +602,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     }
 
     // Build update data
-    const updateData: { name?: string; avatar?: string; passwordHash?: string } = {}
+    const updateData: { name?: string; avatar?: string; passwordHash?: string; settings?: any } = {}
 
     if (name !== undefined && name !== existingChild.name) {
       // Check if another child with the same name exists (excluding current child)
@@ -626,6 +634,21 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
         throw new AppError(400, 'PIN必须是4位数字')
       }
       updateData.passwordHash = await bcrypt.hash(pin, 12)
+    }
+
+    // Update settings if provided
+    const settingsUpdate = {
+      age,
+      grade,
+      gender,
+      birthday,
+      interests,
+      personality
+    }
+
+    // Only update settings if at least one field is provided
+    if (Object.values(settingsUpdate).some(value => value !== undefined)) {
+      updateData.settings = settingsUpdate
     }
 
     // Update child

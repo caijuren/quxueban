@@ -141,6 +141,9 @@ readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: Aut
     throw new AppError(404, '书籍不存在')
   }
 
+  // Calculate pages read
+  const pagesRead = endPage && startPage ? endPage - startPage + 1 : 0;
+
   const log = await prisma.readingLog.create({
     data: {
       familyId,
@@ -151,7 +154,7 @@ readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: Aut
       performance: performance || '',
       note: note || '',
       readStage: readStage || '',
-      pages: pages || 0,
+      pages: pagesRead,
       minutes: minutes || 0,
       startPage: startPage || 0,
       endPage: endPage || 0,
@@ -167,6 +170,43 @@ readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: Aut
     where: { id: bookId },
     data: { readCount: { increment: 1 } }
   })
+
+  // Update or create reading state
+  if (childId) {
+    // Check if reading state exists
+    const existingState = await prisma.bookReadState.findFirst({
+      where: { bookId, childId }
+    })
+
+    // Calculate total read pages for this child
+    const totalReadPages = await prisma.readingLog.aggregate({
+      where: { bookId, childId },
+      _sum: { pages: true }
+    })
+
+    const totalPagesRead = totalReadPages._sum.pages || 0;
+    const isFinished = endPage >= book.totalPages;
+
+    if (existingState) {
+      await prisma.bookReadState.update({
+        where: { id: existingState.id },
+        data: {
+          status: isFinished ? 'finished' : existingState.status,
+          finishedAt: isFinished ? new Date() : existingState.finishedAt,
+        }
+      })
+    } else {
+      await prisma.bookReadState.create({
+        data: {
+          familyId,
+          bookId,
+          childId,
+          status: isFinished ? 'finished' : 'reading',
+          finishedAt: isFinished ? new Date() : null,
+        }
+      })
+    }
+  }
 
   res.status(201).json({
     status: 'success',

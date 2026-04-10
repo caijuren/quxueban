@@ -188,7 +188,7 @@ export default function BookInsightsPage() {
                 <CardContent className="p-6">
                   <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
                     <BookOpen className="size-4 text-blue-500" />
-                    书籍内容分析
+                    📖 故事里有什么？
                   </h4>
                   <p className="text-gray-700">{insights.insights.contentAnalysis}</p>
                 </CardContent>
@@ -199,7 +199,7 @@ export default function BookInsightsPage() {
                 <CardContent className="p-6">
                   <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
                     <Clock className="size-4 text-green-500" />
-                    阅读进度分析
+                    🎯 {book.name}的阅读画像
                   </h4>
                   <p className="text-gray-700">{insights.insights.readingProgress}</p>
                 </CardContent>
@@ -210,7 +210,7 @@ export default function BookInsightsPage() {
                 <CardContent className="p-6">
                   <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
                     <Brain className="size-4 text-purple-500" />
-                    能力发展分析
+                    💡 一起来聊聊
                   </h4>
                   <p className="text-gray-700">{insights.insights.abilityDevelopment}</p>
                 </CardContent>
@@ -221,7 +221,7 @@ export default function BookInsightsPage() {
                 <CardContent className="p-6">
                   <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
                     <Lightbulb className="size-4 text-yellow-500" />
-                    阅读建议
+                    🔍 接下来读什么？
                   </h4>
                   <p className="text-gray-700">{insights.insights.readingSuggestions}</p>
                 </CardContent>
@@ -232,7 +232,7 @@ export default function BookInsightsPage() {
                 <CardContent className="p-6">
                   <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
                     <Users className="size-4 text-red-500" />
-                    家长指导
+                    👨‍👩‍👧‍👦 家长指导
                   </h4>
                   <p className="text-gray-700">{insights.insights.parentGuidance}</p>
                 </CardContent>

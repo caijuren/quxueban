@@ -58,7 +58,13 @@ interface Child {
 const childSchema = z.object({
   name: z.string().min(1, '请输入孩子姓名').max(20, '姓名不能超过20个字符'),
   avatar: z.string().optional(),
-  pin: z.string().length(4, 'PIN码必须是4位数字').regex(/^\d+$/, 'PIN码必须是数字')
+  pin: z.string().length(4, 'PIN码必须是4位数字').regex(/^\d+$/, 'PIN码必须是数字'),
+  age: z.string().optional(),
+  grade: z.string().optional(),
+  gender: z.string().optional(),
+  birthday: z.string().optional(),
+  interests: z.array(z.string()).optional(),
+  personality: z.string().optional()
 });
 
 type ChildFormData = z.infer<typeof childSchema>;
@@ -408,10 +414,10 @@ export default function ChildrenPage() {
         {dialogOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={closeDialog} />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-4 lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[520px] lg:max-h-[85vh] bg-white rounded-3xl shadow-2xl z-50 overflow-hidden flex flex-col">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-4 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[520px] lg:max-h-[85vh] bg-white rounded-3xl shadow-2xl z-50 overflow-hidden flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                <h2 className="text-xl font-bold text-gray-900">{editingChild ? '编辑孩子信息' : '添加孩子'}</h2>
+                <h2 className="text-xl font-bold text-gray-900">{editingChild ? '编辑孩子档案' : '添加孩子'}</h2>
                 <Button variant="ghost" size="icon" onClick={closeDialog} className="rounded-full"><X className="size-5" /></Button>
               </div>
 
@@ -514,6 +520,70 @@ export default function ChildrenPage() {
                     <Input type="password" maxLength={4} {...register('pin')} placeholder="4位数字PIN码" className="mt-2 rounded-xl h-12 bg-gray-50 border-0 text-center tracking-[0.5em] text-lg" />
                     {errors.pin && <p className="text-red-500 text-xs mt-1">{errors.pin.message}</p>}
                     <p className="text-xs text-gray-400 mt-2">PIN码用于孩子登录时的身份验证，建议使用简单易记的4位数字</p>
+                  </div>
+
+                  {/* 年龄/年级 */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">年龄/年级 *</Label>
+                    <select {...register('age')} className="mt-2 w-full rounded-xl h-12 bg-gray-50 border-0 px-4 text-gray-700">
+                      <option value="">请选择</option>
+                      <option value="3">3岁</option>
+                      <option value="4">4岁</option>
+                      <option value="5">5岁</option>
+                      <option value="6">6岁</option>
+                      <option value="7">7岁</option>
+                      <option value="8">8岁</option>
+                      <option value="9">9岁</option>
+                      <option value="10">10岁</option>
+                      <option value="11">11岁</option>
+                      <option value="12">12岁</option>
+                      <option value="grade1">小学一年级</option>
+                      <option value="grade2">小学二年级</option>
+                      <option value="grade3">小学三年级</option>
+                      <option value="grade4">小学四年级</option>
+                      <option value="grade5">小学五年级</option>
+                      <option value="grade6">小学六年级</option>
+                    </select>
+                  </div>
+
+                  {/* 性别 */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">性别</Label>
+                    <div className="mt-2 flex gap-6">
+                      <label className="flex items-center gap-2">
+                        <input type="radio" {...register('gender')} value="male" className="text-purple-500" />
+                        <span className="text-gray-700">男孩</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="radio" {...register('gender')} value="female" className="text-purple-500" />
+                        <span className="text-gray-700">女孩</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* 生日 */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">生日</Label>
+                    <Input type="date" {...register('birthday')} className="mt-2 rounded-xl h-12 bg-gray-50 border-0 px-4" />
+                  </div>
+
+                  {/* 兴趣爱好 */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">兴趣爱好</Label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {['科幻', '恐龙', '绘画', '足球', '音乐', '舞蹈', '阅读', '数学', '科学', '手工'].map((interest) => (
+                        <label key={interest} className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full text-sm">
+                          <input type="checkbox" {...register('interests', { valueAsArray: true })} value={interest} className="text-purple-500" />
+                          <span className="text-gray-700">{interest}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 个性描述 */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">个性描述</Label>
+                    <textarea {...register('personality')} placeholder="例如：活泼开朗，喜欢问为什么..." className="mt-2 w-full rounded-xl h-24 bg-gray-50 border-0 px-4 py-3 resize-none" />
                   </div>
                 </form>
               </div>

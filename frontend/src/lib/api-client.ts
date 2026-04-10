@@ -36,21 +36,31 @@ apiClient.interceptors.request.use(
 
     // 自动注入 selectedChildId 到请求参数
     // 只对非 /auth/ 和 /settings/ 路径注入，避免干扰获取用户信息和设置的请求
-    const selectedChildId = localStorage.getItem('selected_child_id');
+    // 同时避免在文件上传请求中注入，因为文件上传使用 multipart/form-data 格式
+    // 只在请求体中没有 childId 时才注入
+    const selectedChildIdStr = localStorage.getItem('selected_child_id');
     const url = config.url || '';
-    if (selectedChildId && !url.includes('/auth/') && !url.includes('/settings/')) {
-      if (config.method?.toLowerCase() === 'get') {
-        // GET 请求：添加到 query 参数
-        config.params = {
-          ...config.params,
-          childId: selectedChildId,
-        };
-      } else {
-        // 非 GET 请求：添加到 body 参数
-        config.data = {
-          ...config.data,
-          childId: selectedChildId,
-        };
+    const isFileUpload = config.headers?.['Content-Type']?.includes('multipart/form-data');
+    if (selectedChildIdStr && selectedChildIdStr !== 'null' && !url.includes('/auth/') && !url.includes('/settings/') && !isFileUpload) {
+      const selectedChildId = parseInt(selectedChildIdStr);
+      if (!isNaN(selectedChildId)) {
+        if (config.method?.toLowerCase() === 'get') {
+          // GET 请求：添加到 query 参数，仅当 query 中没有 childId 时
+          if (!config.params || !('childId' in config.params)) {
+            config.params = {
+              ...config.params,
+              childId: selectedChildId,
+            };
+          }
+        } else {
+          // 非 GET 请求：添加到 body 参数，仅当 body 中没有 childId 时
+          if (!config.data || !('childId' in config.data)) {
+            config.data = {
+              ...config.data,
+              childId: selectedChildId,
+            };
+          }
+        }
       }
     }
 

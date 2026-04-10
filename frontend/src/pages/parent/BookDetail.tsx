@@ -13,12 +13,16 @@ import {
   Star,
   MessageSquare,
   Brain,
+  Clock,
+  FileText,
+  Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 interface ReadingLog {
   id: number;
@@ -48,6 +52,13 @@ interface Book {
   readCount: number;
   totalPages: number;
   readingLogs: ReadingLog[];
+  readState?: {
+    id: number;
+    status: string;
+    finishedAt: string | null;
+  } | null;
+  totalReadPages: number;
+  totalReadMinutes: number;
 }
 
 async function fetchBook(id: number): Promise<Book> {
@@ -64,6 +75,10 @@ async function deleteReadingLog(id: number): Promise<void> {
   await apiClient.delete(`/reading-logs/logs/${id}`);
 }
 
+async function startNewReading(bookId: number, childId: number): Promise<void> {
+  await apiClient.post(`/library/${bookId}/start`, { childId });
+}
+
 const typeLabels: Record<string, string> = {
   children: '儿童故事',
   tradition: '传统文化',
@@ -77,6 +92,7 @@ export default function BookDetailPage() {
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [logToDelete, setLogToDelete] = useState<number | null>(null);
+  const { selectedChildId } = useSelectedChild();
 
   const { data: book, isLoading } = useQuery({
     queryKey: ['book', id],
@@ -88,6 +104,7 @@ export default function BookDetailPage() {
     mutationFn: (log: Partial<ReadingLog>) => addReadingLog(Number(id), log),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['book', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
       toast.success('阅读记录添加成功');
       setShowAddForm(false);
     },
@@ -98,11 +115,28 @@ export default function BookDetailPage() {
     mutationFn: deleteReadingLog,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['book', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
       toast.success('阅读记录删除成功');
       setLogToDelete(null);
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
+
+  const startNewReadingMutation = useMutation({
+    mutationFn: (childId: number) => startNewReading(Number(id), childId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['book', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      toast.success('已开始新一轮阅读');
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  // 计算阅读进度
+  const calculateProgress = () => {
+    if (!book || !book.totalPages) return 0;
+    return Math.round((book.totalReadPages / book.totalPages) * 100);
+  };
 
   if (isLoading) {
     return (
@@ -121,6 +155,9 @@ export default function BookDetailPage() {
       </div>
     );
   }
+
+  const progress = calculateProgress();
+  const isFinished = book.readState?.status === 'finished';
 
   return (
     <div className="space-y-6">
@@ -159,11 +196,43 @@ export default function BookDetailPage() {
                   <Tag className="size-4" />
                   <span>{typeLabels[book.type] || book.type}</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <FileText className="size-4" />
+                  <span>{book.totalPages} 页</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="size-4" />
+                  <span>已读 {book.totalReadMinutes} 分钟</span>
+                </div>
               </div>
+              
+              {/* Reading Progress */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <span className="text-gray-600">阅读进度</span>
+                  <span className="font-medium">{progress}%</span>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary rounded-full transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+              
               <div className="mt-4 flex items-center gap-4">
                 <div className="px-4 py-2 rounded-xl bg-purple-100 text-purple-700 font-medium">
                   📚 已读 {book.readCount} 次
                 </div>
+                {isFinished && selectedChildId && (
+                  <Button 
+                    onClick={() => startNewReadingMutation.mutate(selectedChildId)}
+                    className="gap-2 rounded-xl bg-primary text-white"
+                  >
+                    <Play className="size-4" />
+                    开始新一轮阅读
+                  </Button>
+                )}
                 <Button 
                   onClick={() => navigate(`/parent/library/${id}/insights`)}
                   className="gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
@@ -274,7 +343,7 @@ export default function BookDetailPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="fixed inset-x-4 top-1/2 -translate-y-1/2 lg:inset-auto lg:left-1/2 lg:-translate-x-1/2 lg:w-[480px] bg-white rounded-3xl shadow-2xl z-50 p-6 max-h-[80vh] overflow-auto"
+            className="fixed inset-x-4 top-8 bottom-8 lg:inset-auto lg:top-1/2 lg:-translate-y-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:w-[480px] lg:max-h-[80vh] bg-white rounded-3xl shadow-2xl z-50 p-6 overflow-auto"
           >
             <h3 className="text-lg font-semibold mb-4">添加阅读记录</h3>
             <form
@@ -282,11 +351,13 @@ export default function BookDetailPage() {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
                 addMutation.mutate({
+                  childId: selectedChildId,
                   readDate: formData.get('readDate') as string || new Date().toISOString(),
                   effect: formData.get('effect') as string,
                   performance: formData.get('performance') as string,
                   note: formData.get('note') as string,
                   readStage: formData.get('readStage') as string,
+                  minutes: parseInt(formData.get('minutes') as string) || 0,
                   startPage: parseInt(formData.get('startPage') as string) || 0,
                   endPage: parseInt(formData.get('endPage') as string) || 0,
                   evidenceUrl: formData.get('evidenceUrl') as string,
@@ -334,6 +405,16 @@ export default function BookDetailPage() {
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">阅读时长（分钟）</label>
+                <input
+                  type="number"
+                  name="minutes"
+                  placeholder="30"
+                  min="0"
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">开始页数</label>
@@ -366,11 +447,11 @@ export default function BookDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">心得</label>
                 <textarea
                   name="note"
-                  rows={2}
-                  placeholder="其他备注..."
+                  rows={3}
+                  placeholder="记录阅读心得..."
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
                 />
               </div>

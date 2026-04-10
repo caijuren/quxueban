@@ -244,6 +244,7 @@ export default function LibraryPage() {
   const [selectedBookIds, setSelectedBookIds] = useState<Set<number>>(new Set());
   const [batchReadStage, setBatchReadStage] = useState<string>('');
   const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -703,25 +704,54 @@ export default function LibraryPage() {
           {/* Sort */}
           <div className="flex gap-2 overflow-x-auto pb-1 flex-shrink-0">
             <span className="text-sm text-muted-foreground py-2">排序：</span>
-            {[
-              { value: '', label: '默认' },
-              { value: 'recently_finished', label: '最近读完' },
-              { value: 'most_pages', label: '页数最多' },
-              { value: 'most_minutes', label: '时长最长' },
-            ].map((sort) => (
-              <button
-                key={sort.value}
-                onClick={() => setSortBy(sort.value)}
-                className={cn(
-                  'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
-                  sortBy === sort.value
-                    ? 'bg-primary text-white'
-                    : 'bg-muted text-foreground hover:bg-muted/80'
-                )}
-              >
-                {sort.label}
-              </button>
-            ))}
+            {
+              [
+                { value: '', label: '默认' },
+                { value: 'recently_finished', label: '最近读完' },
+                { value: 'most_pages', label: '页数最多' },
+                { value: 'most_minutes', label: '时长最长' },
+              ].map((sort) => (
+                <button
+                  key={sort.value}
+                  onClick={() => setSortBy(sort.value)}
+                  className={cn(
+                    'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                    sortBy === sort.value
+                      ? 'bg-primary text-white'
+                      : 'bg-muted text-foreground hover:bg-muted/80'
+                  )}
+                >
+                  {sort.label}
+                </button>
+              ))
+            }
+          </div>
+          
+          {/* View Mode */}
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-shrink-0">
+            <span className="text-sm text-muted-foreground py-2">视图：</span>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                viewMode === 'grid'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              网格
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                viewMode === 'list'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              列表
+            </button>
           </div>
           
           {/* Action Buttons */}
@@ -848,13 +878,16 @@ export default function LibraryPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0 * 0.1 }}
         >
-          <Card className="border border-border shadow-sm rounded-lg border-success h-full">
+          <Card className="border border-border shadow-sm rounded-lg border-success h-full hover:shadow-md transition-all duration-300">
             <CardContent className="p-3 flex flex-col items-center justify-center text-center">
               <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-success/10 text-success">
                 <span className="text-lg">📚</span>
               </div>
               <p className="text-xl font-bold text-foreground">{stats?.finishedBooks || 0}</p>
               <p className="text-xs text-muted-foreground mt-1">已读书籍</p>
+              {stats?.thisMonthRead && stats.thisMonthRead > 0 && (
+                <p className="text-xs text-success mt-1">本月已读 {stats.thisMonthRead} 本</p>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -864,13 +897,14 @@ export default function LibraryPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1 * 0.1 }}
         >
-          <Card className="border border-border shadow-sm rounded-lg border-primary h-full">
+          <Card className="border border-border shadow-sm rounded-lg border-primary h-full hover:shadow-md transition-all duration-300">
             <CardContent className="p-3 flex flex-col items-center justify-center text-center">
               <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-primary/10 text-primary">
                 <span className="text-lg">📄</span>
               </div>
               <p className="text-xl font-bold text-foreground">{stats?.totalPages || 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">总页数</p>
+              <p className="text-xs text-muted-foreground mt-1">阅读总量</p>
+              <p className="text-xs text-muted-foreground mt-1">{formatWordCount(stats?.totalWords)} 字</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -880,13 +914,13 @@ export default function LibraryPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 2 * 0.1 }}
         >
-          <Card className="border border-border shadow-sm rounded-lg border-warning h-full">
+          <Card className="border border-border shadow-sm rounded-lg border-warning h-full hover:shadow-md transition-all duration-300">
             <CardContent className="p-3 flex flex-col items-center justify-center text-center">
               <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-warning/10 text-warning">
-                <span className="text-lg">✍️</span>
+                <span className="text-lg">⏱️</span>
               </div>
-              <p className="text-xl font-bold text-foreground">{formatWordCount(stats?.totalWords)}</p>
-              <p className="text-xs text-muted-foreground mt-1">总字数</p>
+              <p className="text-sm font-bold text-foreground">{stats?.totalHours || 0}h {stats?.remainingMinutes || 0}m</p>
+              <p className="text-xs text-muted-foreground mt-1">阅读时长</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -896,13 +930,16 @@ export default function LibraryPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 3 * 0.1 }}
         >
-          <Card className="border border-border shadow-sm rounded-lg border-info h-full">
+          <Card className="border border-border shadow-sm rounded-lg border-info h-full hover:shadow-md transition-all duration-300">
             <CardContent className="p-3 flex flex-col items-center justify-center text-center">
               <div className="size-8 rounded-lg flex items-center justify-center mb-2 bg-info/10 text-info">
-                <span className="text-lg">⏱️</span>
+                <span className="text-lg">📊</span>
               </div>
-              <p className="text-sm font-bold text-foreground">{stats?.totalHours || 0}h {stats?.remainingMinutes || 0}m</p>
-              <p className="text-xs text-muted-foreground mt-1">阅读时长</p>
+              <p className="text-xl font-bold text-foreground">{stats?.topBooks?.length || 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">热门书籍</p>
+              {stats?.favoriteType && (
+                <p className="text-xs text-muted-foreground mt-1">最爱: {stats.favoriteType}</p>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -917,167 +954,413 @@ export default function LibraryPage() {
             </div>
             <h3 className="font-semibold text-foreground text-lg">图书馆还是空的</h3>
             <p className="text-muted-foreground mt-1">添加第一本书开始阅读之旅</p>
-            <Button
-              onClick={() => setShowAddForm(true)}
-              className="mt-4 rounded-lg bg-primary text-white"
-            >
-              添加图书
-            </Button>
+            <div className="flex gap-3 mt-4">
+              <Button
+                onClick={() => {
+                  setShowAddForm(true);
+                  setAddMode('isbn');
+                }}
+                className="rounded-lg bg-primary text-white"
+              >
+                通过ISBN添加
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowAddForm(true);
+                  setAddMode('manual');
+                }}
+                variant="outline"
+                className="rounded-lg"
+              >
+                手动创建
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {books.map((book, index) => (
-            <motion.div
-              key={book.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="group relative"
-            >
-              {/* P1-6: 批量选择复选框 */}
-              {batchMode && (
-                <div 
-                  className="absolute top-2 left-2 z-20"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleBookSelection(book.id);
-                  }}
-                >
-                  <div className={cn(
-                    "w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all",
-                    selectedBookIds.has(book.id)
-                      ? "bg-primary border-primary"
-                      : "bg-white border-border hover:border-primary"
-                  )}>
-                    {selectedBookIds.has(book.id) && (
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300">
-                {/* Cover */}
-                <div 
-                  className="aspect-[3/4] relative bg-muted cursor-pointer"
-                  onClick={() => batchMode ? toggleBookSelection(book.id) : navigate(`/parent/library/${book.id}`)}
-                >
-                  {book.coverUrl ? (
-                    <img
-                      src={book.coverUrl}
-                      alt={formatBookName(book.name)}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <BookOpen className="w-10 h-10 text-muted-foreground/50" />
-                    </div>
-                  )}
-                  {/* Character Tag */}
-                  {book.characterTag && (
-                    <div className="absolute top-2 right-2">
-                      <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded">
-                        {book.characterTag}
-                      </Badge>
-                    </div>
-                  )}
-                  {/* Reading Badge */}
-                  {book.activeReadings?.length > 0 && (
-                    <div className="absolute bottom-2 left-2">
-                      <Badge className="text-xs bg-success text-white px-2 py-0.5 rounded">
-                        在读中
-                      </Badge>
-                    </div>
-                  )}
-                  {/* Reading State Badge */}
-                  {book.readState?.status === 'finished' && (
-                    <div className="absolute bottom-2 left-2">
-                      <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded">
-                        已读完
-                      </Badge>
-                    </div>
-                  )}
-                  {/* Hover Actions - 非批量模式才显示 */}
-                  {!batchMode && (
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 flex-wrap p-2">
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setStartReadingBook(book);
-                        }}
-                        className="bg-white text-foreground hover:bg-muted rounded text-xs"
-                      >
-                        <Play className="w-3 h-3 mr-1" />
-                        开始阅读
-                      </Button>
-                      {book.readState?.status !== 'finished' && selectedChildId && (
-                        <Button
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMarkFinished(book, selectedChildId);
-                          }}
-                          disabled={updateStateMutation.isPending}
-                          className="bg-success text-white hover:bg-success/90 rounded text-xs"
-                        >
-                          ✓ 标记读完
-                        </Button>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {books.map((book, index) => {
+            // 计算阅读进度
+            const totalPages = book.totalPages || 0;
+            const readPages = book.totalReadPages || 0;
+            const progress = totalPages > 0 ? Math.round((readPages / totalPages) * 100) : 0;
+            
+            // 确定阅读状态
+            let readStatus = '未开始';
+            let statusColor = 'text-muted-foreground';
+            let statusBg = 'bg-muted';
+            
+            if (book.readState?.status === 'finished') {
+              readStatus = '已读完';
+              statusColor = 'text-success';
+              statusBg = 'bg-success/10';
+            } else if (book.activeReadings?.length > 0) {
+              readStatus = '在读中';
+              statusColor = 'text-primary';
+              statusBg = 'bg-primary/10';
+            }
+            
+            return (
+              <motion.div
+                key={book.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="group relative"
+              >
+                {/* P1-6: 批量选择复选框 */}
+                {batchMode && (
+                  <div 
+                    className="absolute top-2 left-2 z-20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleBookSelection(book.id);
+                    }}
+                  >
+                    <div className={cn(
+                      "w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all",
+                      selectedBookIds.has(book.id)
+                        ? "bg-primary border-primary"
+                        : "bg-white border-border hover:border-primary"
+                    )}>
+                      {selectedBookIds.has(book.id) && (
+                        <CheckCircle2 className="w-4 h-4 text-white" />
                       )}
                     </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <CardContent className="p-3">
-                  <h4 className="font-medium text-foreground text-sm truncate">
-                    {formatBookName(book.name)}
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1 truncate">
-                    {book.author || '未知作者'}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-muted-foreground">
-                      {book.totalPages > 0 ? `${book.totalPages}页` : '页数未知'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      已读{book.readLogCount || 0}次
-                    </span>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+                
+                <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                  <div className="flex flex-col md:flex-row">
+                    {/* Cover */}
+                    <div 
+                      className="w-full md:w-1/3 aspect-[3/4] md:aspect-auto relative bg-muted cursor-pointer"
+                      onClick={() => batchMode ? toggleBookSelection(book.id) : navigate(`/parent/library/${book.id}`)}
+                    >
+                      {book.coverUrl ? (
+                        <img
+                          src={book.coverUrl}
+                          alt={formatBookName(book.name)}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <BookOpen className="w-10 h-10 text-muted-foreground/50" />
+                        </div>
+                      )}
+                      {/* Character Tag */}
+                      {book.characterTag && (
+                        <div className="absolute top-2 right-2">
+                          <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded">
+                            {book.characterTag}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
 
-              {/* More Actions - 非批量模式才显示 */}
-              {!batchMode && (
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="w-8 h-8 bg-white/90 hover:bg-white rounded"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEdit(book)}>
-                        编辑
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(book)}
-                        className="text-destructive"
-                      >
-                        删除
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
-            </motion.div>
-          ))}
+                    {/* Core Info and Actions */}
+                    <div className="w-full md:w-2/3 flex flex-col">
+                      {/* Core Info */}
+                      <CardContent className="p-3 flex-1">
+                        <h4 className="font-semibold text-foreground text-base truncate">
+                          {formatBookName(book.name)}
+                        </h4>
+                        <p className="text-sm text-muted-foreground mt-1 truncate">
+                          {book.author || '未知作者'}{book.publisher ? ` / ${book.publisher}` : ''}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {book.totalPages > 0 && (
+                            <Badge className="text-xs bg-muted text-foreground px-2 py-0.5 rounded">
+                              {book.totalPages}页
+                            </Badge>
+                          )}
+                          {book.suitableAge && (
+                            <Badge className="text-xs bg-muted text-foreground px-2 py-0.5 rounded">
+                              适读年龄: {book.suitableAge}
+                            </Badge>
+                          )}
+                          <Badge className={cn("text-xs px-2 py-0.5 rounded", statusColor, statusBg)}>
+                            {readStatus}
+                          </Badge>
+                        </div>
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-muted-foreground">阅读进度</span>
+                            <span className="font-medium">{progress}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-primary rounded-full transition-all duration-500"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+
+                      {/* Status and Actions */}
+                      <div className="p-3 border-t border-border flex items-center justify-between">
+                        <div className="flex gap-2">
+                          {book.readState?.status === 'finished' ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-xs bg-success/10 text-success hover:bg-success/20"
+                              disabled
+                            >
+                              ✅ 已读完
+                            </Button>
+                          ) : book.activeReadings?.length > 0 ? (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStartReadingBook(book);
+                              }}
+                              className="text-xs bg-primary text-white hover:bg-primary/90"
+                            >
+                              ⏸ 继续阅读
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStartReadingBook(book);
+                              }}
+                              className="text-xs bg-primary text-white hover:bg-primary/90"
+                            >
+                              ▶ 开始阅读
+                            </Button>
+                          )}
+                        </div>
+                        {/* More Actions */}
+                        {!batchMode && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="w-8 h-8 rounded"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(book)}>
+                                编辑信息
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(book)}
+                                className="text-destructive"
+                              >
+                                删除
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+      ) : (
+        // 列表视图
+        <div className="space-y-4">
+          {books.map((book, index) => {
+            // 计算阅读进度
+            const totalPages = book.totalPages || 0;
+            const readPages = book.totalReadPages || 0;
+            const progress = totalPages > 0 ? Math.round((readPages / totalPages) * 100) : 0;
+            
+            // 确定阅读状态
+            let readStatus = '未开始';
+            let statusColor = 'text-muted-foreground';
+            let statusBg = 'bg-muted';
+            
+            if (book.readState?.status === 'finished') {
+              readStatus = '已读完';
+              statusColor = 'text-success';
+              statusBg = 'bg-success/10';
+            } else if (book.activeReadings?.length > 0) {
+              readStatus = '在读中';
+              statusColor = 'text-primary';
+              statusBg = 'bg-primary/10';
+            }
+            
+            return (
+              <motion.div
+                key={book.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="group relative"
+              >
+                {/* P1-6: 批量选择复选框 */}
+                {batchMode && (
+                  <div 
+                    className="absolute top-4 left-4 z-20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleBookSelection(book.id);
+                    }}
+                  >
+                    <div className={cn(
+                      "w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all",
+                      selectedBookIds.has(book.id)
+                        ? "bg-primary border-primary"
+                        : "bg-white border-border hover:border-primary"
+                    )}>
+                      {selectedBookIds.has(book.id) && (
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300">
+                  <div className="flex flex-col md:flex-row">
+                    {/* Cover */}
+                    <div 
+                      className="w-24 h-32 relative bg-muted cursor-pointer"
+                      onClick={() => batchMode ? toggleBookSelection(book.id) : navigate(`/parent/library/${book.id}`)}
+                    >
+                      {book.coverUrl ? (
+                        <img
+                          src={book.coverUrl}
+                          alt={formatBookName(book.name)}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <BookOpen className="w-10 h-10 text-muted-foreground/50" />
+                        </div>
+                      )}
+                      {/* Character Tag */}
+                      {book.characterTag && (
+                        <div className="absolute top-2 right-2">
+                          <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded">
+                            {book.characterTag}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Core Info and Actions */}
+                    <div className="flex-1 flex flex-col">
+                      {/* Core Info */}
+                      <CardContent className="p-4 flex-1">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-foreground text-lg truncate">
+                              {formatBookName(book.name)}
+                            </h4>
+                            <p className="text-sm text-muted-foreground mt-1 truncate">
+                              {book.author || '未知作者'}{book.publisher ? ` / ${book.publisher}` : ''}
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {book.totalPages > 0 && (
+                                <Badge className="text-xs bg-muted text-foreground px-2 py-0.5 rounded">
+                                  {book.totalPages}页
+                                </Badge>
+                              )}
+                              {book.suitableAge && (
+                                <Badge className="text-xs bg-muted text-foreground px-2 py-0.5 rounded">
+                                  适读年龄: {book.suitableAge}
+                                </Badge>
+                              )}
+                              <Badge className={cn("text-xs px-2 py-0.5 rounded", statusColor, statusBg)}>
+                                {readStatus}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="mt-3 md:mt-0 md:ml-4 w-full md:w-64">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">阅读进度</span>
+                              <span className="font-medium">{progress}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-primary rounded-full transition-all duration-500"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+
+                      {/* Status and Actions */}
+                      <div className="p-4 border-t border-border flex items-center justify-between">
+                        <div className="flex gap-3">
+                          {book.readState?.status === 'finished' ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="bg-success/10 text-success hover:bg-success/20"
+                              disabled
+                            >
+                              ✅ 已读完
+                            </Button>
+                          ) : book.activeReadings?.length > 0 ? (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStartReadingBook(book);
+                              }}
+                              className="bg-primary text-white hover:bg-primary/90"
+                            >
+                              ⏸ 继续阅读
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStartReadingBook(book);
+                              }}
+                              className="bg-primary text-white hover:bg-primary/90"
+                            >
+                              ▶ 开始阅读
+                            </Button>
+                          )}
+                        </div>
+                        {/* More Actions */}
+                        {!batchMode && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="w-8 h-8 rounded"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(book)}>
+                                编辑信息
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(book)}
+                                className="text-destructive"
+                              >
+                                删除
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 

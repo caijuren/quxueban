@@ -726,6 +726,12 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
       throw new AppError(400, "Invalid action. Must be 'remove' or 'move'")
     }
 
+    // Validate taskId is a valid number
+    const parsedTaskId = parseInt(taskId)
+    if (isNaN(parsedTaskId)) {
+      throw new AppError(400, 'Invalid taskId: must be a number')
+    }
+
     // Parse the target date to get day of week
     const targetDate = action === 'move' ? new Date(fromDate!) : new Date(date!)
     const dayOfWeek = targetDate.getDay() // 0=Sunday, 1=Monday, ..., 6=Saturday
@@ -734,7 +740,7 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
     // Find the weekly plan for this task
     const weeklyPlan = await prisma.weeklyPlan.findFirst({
       where: {
-        taskId: parseInt(taskId),
+        taskId: parsedTaskId,
         weekNo,
       },
     })

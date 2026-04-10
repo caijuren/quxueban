@@ -222,6 +222,18 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
   const { familyId, name } = req.user!
   const search = req.query.search as string | undefined
   const type = req.query.type as string | undefined
+  let childId = req.query.childId as string | undefined
+  
+  // Handle case where childId is an array (duplicate parameters)
+  if (Array.isArray(childId)) {
+    childId = childId[0]
+  }
+  
+  // Validate childId if provided
+  const parsedChildId = childId ? parseInt(childId) : null
+  if (childId && isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -298,12 +310,33 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
         where: { status: 'reading' },
         select: { id: true, childId: true, readPages: true },
       },
+      bookReadStates: {
+        select: { id: true, status: true, finishedAt: true },
+      },
+      readingLogs: {
+        select: { pages: true, minutes: true },
+      },
     },
   })
 
+  // Transform books to match frontend expectations
+  const transformedBooks = books.map(book => {
+    // Calculate total read pages and minutes
+    const totalReadPages = book.readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0);
+    const totalReadMinutes = book.readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0);
+    
+    return {
+      ...book,
+      readState: book.bookReadStates[0] || null,
+      totalReadPages,
+      totalReadMinutes,
+      readLogCount: book.readingLogs.length,
+    };
+  });
+
   res.json({
     status: 'success',
-    data: books,
+    data: transformedBooks,
   })
 })
 
@@ -593,6 +626,12 @@ libraryRouter.post('/:id/start', authMiddleware, requireRole('parent'), async (r
     throw new AppError(400, '请选择孩子')
   }
 
+  // Validate childId is a valid number
+  const parsedChildId = parseInt(childId)
+  if (isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
+
   // Check book exists
   const book = await prisma.book.findFirst({
     where: { id: bookId, familyId },
@@ -604,7 +643,7 @@ libraryRouter.post('/:id/start', authMiddleware, requireRole('parent'), async (r
 
   // Check child exists
   const child = await prisma.user.findFirst({
-    where: { id: childId, familyId, role: 'child', status: 'active' },
+    where: { id: parsedChildId, familyId, role: 'child', status: 'active' },
   })
 
   if (!child) {
@@ -613,7 +652,7 @@ libraryRouter.post('/:id/start', authMiddleware, requireRole('parent'), async (r
 
   // Check if already reading
   const existing = await prisma.activeReading.findFirst({
-    where: { bookId, childId, status: 'reading' },
+    where: { bookId, childId: parsedChildId, status: 'reading' },
   })
 
   if (existing) {
@@ -624,7 +663,7 @@ libraryRouter.post('/:id/start', authMiddleware, requireRole('parent'), async (r
   const activeReading = await prisma.activeReading.create({
     data: {
       familyId,
-      childId,
+      childId: parsedChildId,
       bookId,
       readPages: 0,
       readCount: 0,
@@ -640,10 +679,197 @@ libraryRouter.post('/:id/start', authMiddleware, requireRole('parent'), async (r
 })
 
 /**
+ * POST /:id/state - Update book reading state
+ * Body: { childId, status, finishedAt }
+ */
+libraryRouter.post('/:id/state', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const bookId = parseInt(req.params.id as string)
+  const { familyId } = req.user!
+  const { childId, status, finishedAt } = req.body
+
+  if (!childId) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  // Validate childId is a valid number
+  const parsedChildId = parseInt(childId)
+  if (isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
+
+  if (!status) {
+    throw new AppError(400, '请指定状态')
+  }
+
+  // Check book exists
+  const book = await prisma.book.findFirst({
+    where: { id: bookId, familyId },
+  })
+
+  if (!book) {
+    throw new AppError(404, '图书不存在')
+  }
+
+  // Check child exists
+  const child = await prisma.user.findFirst({
+    where: { id: parsedChildId, familyId, role: 'child', status: 'active' },
+  })
+
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    res.json({
+      status: 'success',
+      data: {
+        id: 1,
+        bookId,
+        childId: parsedChildId,
+        status,
+        finishedAt: finishedAt || null,
+        updatedAt: new Date().toISOString(),
+      },
+    })
+    return
+  }
+
+  // Update or create reading state
+  const existingState = await prisma.bookReadState.findFirst({
+    where: { bookId, childId: parsedChildId },
+  })
+
+  let readingState
+  if (existingState) {
+    readingState = await prisma.bookReadState.update({
+      where: { id: existingState.id },
+      data: {
+        status,
+        finishedAt: status === 'finished' ? (finishedAt || new Date()) : null,
+      },
+    })
+  } else {
+    readingState = await prisma.bookReadState.create({
+      data: {
+        familyId,
+        bookId,
+        childId: parsedChildId,
+        status,
+        finishedAt: status === 'finished' ? (finishedAt || new Date()) : null,
+      },
+    })
+  }
+
+  res.json({
+    status: 'success',
+    data: readingState,
+  })
+})
+
+/**
+ * POST /batch/finish - Batch mark books as finished
+ * Body: { childId, readStage, bookIds }
+ */
+libraryRouter.post('/batch/finish', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const { childId, readStage, bookIds } = req.body
+
+  if (!childId) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  // Validate childId is a valid number
+  const parsedChildId = parseInt(childId)
+  if (isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
+
+  // Check child exists
+  const child = await prisma.user.findFirst({
+    where: { id: parsedChildId, familyId, role: 'child', status: 'active' },
+  })
+
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    res.json({
+      status: 'success',
+      data: {
+        updated: bookIds?.length || 0,
+      },
+    })
+    return
+  }
+
+  let updatedCount = 0
+
+  // If bookIds are provided, update those specific books
+  if (bookIds && Array.isArray(bookIds) && bookIds.length > 0) {
+    for (const bookId of bookIds) {
+      // Check book exists
+      const book = await prisma.book.findFirst({
+        where: { id: bookId, familyId },
+      })
+
+      if (book) {
+          // Update or create reading state
+          const existingState = await prisma.bookReadState.findFirst({
+            where: { bookId, childId: parsedChildId },
+          })
+
+          if (existingState) {
+            await prisma.bookReadState.update({
+              where: { id: existingState.id },
+              data: {
+                status: 'finished',
+                finishedAt: new Date(),
+              },
+            })
+          } else {
+            await prisma.bookReadState.create({
+              data: {
+                familyId,
+                bookId,
+                childId: parsedChildId,
+                status: 'finished',
+                finishedAt: new Date(),
+              },
+            })
+          }
+          updatedCount++
+        }
+    }
+  }
+
+  res.json({
+    status: 'success',
+    data: {
+      updated: updatedCount,
+    },
+  })
+})
+
+/**
  * GET /stats - Get library statistics
  */
 libraryRouter.get('/stats', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
+  let childId = req.query.childId as string | undefined
+  
+  // Handle case where childId is an array (duplicate parameters)
+  if (Array.isArray(childId)) {
+    childId = childId[0]
+  }
+  
+  // Validate childId if provided
+  const parsedChildId = childId ? parseInt(childId) : null
+  if (childId && isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
