@@ -213,11 +213,11 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
       FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
     `
     
-    // 严格过滤：只返回明确分配给该孩子的任务
+    // 过滤：返回分配给该孩子的任务，或者未分配的任务（兼容旧数据）
     tasks = (tasks as any[]).filter(task => {
       const appliesTo = task.applies_to as number[] || []
-      // 如果appliesTo为空数组，说明任务未分配，不应该显示给任何孩子
-      return appliesTo.includes(childId)
+      // 如果appliesTo为空数组，说明任务未分配，也应该显示给所有孩子
+      return appliesTo.includes(childId) || appliesTo.length === 0
     })
     
     const formattedTasks = (tasks as any[]).map(task => {
