@@ -22,6 +22,7 @@ model Family {
   childTasks     ChildTask[]
   taskTemplates  TaskTemplate[]
   tasks          Task[]
+  userAIConfigs  UserAIConfig[]
   users          User[]
   weeklyPlans    WeeklyPlan[]
 
@@ -291,6 +292,20 @@ model BookAIInsight {
   family    Family   @relation(fields: [familyId], references: [id])
 
   @@map("book_ai_insights")
+}
+
+model UserAIConfig {
+  id        Int      @id @default(autoincrement())
+  familyId  Int      @map("family_id")
+  provider  String   @db.VarChar(50)
+  config    Json     @default("{}")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  family    Family   @relation(fields: [familyId], references: [id])
+
+  @@unique([familyId, provider])
+  @@map("user_ai_configs")
 }
 
 model Achievement {

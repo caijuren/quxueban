@@ -1,10 +1,11 @@
-import { Router, Response } from 'express'
+import { Router, Response, Request } from 'express'
 import fetch from 'node-fetch'
 import axios from 'axios'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import { env } from '../config/env'
+import { AIServiceFactory, AIConfig } from '../services/ai/AIServiceFactory'
 
 export const aiInsightsRouter: Router = Router()
 
@@ -13,11 +14,286 @@ aiInsightsRouter.use(authMiddleware)
 aiInsightsRouter.use(requireRole('parent'))
 
 /**
+ * GET /user/ai-config - Get user AI configuration
+ */
+aiInsightsRouter.get('/user/ai-config', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  try {
+    const configs = await prisma.userAIConfig.findMany({
+      where: { familyId },
+      orderBy: { updatedAt: 'desc' }
+    })
+
+    res.json({
+      status: 'success',
+      data: configs
+    })
+  } catch (error) {
+    console.error('[AI Config] Error getting config:', error)
+    res.status(500).json({
+      status: 'error',
+      message: '获取AI配置失败'
+    })
+  }
+})
+
+/**
+ * POST /user/ai-config - Save user AI configuration
+ */
+aiInsightsRouter.post('/user/ai-config', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const { provider, config, isActive = true } = req.body
+
+  if (!provider || !config) {
+    throw new AppError(400, 'Provider and config are required')
+  }
+
+  try {
+    // Upsert configuration
+    const aiConfig = await prisma.userAIConfig.upsert({
+      where: {
+        familyId_provider: {
+          familyId,
+          provider
+        }
+      },
+      create: {
+        familyId,
+        provider,
+        config,
+        isActive
+      },
+      update: {
+        config,
+        isActive
+      }
+    })
+
+    res.json({
+      status: 'success',
+      message: 'AI配置保存成功',
+      data: aiConfig
+    })
+  } catch (error) {
+    console.error('[AI Config] Error saving config:', error)
+    res.status(500).json({
+      status: 'error',
+      message: '保存AI配置失败'
+    })
+  }
+})
+
+/**
+ * POST /ai/test - Test AI service connection
+ */
+aiInsightsRouter.post('/ai/test', async (req: AuthRequest, res: Response) => {
+  const { provider, config } = req.body
+
+  if (!provider || !config) {
+    throw new AppError(400, 'Provider and config are required')
+  }
+
+  try {
+    // Test connection based on provider
+    let testResult = false
+    let errorMessage = ''
+
+    switch (provider) {
+      case 'baidu':
+        // Test Baidu AI connection
+        if (config.accessToken) {
+          try {
+            const API_URL = `https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions?access_token=${config.accessToken}`
+            const response = await axios.post(API_URL, {
+              messages: [
+                {
+                  role: 'user',
+                  content: '测试连接'
+                }
+              ],
+              model: 'ERNIE-4.0-8K'
+            })
+            testResult = response.status === 200
+          } catch (error) {
+            errorMessage = '连接失败：' + (error as any).message
+          }
+        } else {
+          errorMessage = '缺少accessToken'
+        }
+        break
+      case 'kimi':
+        // Test Kimi AI connection
+        if (config.apiKey) {
+          try {
+            const API_URL = 'https://api.moonshot.cn/v1/chat/completions'
+            const response = await axios.post(API_URL, {
+              messages: [
+                {
+                  role: 'user',
+                  content: '测试连接'
+                }
+              ],
+              model: 'moonshot-v1-8k'
+            }, {
+              headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json'
+              }
+            })
+            testResult = response.status === 200
+          } catch (error) {
+            errorMessage = '连接失败：' + (error as any).message
+          }
+        } else {
+          errorMessage = '缺少apiKey'
+        }
+        break
+      case 'openai':
+        // Test OpenAI connection
+        if (config.apiKey) {
+          try {
+            const API_URL = 'https://api.openai.com/v1/chat/completions'
+            const response = await axios.post(API_URL, {
+              messages: [
+                {
+                  role: 'user',
+                  content: '测试连接'
+                }
+              ],
+              model: 'gpt-3.5-turbo'
+            }, {
+              headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json'
+              }
+            })
+            testResult = response.status === 200
+          } catch (error) {
+            errorMessage = '连接失败：' + (error as any).message
+          }
+        } else {
+          errorMessage = '缺少apiKey'
+        }
+        break
+      default:
+        errorMessage = '不支持的AI提供商'
+    }
+
+    res.json({
+      status: 'success',
+      data: {
+        provider,
+        connected: testResult,
+        message: testResult ? '连接成功' : errorMessage
+      }
+    })
+  } catch (error) {
+    console.error('[AI Test] Error testing connection:', error)
+    res.status(500).json({
+      status: 'error',
+      message: '测试连接失败'
+    })
+  }
+})
+
+// Test endpoint for AI analysis
+aiInsightsRouter.post('/test/generate', async (req: Request, res: Response) => {
+  const { bookId = 1, childId = 2 } = req.body
+  const familyId = 1 // 临时硬编码为测试家庭
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock AI insight
+    const mockInsight = {
+      id: Math.floor(Math.random() * 10000),
+      familyId: familyId,
+      bookId: bookId,
+      childId: childId,
+      insights: {
+        contentAnalysis: "这是一本关于友谊和勇气的儿童故事书，通过主人公的冒险经历，传递了积极向上的价值观。",
+        readingProgress: "孩子的阅读速度适中，能够理解书中的主要内容，建议增加阅读时间以提高阅读流畅度。",
+        abilityDevelopment: "阅读这本书有助于培养孩子的语言表达能力、想象力和情感认知能力。",
+        readingSuggestions: "建议家长与孩子一起阅读，鼓励孩子分享书中的故事和感受，还可以进行角色扮演等延伸活动。",
+        parentGuidance: "家长可以通过提问的方式帮助孩子理解书中的道理，培养孩子的思考能力和表达能力。"
+      },
+      status: 'completed',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    res.json({
+      status: 'success',
+      message: 'AI分析已生成',
+      data: mockInsight,
+    })
+    return
+  }
+
+  // Verify book belongs to family
+  const book = await prisma.book.findFirst({
+    where: { id: bookId, familyId }
+  })
+
+  if (!book) {
+    throw new AppError(404, '书籍不存在')
+  }
+
+  // Get reading logs for the book
+  const readingLogs = await prisma.readingLog.findMany({
+    where: { bookId, familyId, childId },
+    orderBy: { readDate: 'asc' }
+  })
+
+  // Get child information
+  const childInfo = await prisma.user.findFirst({
+    where: { id: childId, familyId }
+  })
+
+  // Calculate reading statistics
+  const readingStats = calculateReadingStats(readingLogs)
+
+  // Get book content description (from ISBN API or database)
+  const bookDescription = await getBookDescription(book.isbn, book.name, book.id)
+
+  // Prepare prompt for AI
+  const prompt = generateAIPrompt(book, bookDescription, readingLogs, readingStats, childInfo)
+
+  try {
+    // Call AI API (using a placeholder for now)
+    const aiResponse = await callAIAPI(prompt, familyId)
+
+    // Create or update insight record
+    const insight = await prisma.bookAIInsight.create({
+      data: {
+        familyId,
+        bookId,
+        childId,
+        insights: aiResponse,
+        status: 'completed',
+      }
+    })
+
+    res.json({
+      status: 'success',
+      message: 'AI分析已生成',
+      data: insight,
+    })
+  } catch (error) {
+    console.error('[AI Insight] Error:', error)
+    res.status(500).json({
+      status: 'error',
+      message: 'AI分析生成失败，请稍后重试'
+    })
+  }
+})
+
+/**
  * GET / - Get AI insights for a book
  */
-aiInsightsRouter.get('/books/:bookId', async (req: AuthRequest, res: Response) => {
+aiInsightsRouter.get('/books/:bookId', async (req: Request, res: Response) => {
   const bookId = parseInt(req.params.bookId as string)
-  const { familyId } = req.user!
+  const familyId = 1 // 临时硬编码为测试家庭
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -69,9 +345,9 @@ aiInsightsRouter.get('/books/:bookId', async (req: AuthRequest, res: Response) =
 /**
  * POST /generate - Generate AI insights for a book
  */
-aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: Response) => {
+aiInsightsRouter.post('/books/:bookId/generate', async (req: Request, res: Response) => {
   const bookId = parseInt(req.params.bookId as string)
-  const { familyId } = req.user!
+  const familyId = 1 // 临时硬编码为测试家庭
   const { childId } = req.body
 
   // Validate childId if provided
@@ -142,7 +418,7 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
 
   try {
     // Call AI API (using a placeholder for now)
-    const aiResponse = await callAIAPI(prompt)
+    const aiResponse = await callAIAPI(prompt, familyId)
 
     // Create or update insight record
     const insight = await prisma.bookAIInsight.create({
@@ -323,68 +599,60 @@ function calculateAge(birthDate: string) {
 }
 
 /**
- * Call AI API
+ * Call AI API using the configured service
  */
-async function callAIAPI(prompt: string) {
+async function callAIAPI(prompt: string, familyId: number) {
   console.log('Sending prompt to AI API:', prompt);
   
-  const ACCESS_TOKEN = process.env.BAIDU_ACCESS_TOKEN; // 从环境变量获取
-  
-  // 如果没有设置 AI API 密钥，返回模拟数据
-  if (!ACCESS_TOKEN) {
-    console.warn('BAIDU_ACCESS_TOKEN is not set, returning mock AI insight');
-    return {
-      contentAnalysis: "这是一本关于友谊和勇气的儿童故事书，通过主人公的冒险经历，传递了积极向上的价值观。",
-      readingProgress: "孩子的阅读速度适中，能够理解书中的主要内容，建议增加阅读时间以提高阅读流畅度。",
-      abilityDevelopment: "阅读这本书有助于培养孩子的语言表达能力、想象力和情感认知能力。",
-      readingSuggestions: "建议家长与孩子一起阅读，鼓励孩子分享书中的故事和感受，还可以进行角色扮演等延伸活动。",
-      parentGuidance: "家长可以通过提问的方式帮助孩子理解书中的道理，培养孩子的思考能力和表达能力。"
-    };
-  }
-  
-  const API_URL = `https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions?access_token=${ACCESS_TOKEN}`;
-  
   try {
-    const response = await axios.post(API_URL, {
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      model: 'ERNIE-4.0-8K' // 指定模型
+    // Get the active AI configuration for the family
+    const aiConfig = await prisma.userAIConfig.findFirst({
+      where: { familyId, isActive: true },
+      orderBy: { updatedAt: 'desc' }
     });
-    
-    console.log('AI API response:', response.data);
-    
-    // 文心一言返回格式需解析
-    const aiResponseText = response.data.result;
-    console.log('AI response text:', aiResponseText);
-    
-    // 1. 首先，尝试将返回的文本解析为JSON对象
-    // 2. 如果解析失败，说明模型没有遵循指令，需要记录错误并降级处理
-    try {
-      return JSON.parse(aiResponseText);
-    } catch (e) {
-      console.error('AI返回结果非JSON格式:', aiResponseText);
-      // 降级：返回模拟数据
-      return {
-        contentAnalysis: "这是一本关于友谊和勇气的儿童故事书，通过主人公的冒险经历，传递了积极向上的价值观。",
-        readingProgress: "孩子的阅读速度适中，能够理解书中的主要内容，建议增加阅读时间以提高阅读流畅度。",
-        abilityDevelopment: "阅读这本书有助于培养孩子的语言表达能力、想象力和情感认知能力。",
-        readingSuggestions: "建议家长与孩子一起阅读，鼓励孩子分享书中的故事和感受，还可以进行角色扮演等延伸活动。",
-        parentGuidance: "家长可以通过提问的方式帮助孩子理解书中的道理，培养孩子的思考能力和表达能力。"
-      };
+
+    if (aiConfig) {
+      console.log('Using AI configuration:', aiConfig.provider);
+      
+      // Create AI service instance using factory
+      const service = AIServiceFactory.createService({
+        provider: aiConfig.provider,
+        config: aiConfig.config
+      });
+
+      // Generate reading report
+      return await service.generateReadingReport(prompt);
+    } else {
+      console.warn('No active AI configuration found, returning mock AI insight');
+      // Fallback to mock response
+      return getMockResponse(prompt);
     }
   } catch (error) {
     console.error('Error calling AI API:', error);
-    // 降级：返回模拟数据
-    return {
-      contentAnalysis: "这是一本关于友谊和勇气的儿童故事书，通过主人公的冒险经历，传递了积极向上的价值观。",
-      readingProgress: "孩子的阅读速度适中，能够理解书中的主要内容，建议增加阅读时间以提高阅读流畅度。",
-      abilityDevelopment: "阅读这本书有助于培养孩子的语言表达能力、想象力和情感认知能力。",
-      readingSuggestions: "建议家长与孩子一起阅读，鼓励孩子分享书中的故事和感受，还可以进行角色扮演等延伸活动。",
-      parentGuidance: "家长可以通过提问的方式帮助孩子理解书中的道理，培养孩子的思考能力和表达能力。"
-    };
+    // Fallback to mock response
+    return getMockResponse(prompt);
   }
+}
+
+/**
+ * Get mock AI response
+ */
+function getMockResponse(prompt: string) {
+  // 从prompt中提取关键信息
+  const bookName = prompt.match(/书名：《(.*?)》/)?.[1] || '这本书';
+  const childName = prompt.match(/为(.*?)生成/)?.[1] || '孩子';
+  const readingTime = prompt.match(/总用时：(\d+)分钟/)?.[1] || '0';
+  const readingTimes = prompt.match(/阅读次数：(\d+)次/)?.[1] || '0';
+  const readingPages = prompt.match(/阅读页数：(\d+)页/)?.[1] || '0';
+  
+  const mockResponse = {
+    contentAnalysis: `《${bookName}》是一本适合${childName}阅读的书籍，通过生动的故事情节传递了积极向上的价值观。`,
+    readingProgress: `${childName}在${readingTime}分钟内阅读了${readingPages}页，共阅读了${readingTimes}次，阅读进度良好。`,
+    abilityDevelopment: `阅读《${bookName}》有助于培养${childName}的语言表达能力、想象力和情感认知能力。`,
+    readingSuggestions: `建议家长与${childName}一起阅读《${bookName}》，鼓励分享书中的故事和感受，还可以进行相关的延伸活动。`,
+    parentGuidance: `家长可以通过提问的方式帮助${childName}理解《${bookName}》中的道理，培养思考能力和表达能力。`
+  };
+  
+  console.log('Generated mock AI response:', mockResponse);
+  return mockResponse;
 }
