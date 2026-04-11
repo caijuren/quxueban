@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Route } from 'react-router-dom';
+import { BrowserRouter, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AnimatedRoutes } from "@/components/AnimatedRoutes";
@@ -94,7 +94,7 @@ function App() {
                   <Route path="library/:id/insights" data-genie-title="AI Reading Insights" data-genie-key="BookInsights" element={<PageTransition transition="slide-up"><BookInsights /></PageTransition>} />
                   <Route path="reading" data-genie-title="Reading" data-genie-key="ParentReading" element={<PageTransition transition="slide-up"><ParentReading /></PageTransition>} />
                   <Route path="achievements" data-genie-title="Achievements" data-genie-key="ParentAchievements" element={<PageTransition transition="slide-up"><ParentAchievements /></PageTransition>} />
-                  <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<PageTransition transition="slide-up"><ParentChildren /></PageTransition>} />
+                  <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<Navigate to="/parent/settings" replace />} />
                   <Route path="statistics" data-genie-title="Statistics" data-genie-key="ParentStatistics" element={<PageTransition transition="slide-up"><ParentStatistics /></PageTransition>} />
                   <Route path="settings" data-genie-title="Settings" data-genie-key="ParentSettings" element={<PageTransition transition="slide-up"><ParentSettings /></PageTransition>} />
                 </Route>

@@ -199,7 +199,7 @@ export default function ParentLayout() {
                   {/* Manage Children */}
                   <DropdownMenuItem 
                     className="cursor-pointer rounded-md hover:bg-muted transition-colors" 
-                    onClick={() => navigate('/parent/children')}
+                    onClick={() => navigate('/parent/settings')}
                   >
                     <Users className="size-4 mr-2" />
                     <span>管理孩子…</span>
