@@ -312,22 +312,10 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
 tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const childId = req.query.childId ? parseInt(req.query.childId as string) : null
   
-  // 强制要求提供childId参数，确保数据隔离
-  if (!childId) {
-    throw new AppError(400, 'Missing required parameter: childId. Data isolation is mandatory.')
-  }
-  
-  const task = await prisma.$queryRaw`SELECT family_id, applies_to FROM tasks WHERE id = ${id}` as any[]
+  const task = await prisma.$queryRaw`SELECT family_id FROM tasks WHERE id = ${id}` as any[]
   if (!task?.length) throw new AppError(404, '任务不存在')
   if (task[0].family_id !== familyId) throw new AppError(403, '无权限')
-  
-  // 验证任务是否分配给了指定的孩子
-  const appliesToArray = task[0].applies_to as number[] || []
-  if (!appliesToArray.includes(childId)) {
-    throw new AppError(403, 'Task is not assigned to the specified child')
-  }
   
   await prisma.task.update({ where: { id }, data: { isActive: false } })
   res.json({ status: 'success', message: 'Task deleted' })
