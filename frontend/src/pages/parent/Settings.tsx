@@ -102,6 +102,21 @@ async function updatePassword(oldPassword: string, newPassword: string): Promise
   await apiClient.put('/auth/password', { oldPassword, newPassword });
 }
 
+// AI config API functions
+async function getAIConfigs(): Promise<any> {
+  const response = await apiClient.get('/ai-insights/user/ai-config');
+  return response.data;
+}
+
+async function saveAIConfig(data: { provider: string; config: any; isActive: boolean }): Promise<void> {
+  await apiClient.post('/ai-insights/user/ai-config', data);
+}
+
+async function testAIConnection(data: { provider: string; config: any }): Promise<any> {
+  const response = await apiClient.post('/ai-insights/ai/test', data);
+  return response.data;
+}
+
 export default function SettingsPage() {
   const [familyName, setFamilyName] = useState('我的家庭');
   const [dailyTimeLimit, setDailyTimeLimit] = useState(210);
@@ -137,6 +152,17 @@ export default function SettingsPage() {
   const [isDeletingChild, setIsDeletingChild] = useState(false);
   const [childStats, setChildStats] = useState<Record<number, any>>({});
 
+  // AI config state
+  const [aiConfigs, setAiConfigs] = useState<any[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState('baidu');
+  const [aiConfigForm, setAiConfigForm] = useState<any>({
+    accessToken: '',
+    apiKey: ''
+  });
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSavingAIConfig, setIsSavingAIConfig] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Rename children query for refetching
   const childrenQuery = useQuery({
     queryKey: ['children'],
@@ -164,6 +190,47 @@ export default function SettingsPage() {
     refetchOnWindowFocus: true,
   });
 
+  // Load AI configs
+  const { data: aiConfigsData, isLoading: isLoadingAIConfigs, refetch: refetchAIConfigs } = useQuery({
+    queryKey: ['ai-configs'],
+    queryFn: getAIConfigs,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+
+  // Save AI config mutation
+  const saveAIConfigMutation = useMutation({
+    mutationFn: saveAIConfig,
+    onSuccess: () => {
+      toast.success('AI配置已保存');
+      refetchAIConfigs();
+      setIsSavingAIConfig(false);
+    },
+    onError: (error) => {
+      toast.error(`保存失败：${getErrorMessage(error)}`);
+      setIsSavingAIConfig(false);
+    }
+  });
+
+  // Test AI connection mutation
+  const testAIConnectionMutation = useMutation({
+    mutationFn: testAIConnection,
+    onSuccess: (data) => {
+      setTestResult({
+        success: data.data.connected,
+        message: data.data.message
+      });
+      setIsTestingConnection(false);
+    },
+    onError: (error) => {
+      setTestResult({
+        success: false,
+        message: `测试失败：${getErrorMessage(error)}`
+      });
+      setIsTestingConnection(false);
+    }
+  });
+
   // Load settings
   useEffect(() => {
     if (settingsData?.data) {
@@ -179,6 +246,22 @@ export default function SettingsPage() {
       setAvatar(userInfoData.data.avatar || '');
     }
   }, [userInfoData]);
+
+  // Load AI configs
+  useEffect(() => {
+    if (aiConfigsData?.data) {
+      setAiConfigs(aiConfigsData.data);
+      // If there's an active config, select it
+      const activeConfig = aiConfigsData.data.find((config: any) => config.isActive);
+      if (activeConfig) {
+        setSelectedProvider(activeConfig.provider);
+        setAiConfigForm(activeConfig.config || {
+          accessToken: '',
+          apiKey: ''
+        });
+      }
+    }
+  }, [aiConfigsData]);
 
   // Load child dingtalk configs and stats
   useEffect(() => {
@@ -510,6 +593,71 @@ export default function SettingsPage() {
     deleteChildMutation.mutate(currentChildId);
   };
 
+  // AI config handlers
+  const handleProviderChange = (provider: string) => {
+    setSelectedProvider(provider);
+    // Reset form when provider changes
+    setAiConfigForm({
+      accessToken: '',
+      apiKey: ''
+    });
+    setTestResult(null);
+    // Check if there's an existing config for this provider
+    const existingConfig = aiConfigs.find((config: any) => config.provider === provider);
+    if (existingConfig) {
+      setAiConfigForm(existingConfig.config || {
+        accessToken: '',
+        apiKey: ''
+      });
+    }
+  };
+
+  const handleAIConfigChange = (field: string, value: string) => {
+    setAiConfigForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setTestResult(null);
+  };
+
+  const handleSaveAIConfig = () => {
+    // Validate form based on provider
+    if (selectedProvider === 'baidu' && !aiConfigForm.accessToken) {
+      toast.error('请输入Access Token');
+      return;
+    }
+    if ((selectedProvider === 'kimi' || selectedProvider === 'openai') && !aiConfigForm.apiKey) {
+      toast.error('请输入API Key');
+      return;
+    }
+
+    setIsSavingAIConfig(true);
+    saveAIConfigMutation.mutate({
+      provider: selectedProvider,
+      config: aiConfigForm,
+      isActive: true
+    });
+  };
+
+  const handleTestAIConnection = () => {
+    // Validate form based on provider
+    if (selectedProvider === 'baidu' && !aiConfigForm.accessToken) {
+      toast.error('请输入Access Token');
+      return;
+    }
+    if ((selectedProvider === 'kimi' || selectedProvider === 'openai') && !aiConfigForm.apiKey) {
+      toast.error('请输入API Key');
+      return;
+    }
+
+    setIsTestingConnection(true);
+    setTestResult(null);
+    testAIConnectionMutation.mutate({
+      provider: selectedProvider,
+      config: aiConfigForm
+    });
+  };
+
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -752,6 +900,160 @@ export default function SettingsPage() {
                     </div>
                     <p className="text-gray-500">暂无孩子信息</p>
                     <p className="text-sm text-gray-400 mt-1">请先添加孩子账户</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.section>
+
+          {/* AI Model Configuration Section */}
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="w-5 h-5 text-purple-500" />
+              <h2 className="text-lg font-semibold text-gray-900">AI模型配置</h2>
+            </div>
+            
+            <Card className="border border-gray-200 rounded-2xl shadow-sm bg-gray-50/50">
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-700">AI服务提供商</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {[
+                      { value: 'baidu', label: '百度文心一言' },
+                      { value: 'kimi', label: 'Kimi' },
+                      { value: 'openai', label: 'OpenAI (GPT)' }
+                    ].map((provider) => (
+                      <Button
+                        key={provider.value}
+                        variant={selectedProvider === provider.value ? "default" : "outline"}
+                        onClick={() => handleProviderChange(provider.value)}
+                        className={`h-11 ${selectedProvider === provider.value ? 'bg-purple-500 hover:bg-purple-600' : ''}`}
+                      >
+                        {provider.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-700">配置信息</h3>
+                  
+                  {selectedProvider === 'baidu' && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="baidu-access-token" className="text-sm font-medium text-gray-700">Access Token</Label>
+                        <Input
+                          id="baidu-access-token"
+                          type="password"
+                          value={aiConfigForm.accessToken}
+                          onChange={(e) => handleAIConfigChange('accessToken', e.target.value)}
+                          placeholder="请输入百度文心一言的Access Token"
+                          className="h-11 rounded-xl bg-white"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        如何获取Access Token：<a href="https://ai.baidu.com/" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">百度AI开放平台</a>
+                      </p>
+                    </div>
+                  )}
+
+                  {(selectedProvider === 'kimi' || selectedProvider === 'openai') && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="api-key" className="text-sm font-medium text-gray-700">
+                          {selectedProvider === 'kimi' ? 'Kimi API Key' : 'OpenAI API Key'}
+                        </Label>
+                        <Input
+                          id="api-key"
+                          type="password"
+                          value={aiConfigForm.apiKey}
+                          onChange={(e) => handleAIConfigChange('apiKey', e.target.value)}
+                          placeholder={`请输入${selectedProvider === 'kimi' ? 'Kimi' : 'OpenAI'}的API Key`}
+                          className="h-11 rounded-xl bg-white"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        如何获取API Key：
+                        {selectedProvider === 'kimi' ? (
+                          <a href="https://www.moonshot.cn/" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Moonshot Kimi</a>
+                        ) : (
+                          <a href="https://platform.openai.com/" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">OpenAI平台</a>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-700">连接测试</h3>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleTestAIConnection}
+                      disabled={isTestingConnection}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      {isTestingConnection ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
+                          测试中...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          测试连接
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleSaveAIConfig}
+                      disabled={isSavingAIConfig}
+                      className="flex-1"
+                    >
+                      {isSavingAIConfig ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                          保存中...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 mr-2" />
+                          保存配置
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {testResult && (
+                    <div className={`p-3 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                      {testResult.message}
+                    </div>
+                  )}
+                </div>
+
+                {aiConfigs.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <h3 className="text-sm font-medium text-gray-700">已保存的配置</h3>
+                    <div className="space-y-2">
+                      {aiConfigs.map((config: any) => (
+                        <div key={config.provider} className="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
+                          <div>
+                            <p className="font-medium">
+                              {config.provider === 'baidu' ? '百度文心一言' : config.provider === 'kimi' ? 'Kimi' : 'OpenAI (GPT)'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              最后更新：{new Date(config.updatedAt).toLocaleString('zh-CN')}
+                            </p>
+                          </div>
+                          <Badge variant={config.isActive ? "default" : "outline"} className={config.isActive ? 'bg-purple-500' : ''}>
+                            {config.isActive ? '当前使用' : '已保存'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
