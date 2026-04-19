@@ -16,6 +16,9 @@ import {
   Clock,
   FileText,
   Play,
+  Heart,
+  Edit3,
+  Quote,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { cn } from '@/lib/utils';
 
 interface ReadingLog {
   id: number;
@@ -36,6 +40,7 @@ interface ReadingLog {
   startPage: number;
   endPage: number;
   evidenceUrl: string;
+  childId?: number;
   child?: {
     id: number;
     name: string;
@@ -93,10 +98,41 @@ export default function BookDetailPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [logToDelete, setLogToDelete] = useState<number | null>(null);
   const { selectedChildId } = useSelectedChild();
+  
+  // P1-9: 书籍详情增强 - 评分、评论、笔记
+  const [bookRating, setBookRating] = useState<number>(() => {
+    const saved = localStorage.getItem(`book_rating_${id}`);
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  const [bookReview, setBookReview] = useState<string>(() => {
+    return localStorage.getItem(`book_review_${id}`) || '';
+  });
+  const [bookNotes, setBookNotes] = useState<string>(() => {
+    return localStorage.getItem(`book_notes_${id}`) || '';
+  });
+  const [isFavorite, setIsFavorite] = useState<boolean>(() => {
+    const saved = localStorage.getItem(`book_favorite_${id}`);
+    return saved ? saved === 'true' : false;
+  });
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [showNotesForm, setShowNotesForm] = useState(false);
+  const [reviewInput, setReviewInput] = useState('');
+  const [notesInput, setNotesInput] = useState('');
 
-  const { data: book, isLoading } = useQuery({
+  const { data: book, isLoading, error } = useQuery({
     queryKey: ['book', id],
-    queryFn: () => fetchBook(Number(id)),
+    queryFn: async () => {
+      const bookId = Number(id);
+      console.log('[BookDetail] Fetching book with ID:', bookId, 'URL ID:', id);
+      const data = await fetchBook(bookId);
+      console.log('[BookDetail] Received book:', data);
+      // 验证返回的数据 ID 是否匹配
+      if (data.id !== bookId) {
+        console.error(`[BookDetail] ID mismatch! Expected ${bookId}, got ${data.id}`);
+        throw new Error(`数据错误：请求的书籍ID(${bookId})与返回的ID(${data.id})不匹配`);
+      }
+      return data;
+    },
     enabled: !!id,
   });
 
@@ -137,6 +173,41 @@ export default function BookDetailPage() {
     if (!book || !book.totalPages) return 0;
     return Math.round((book.totalReadPages / book.totalPages) * 100);
   };
+  
+  // P1-9: 保存评分
+  const handleRateBook = (rating: number) => {
+    setBookRating(rating);
+    localStorage.setItem(`book_rating_${id}`, String(rating));
+    toast.success(`已评分 ${rating} 星`);
+  };
+  
+  // P1-9: 保存评论
+  const handleSaveReview = () => {
+    if (reviewInput.trim()) {
+      setBookReview(reviewInput.trim());
+      localStorage.setItem(`book_review_${id}`, reviewInput.trim());
+      toast.success('评论已保存');
+      setShowReviewForm(false);
+    }
+  };
+  
+  // P1-9: 保存笔记
+  const handleSaveNotes = () => {
+    if (notesInput.trim()) {
+      setBookNotes(notesInput.trim());
+      localStorage.setItem(`book_notes_${id}`, notesInput.trim());
+      toast.success('笔记已保存');
+      setShowNotesForm(false);
+    }
+  };
+  
+  // P1-9: 切换收藏
+  const handleToggleFavorite = () => {
+    const newValue = !isFavorite;
+    setIsFavorite(newValue);
+    localStorage.setItem(`book_favorite_${id}`, String(newValue));
+    toast.success(newValue ? '已添加到收藏' : '已取消收藏');
+  };
 
   if (isLoading) {
     return (
@@ -147,10 +218,22 @@ export default function BookDetailPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-red-500 font-medium">加载失败</p>
+        <p className="text-gray-500 text-sm mt-2">{getErrorMessage(error)}</p>
+        <p className="text-gray-400 text-xs mt-1">书籍ID: {id}</p>
+        <Button onClick={() => navigate('/parent/library')} className="mt-4">返回图书馆</Button>
+      </div>
+    );
+  }
+
   if (!book) {
     return (
       <div className="p-6 text-center">
         <p className="text-gray-500">书籍不存在</p>
+        <p className="text-gray-400 text-xs mt-1">书籍ID: {id}</p>
         <Button onClick={() => navigate('/parent/library')} className="mt-4">返回图书馆</Button>
       </div>
     );
@@ -174,7 +257,7 @@ export default function BookDetailPage() {
         <CardContent className="p-6">
           <div className="flex gap-6">
             {/* Cover */}
-            <div className="size-32 rounded-2xl bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-6xl shrink-0 shadow-lg">
+            <div className="size-32 rounded-2xl bg-primary/80 flex items-center justify-center text-6xl shrink-0 shadow-lg">
               {book.coverUrl ? (
                 <img src={book.coverUrl} alt={book.name} className="size-full rounded-2xl object-cover" />
               ) : (
@@ -220,10 +303,56 @@ export default function BookDetailPage() {
                 </div>
               </div>
               
-              <div className="mt-4 flex items-center gap-4">
-                <div className="px-4 py-2 rounded-xl bg-purple-100 text-purple-700 font-medium">
+              {/* P1-9: 评分和收藏 */}
+              <div className="mt-4 flex items-center gap-4 flex-wrap">
+                <div className="px-4 py-2 rounded-xl bg-primary/10 text-primary font-medium">
                   📚 已读 {book.readCount} 次
                 </div>
+                
+                {/* 评分 */}
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => handleRateBook(star)}
+                      className="p-1 hover:scale-110 transition-transform"
+                    >
+                      <Star
+                        className={cn(
+                          "size-5 transition-colors",
+                          star <= bookRating
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-gray-300 hover:text-amber-300"
+                        )}
+                      />
+                    </button>
+                  ))}
+                  {bookRating > 0 && (
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      {bookRating} 星
+                    </span>
+                  )}
+                </div>
+                
+                {/* 收藏按钮 */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleToggleFavorite}
+                  className={cn(
+                    "gap-1 rounded-lg",
+                    isFavorite && "text-red-500 hover:text-red-600"
+                  )}
+                >
+                  <Heart
+                    className={cn(
+                      "size-4",
+                      isFavorite && "fill-current"
+                    )}
+                  />
+                  {isFavorite ? '已收藏' : '收藏'}
+                </Button>
+                
                 {isFinished && selectedChildId && (
                   <Button 
                     onClick={() => startNewReadingMutation.mutate(selectedChildId)}
@@ -235,7 +364,7 @@ export default function BookDetailPage() {
                 )}
                 <Button 
                   onClick={() => navigate(`/parent/library/${id}/insights`)}
-                  className="gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                  className="gap-2 rounded-xl bg-primary text-primary-foreground"
                 >
                   <Brain className="size-4" />
                   AI阅读洞察
@@ -245,6 +374,78 @@ export default function BookDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* P1-9: 评论和笔记卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 评论卡片 */}
+        <Card className="border-0 shadow-lg rounded-3xl overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="size-5 text-blue-500" />
+                <h3 className="font-semibold text-gray-900">我的评论</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setReviewInput(bookReview);
+                  setShowReviewForm(true);
+                }}
+                className="rounded-lg"
+              >
+                <Edit3 className="size-4 mr-1" />
+                {bookReview ? '编辑' : '写评论'}
+              </Button>
+            </div>
+            {bookReview ? (
+              <div className="bg-blue-50 rounded-xl p-4">
+                <Quote className="size-4 text-blue-400 mb-2" />
+                <p className="text-gray-700 leading-relaxed">{bookReview}</p>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <MessageSquare className="size-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">暂无评论，写下你的读后感吧</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 笔记卡片 */}
+        <Card className="border-0 shadow-lg rounded-3xl overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <FileText className="size-5 text-green-500" />
+                <h3 className="font-semibold text-gray-900">阅读笔记</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setNotesInput(bookNotes);
+                  setShowNotesForm(true);
+                }}
+                className="rounded-lg"
+              >
+                <Edit3 className="size-4 mr-1" />
+                {bookNotes ? '编辑' : '记笔记'}
+              </Button>
+            </div>
+            {bookNotes ? (
+              <div className="bg-green-50 rounded-xl p-4">
+                <pre className="text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{bookNotes}</pre>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <FileText className="size-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">暂无笔记，记录阅读心得和摘抄</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Reading Logs */}
       <div className="space-y-4">
@@ -283,7 +484,7 @@ export default function BookDetailPage() {
                             {new Date(log.readDate).toLocaleDateString('zh-CN')}
                           </span>
                           {log.readStage && (
-                            <span className="px-2 py-0.5 rounded-lg bg-blue-100 text-blue-700 text-xs">
+                            <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs">
                               {log.readStage}
                             </span>
                           )}
@@ -349,6 +550,10 @@ export default function BookDetailPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!selectedChildId) {
+                  toast.error('请选择一个孩子');
+                  return;
+                }
                 const formData = new FormData(e.currentTarget);
                 addMutation.mutate({
                   childId: selectedChildId,
@@ -357,10 +562,11 @@ export default function BookDetailPage() {
                   performance: formData.get('performance') as string,
                   note: formData.get('note') as string,
                   readStage: formData.get('readStage') as string,
+                  pages: parseInt(formData.get('pages') as string) || 0,
                   minutes: parseInt(formData.get('minutes') as string) || 0,
                   startPage: parseInt(formData.get('startPage') as string) || 0,
                   endPage: parseInt(formData.get('endPage') as string) || 0,
-                  evidenceUrl: formData.get('evidenceUrl') as string,
+                  evidenceUrl: formData.get('evidenceUrl') as string || '',
                 });
               }}
               className="space-y-4"
@@ -457,7 +663,7 @@ export default function BookDetailPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="flex-1 rounded-xl">取消</Button>
-                <Button type="submit" disabled={addMutation.isPending} className="flex-1 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white">保存</Button>
+                <Button type="submit" disabled={addMutation.isPending} className="flex-1 rounded-xl bg-primary text-primary-foreground">保存</Button>
               </div>
             </form>
           </motion.div>
@@ -479,6 +685,64 @@ export default function BookDetailPage() {
                   className="flex-1 rounded-xl"
                 >
                   删除
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* P1-9: 评论编辑对话框 */}
+      {showReviewForm && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowReviewForm(false)}>
+          <Card className="border-0 shadow-2xl rounded-3xl max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <MessageSquare className="size-5 text-blue-500" />
+                {bookReview ? '编辑评论' : '写评论'}
+              </h3>
+              <textarea
+                value={reviewInput}
+                onChange={(e) => setReviewInput(e.target.value)}
+                placeholder="分享你的读后感..."
+                rows={6}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+              <div className="flex gap-3 mt-4">
+                <Button variant="outline" onClick={() => setShowReviewForm(false)} className="flex-1 rounded-xl">
+                  取消
+                </Button>
+                <Button onClick={handleSaveReview} className="flex-1 rounded-xl bg-blue-500 hover:bg-blue-600 text-white">
+                  保存评论
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* P1-9: 笔记编辑对话框 */}
+      {showNotesForm && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowNotesForm(false)}>
+          <Card className="border-0 shadow-2xl rounded-3xl max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <FileText className="size-5 text-green-500" />
+                {bookNotes ? '编辑笔记' : '记笔记'}
+              </h3>
+              <textarea
+                value={notesInput}
+                onChange={(e) => setNotesInput(e.target.value)}
+                placeholder="记录阅读心得、摘抄好词好句..."
+                rows={8}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none font-mono text-sm"
+              />
+              <div className="flex gap-3 mt-4">
+                <Button variant="outline" onClick={() => setShowNotesForm(false)} className="flex-1 rounded-xl">
+                  取消
+                </Button>
+                <Button onClick={handleSaveNotes} className="flex-1 rounded-xl bg-green-500 hover:bg-green-600 text-white">
+                  保存笔记
                 </Button>
               </div>
             </CardContent>

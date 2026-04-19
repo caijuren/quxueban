@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() })
 /**
  * GET /fetch-by-isbn/:isbn - Fetch book info by ISBN from Jisu API
  */
-libraryRouter.get('/fetch-by-isbn/:isbn', async (req: any, res: Response) => {
+libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: Response) => {
   let { isbn } = req.params
 
   try {
@@ -73,7 +73,8 @@ libraryRouter.get('/fetch-by-isbn/:isbn', async (req: any, res: Response) => {
           }
 
           const imageBuffer = await imageResponse.buffer()
-          const fileExt = coverUrl.split('.').pop() || 'jpg'
+          const urlPath = new URL(coverUrl).pathname
+          const fileExt = urlPath.split('.').pop() || 'jpg'
           const fileName = `book-${isbn}-${Date.now()}.${fileExt}`
 
           // Upload to Supabase Storage
@@ -151,7 +152,7 @@ libraryRouter.get('/fetch-by-isbn/:isbn', async (req: any, res: Response) => {
 /**
  * GET /search-by-title/:title - Search books by title from Google Books API
  */
-libraryRouter.get('/search-by-title/:title', async (req: any, res: Response) => {
+libraryRouter.get('/search-by-title/:title', authMiddleware, async (req: any, res: Response) => {
   const { title } = req.params
 
   try {
@@ -294,6 +295,9 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
     status: 'active',
   }
 
+  // 查询家庭中所有孩子的书籍（包括指定孩子的和没有指定孩子的）
+  // 不限制 childId，让家庭中的所有书籍都可见
+
   if (search) {
     whereClause.name = { contains: search, mode: 'insensitive' }
   }
@@ -342,11 +346,11 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
 
 /**
  * POST / - Create a new book in library
- * Body: { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge }
+ * Body: { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge, childId }
  */
 libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
-  const { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge } = req.body
+  const { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge, childId } = req.body
 
   if (!name) {
     throw new AppError(400, '书名不能为空')
@@ -381,6 +385,8 @@ libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthR
     return
   }
 
+  const parsedBookChildId = childId ? parseInt(childId) : null
+
   const book = await prisma.book.create({
     data: {
       familyId,
@@ -393,6 +399,7 @@ libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthR
       totalPages: totalPages || 0,
       wordCount: wordCount || null,
       characterTag: characterTag || '',
+      ...(parsedBookChildId && { childId: parsedBookChildId }),
     },
   })
 
@@ -438,6 +445,91 @@ libraryRouter.put('/:id', authMiddleware, requireRole('parent'), async (req: Aut
     status: 'success',
     message: '图书更新成功',
     data: updatedBook,
+  })
+})
+
+/**
+ * GET /stats - Get library statistics (must be before /:id)
+ */
+libraryRouter.get('/stats', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  let childId = req.query.childId as string | undefined
+  
+  // Handle case where childId is an array (duplicate parameters)
+  if (Array.isArray(childId)) {
+    childId = childId[0]
+  }
+  
+  // Validate childId if provided
+  const parsedChildId = childId ? parseInt(childId) : null
+  if (childId && isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
+
+  // Handle mock mode
+  if (!env.DATABASE_URL) {
+    // Return mock statistics
+    const mockStats = {
+      totalBooks: 10,
+      newThisMonth: 2,
+      topBooks: [
+        {
+          id: 1,
+          name: '哈利·波特与魔法石',
+          coverUrl: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=harry%20potter%20book%20cover&image_size=square',
+          readCount: 3,
+        },
+        {
+          id: 2,
+          name: '小王子',
+          coverUrl: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=the%20little%20prince%20book%20cover&image_size=square',
+          readCount: 2,
+        },
+      ],
+    }
+
+    res.json({
+      status: 'success',
+      data: mockStats,
+    })
+    return
+  }
+
+  const bookWhere: any = { familyId, status: 'active' }
+  if (parsedChildId) {
+    bookWhere.childId = parsedChildId
+  }
+
+  const totalBooks = await prisma.book.count({
+    where: bookWhere,
+  })
+
+  const thisMonth = new Date()
+  thisMonth.setDate(1)
+  thisMonth.setHours(0, 0, 0, 0)
+
+  const newThisMonth = await prisma.book.count({
+    where: {
+      ...bookWhere,
+      createdAt: { gte: thisMonth },
+    },
+  })
+
+  // Top read books
+  const topBooks = await prisma.book.findMany({
+    where: bookWhere,
+    orderBy: { readCount: 'desc' },
+    take: 5,
+    select: { id: true, name: true, coverUrl: true, readCount: true },
+  })
+
+  res.json({
+    status: 'success',
+    data: {
+      totalBooks,
+      newThisMonth,
+      topBooks,
+    },
   })
 })
 
@@ -854,95 +946,95 @@ libraryRouter.post('/batch/finish', authMiddleware, requireRole('parent'), async
 })
 
 /**
- * GET /stats - Get library statistics
+ * Download image from URL and upload to Supabase
  */
-libraryRouter.get('/stats', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
-  const { familyId } = req.user!
-  let childId = req.query.childId as string | undefined
-  
-  // Handle case where childId is an array (duplicate parameters)
-  if (Array.isArray(childId)) {
-    childId = childId[0]
-  }
-  
-  // Validate childId if provided
-  const parsedChildId = childId ? parseInt(childId) : null
-  if (childId && isNaN(parsedChildId)) {
-    throw new AppError(400, 'Invalid childId: must be a number')
+async function downloadAndUploadCover(imageUrl: string, bookName: string): Promise<string> {
+  if (!imageUrl || !supabase || !env.SUPABASE_STORAGE_BUCKET) {
+    return ''
   }
 
-  // Handle mock mode
-  if (!env.DATABASE_URL) {
-    // Return mock statistics
-    const mockStats = {
-      totalBooks: 10,
-      newThisMonth: 2,
-      topBooks: [
-        {
-          id: 1,
-          name: '哈利·波特与魔法石',
-          coverUrl: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=harry%20potter%20book%20cover&image_size=square',
-          readCount: 3,
-        },
-        {
-          id: 2,
-          name: '小王子',
-          coverUrl: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=the%20little%20prince%20book%20cover&image_size=square',
-          readCount: 2,
-        },
-      ],
+  try {
+    console.log(`[COVER] Downloading cover for "${bookName}": ${imageUrl}`)
+    
+    // Download image with timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
+    
+    const imageResponse = await fetch(imageUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+    clearTimeout(timeoutId)
+    
+    if (!imageResponse.ok) {
+      console.error(`[COVER] Failed to download: ${imageResponse.status}`)
+      return ''
     }
 
-    res.json({
-      status: 'success',
-      data: mockStats,
-    })
-    return
+    const imageBuffer = await imageResponse.buffer()
+    
+    // Validate image size (max 5MB)
+    if (imageBuffer.length > 5 * 1024 * 1024) {
+      console.error(`[COVER] Image too large: ${imageBuffer.length} bytes`)
+      return ''
+    }
+
+    // Determine file extension
+    const contentType = imageResponse.headers.get('content-type') || ''
+    let fileExt = 'jpg'
+    if (contentType.includes('png')) fileExt = 'png'
+    else if (contentType.includes('gif')) fileExt = 'gif'
+    else if (contentType.includes('webp')) fileExt = 'webp'
+    
+    // Generate unique filename
+    const sanitizedName = bookName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_').substring(0, 20)
+    const fileName = `covers/import/${sanitizedName}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}.${fileExt}`
+
+    console.log(`[COVER] Uploading to Supabase: ${fileName}`)
+    
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .upload(fileName, imageBuffer, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: contentType || `image/${fileExt}`
+      })
+
+    if (error) {
+      console.error('[COVER] Supabase upload error:', error)
+      return ''
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .getPublicUrl(fileName)
+    
+    if (urlData.publicUrl) {
+      console.log(`[COVER] Success: ${urlData.publicUrl}`)
+      return urlData.publicUrl
+    }
+    
+    return ''
+  } catch (error: any) {
+    console.error(`[COVER] Error processing cover for "${bookName}":`, error.message)
+    return ''
   }
-
-  const totalBooks = await prisma.book.count({
-    where: { familyId, status: 'active' },
-  })
-
-  const thisMonth = new Date()
-  thisMonth.setDate(1)
-  thisMonth.setHours(0, 0, 0, 0)
-
-  const newThisMonth = await prisma.book.count({
-    where: {
-      familyId,
-      status: 'active',
-      createdAt: { gte: thisMonth },
-    },
-  })
-
-  // Top read books
-  const topBooks = await prisma.book.findMany({
-    where: { familyId, status: 'active' },
-    orderBy: { readCount: 'desc' },
-    take: 5,
-    select: { id: true, name: true, coverUrl: true, readCount: true },
-  })
-
-  res.json({
-    status: 'success',
-    data: {
-      totalBooks,
-      newThisMonth,
-      topBooks,
-    },
-  })
-})
+}
 
 /**
  * POST /import - Import books from Excel file
  */
 libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
-    const { familyId } = req.user!
+    const { familyId, userId } = req.user!
     const file = req.file
+    const { childId } = req.body
 
-    console.log(`[IMPORT] Starting import for family ${familyId}`)
+    console.log(`[IMPORT] Starting import for family ${familyId}, childId: ${childId || 'none'}`)
 
     if (!file) {
       throw new AppError(400, '请上传文件')
@@ -953,9 +1045,41 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
     // Parse Excel
     const workbook = XLSX.read(file.buffer, { type: 'buffer' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    
+    // Get hyperlinks from the sheet
+    const hyperlinks: Record<string, string> = {}
+    console.log(`[IMPORT] Sheet keys:`, Object.keys(sheet))
+    
+    // xlsx library stores hyperlinks in sheet['!links'] or sheet['!data']
+    const links = sheet['!links'] || sheet['!hyperlinks'] || sheet['!rels']?.hyperlinks
+    if (links && Array.isArray(links)) {
+      console.log(`[IMPORT] Found ${links.length} hyperlinks, first few:`, links.slice(0, 3))
+      for (const link of links) {
+        // Different versions of xlsx use different property names
+        const cellRef = link.ref || link.r || link.cell
+        const target = link.Target || link.target || link.t || link.hyperlink
+        if (cellRef && target) {
+          hyperlinks[cellRef] = target
+          console.log(`[IMPORT] Hyperlink ${cellRef} -> ${target}`)
+        }
+      }
+      console.log(`[IMPORT] Parsed ${Object.keys(hyperlinks).length} hyperlinks`)
+    } else {
+      console.log(`[IMPORT] No hyperlinks found in sheet`)
+      // Debug: log the sheet structure
+      console.log(`[IMPORT] Sheet !links:`, sheet['!links'])
+      console.log(`[IMPORT] Sheet !hyperlinks:`, sheet['!hyperlinks'])
+    }
+    
     const data = XLSX.utils.sheet_to_json(sheet)
 
     console.log(`[IMPORT] Found ${data.length} rows in Excel`)
+    
+    // Log first row to debug column names
+    if (data.length > 0) {
+      console.log(`[IMPORT] First row columns:`, Object.keys(data[0]))
+      console.log(`[IMPORT] First row data:`, data[0])
+    }
 
     // Type mapping - 新的图书类型映射
     const typeMap: Record<string, string> = {
@@ -967,7 +1091,9 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
 
     let imported = 0
     let skipped = 0
-    const batchSize = 100
+    let coverSuccess = 0
+    let coverFailed = 0
+    const batchSize = 10 // Smaller batch for cover processing
     const booksToCreate: any[] = []
     const totalRows = data.length
 
@@ -1002,14 +1128,53 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       // Map type
       const excelType = row['类型'] || ''
       const bookType = typeMap[excelType] || 'children'
+      
+      // Get cover URL from K column hyperlinks
+      // Row index in Excel is i+2 (1-based, with header row)
+      const excelRowNumber = i + 2
+      const kCellAddress = `K${excelRowNumber}`
+      let coverUrl = hyperlinks[kCellAddress] || ''
+      
+      // Fallback: try to get from cell value if no hyperlink
+      if (!coverUrl) {
+        const possibleCoverColumns = ['封面', '封面链接', '图片', '图片链接', 'cover', 'coverUrl']
+        for (const col of possibleCoverColumns) {
+          if (row[col] && String(row[col]).trim()) {
+            const value = String(row[col]).trim()
+            // Check if it's a URL
+            if (value.startsWith('http://') || value.startsWith('https://')) {
+              coverUrl = value
+              break
+            }
+          }
+        }
+      }
+      
+      if (coverUrl) {
+        console.log(`[IMPORT] Row ${excelRowNumber} cover URL: ${coverUrl}`)
+      }
+
+      // Download and upload cover if URL exists
+      let finalCoverUrl = ''
+      if (coverUrl && (coverUrl.startsWith('http://') || coverUrl.startsWith('https://'))) {
+        finalCoverUrl = await downloadAndUploadCover(coverUrl, String(name))
+        if (finalCoverUrl) {
+          coverSuccess++
+        } else {
+          coverFailed++
+        }
+      }
 
       booksToCreate.push({
         familyId,
+        childId: childId ? parseInt(childId) : null,
         name: String(name),
         author: String(row['作者'] || ''),
         type: bookType,
-        coverUrl: '',
-        totalPages: 0,
+        coverUrl: finalCoverUrl,
+        totalPages: parseInt(row['页数']) || 0,
+        isbn: String(row['ISBN'] || ''),
+        publisher: String(row['出版社'] || ''),
       })
 
       // Batch insert
@@ -1017,7 +1182,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
         await prisma.book.createMany({ data: booksToCreate, skipDuplicates: true })
         imported += booksToCreate.length
         booksToCreate.length = 0
-        console.log(`[IMPORT] Batch inserted, total: ${imported}`)
+        console.log(`[IMPORT] Batch inserted, total: ${imported}, covers: ${coverSuccess} success, ${coverFailed} failed`)
 
         // 发送进度信息
         const progress = Math.round((i / totalRows) * 100)
@@ -1027,7 +1192,9 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
             progress,
             imported,
             skipped,
-            processed: i
+            processed: i,
+            coverSuccess,
+            coverFailed
           }
         }) + '\n')
         // 确保数据立即发送到前端
@@ -1043,21 +1210,24 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       imported += booksToCreate.length
     }
 
-    console.log(`[IMPORT] Completed: ${imported} imported, ${skipped} skipped`)
+    console.log(`[IMPORT] Completed: ${imported} imported, ${skipped} skipped, ${coverSuccess} covers, ${coverFailed} failed`)
 
     // 发送完成信息
     res.write(JSON.stringify({
       status: 'success',
-      message: `导入完成：成功 ${imported} 本，跳过 ${skipped} 本`,
-      data: { imported, skipped },
+      message: `导入完成：成功 ${imported} 本，跳过 ${skipped} 本，封面 ${coverSuccess} 个`,
+      data: { imported, skipped, coverSuccess, coverFailed },
     }) + '\n')
 
     res.end()
   } catch (error: any) {
     console.error('[IMPORT] Error:', error)
-    res.writeHead(500, {
-      'Content-Type': 'application/json'
-    })
+    // 如果响应头还没发送，发送错误响应
+    if (!res.headersSent) {
+      res.writeHead(500, {
+        'Content-Type': 'application/json'
+      })
+    }
     res.write(JSON.stringify({
       status: 'error',
       message: `导入失败: ${error.message}`
