@@ -43,7 +43,7 @@ export function ChildSwitcher({ className }: ChildSwitcherProps) {
           <>
             <Avatar className="w-8 h-8 ring-2 ring-white shadow-sm">
               <AvatarImage src={selectedChild.avatar} />
-              <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-xs font-medium">
+              <AvatarFallback className="bg-primary text-white text-xs font-medium">
                 {selectedChild.name.charAt(0)}
               </AvatarFallback>
             </Avatar>
@@ -78,7 +78,7 @@ export function ChildSwitcher({ className }: ChildSwitcherProps) {
           >
             <Avatar className="w-7 h-7">
               <AvatarImage src={child.avatar} />
-              <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-xs">
+              <AvatarFallback className="bg-primary text-white text-xs">
                 {child.name.charAt(0)}
               </AvatarFallback>
             </Avatar>

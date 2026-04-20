@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 export default function Login() {
-  const { login, isLoading } = useAuth();
+  const { login, isInitializing } = useAuth();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -17,10 +17,7 @@ export default function Login() {
     e.preventDefault();
 
     try {
-      await login({
-        username: formData.username,
-        password: formData.password
-      });
+      await login(formData.username, formData.password);
       toast.success('登录成功！');
     } catch {
       toast.error('登录失败，请检查用户名和密码');
@@ -80,10 +77,10 @@ export default function Login() {
 
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isInitializing}
               className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium shadow-lg shadow-purple-200 mt-2"
             >
-              {isLoading ? '登录中...' : '登录'}
+              {isInitializing ? '登录中...' : '登录'}
             </Button>
           </form>
 

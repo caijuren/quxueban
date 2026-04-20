@@ -211,7 +211,7 @@ export default function AchievementsPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: '总成就', value: totalAchievements, gradient: 'from-purple-500 to-violet-500' },
+          { label: '总成就', value: totalAchievements, gradient: 'from-primary to-primary/70' },
           { label: '已启用', value: activeAchievements, gradient: 'from-emerald-500 to-teal-500' },
           { label: '已解锁', value: totalUnlocks, gradient: 'from-amber-500 to-yellow-500' }
         ].map((stat, index) => (
@@ -254,11 +254,11 @@ export default function AchievementsPage() {
               transition={{ delay: index * 0.05 }}
             >
               <Card className={cn('group overflow-hidden border-0 shadow-lg shadow-gray-200/50 rounded-3xl transition-all', !achievement.isActive && 'opacity-60')}>
-                <div className={cn('h-1.5', achievement.isActive ? 'bg-gradient-to-r from-purple-500 via-blue-500 to-emerald-500' : 'bg-gray-200')} />
+                <div className={cn('h-1.5', achievement.isActive ? 'bg-primary' : 'bg-gray-200')} />
                 <CardContent className="p-5">
                   <div className="flex gap-4">
                     {/* Icon */}
-                    <div className={cn('size-16 rounded-2xl flex items-center justify-center text-3xl shrink-0 shadow-md', achievement.isActive ? 'bg-gradient-to-br from-purple-400 to-blue-400' : 'bg-gray-100')}>
+                    <div className={cn('size-16 rounded-2xl flex items-center justify-center text-3xl shrink-0 shadow-md', achievement.isActive ? 'bg-primary/80' : 'bg-gray-100')}>
                       {achievement.icon}
                     </div>
 
@@ -300,7 +300,7 @@ export default function AchievementsPage() {
                                 {achievement.unlockedChildren.map((child) => (
                                   <div key={child.id} className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 rounded-full">
                                     <Avatar className="size-4">
-                                      <AvatarFallback className="text-[8px] bg-gradient-to-br from-purple-500 to-blue-500 text-white">{child.name.charAt(0)}</AvatarFallback>
+                                      <AvatarFallback className="text-[8px] bg-primary text-white">{child.name.charAt(0)}</AvatarFallback>
                                     </Avatar>
                                     <span className="text-xs text-gray-700">{child.name}</span>
                                   </div>
@@ -323,12 +323,12 @@ export default function AchievementsPage() {
       {!isLoading && (!achievements || achievements.length === 0) && (
         <Card className="border-0 shadow-lg rounded-3xl">
           <CardContent className="py-16 text-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
               <Trophy className="size-10 text-gray-400" />
             </div>
             <h3 className="font-semibold text-gray-900 text-lg">还没有创建成就</h3>
             <p className="text-gray-500 mt-1">创建成就来激励孩子学习</p>
-            <Button onClick={openCreateDialog} className="mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white">添加成就</Button>
+            <Button onClick={openCreateDialog} className="mt-4 rounded-xl bg-primary text-primary-foreground">添加成就</Button>
           </CardContent>
         </Card>
       )}
@@ -381,7 +381,7 @@ export default function AchievementsPage() {
 
               {/* Footer */}
               <div className="p-6 border-t border-gray-100 space-y-3">
-                <Button type="submit" form="achievement-form" disabled={createMutation.isPending || updateMutation.isPending} className="w-full h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
+                <Button type="submit" form="achievement-form" disabled={createMutation.isPending || updateMutation.isPending} className="w-full h-12 rounded-xl text-base font-semibold bg-primary text-primary-foreground shadow-sm">
                   {editingAchievement ? '保存修改' : '创建成就'}
                 </Button>
                 <Button type="button" variant="outline" className="w-full h-12 rounded-xl" onClick={closeDialog}>取消</Button>

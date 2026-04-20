@@ -11,7 +11,6 @@ export interface AuthRequest extends Request {
     role: string
     familyId: number
     name: string
-    avatar: string
   }
 }
 
@@ -35,7 +34,6 @@ export const authMiddleware = (req: Request, _res: Response, next: NextFunction)
       name: string
       role: string
       familyId: number
-      avatar: string
     }
 
     // Attach user info to request
@@ -44,7 +42,6 @@ export const authMiddleware = (req: Request, _res: Response, next: NextFunction)
       role: decoded.role,
       familyId: decoded.familyId,
       name: decoded.name,
-      avatar: decoded.avatar,
     }
 
     next()
@@ -91,7 +88,6 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
       name: string
       role: string
       familyId: number
-      avatar: string
     }
 
     (req as AuthRequest).user = {
@@ -99,7 +95,6 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
       role: decoded.role,
       familyId: decoded.familyId,
       name: decoded.name,
-      avatar: decoded.avatar,
     }
   } catch {
     // Token invalid, but continue without user
@@ -116,7 +111,6 @@ export const generateToken = (payload: {
   name: string
   role: string
   familyId: number
-  avatar: string
 }): string => {
   // @ts-ignore - jsonwebtoken types are complex for expiresIn
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN })

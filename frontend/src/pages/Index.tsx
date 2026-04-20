@@ -81,25 +81,25 @@ const Index = () => {
             </div>
             <div className="flex items-center gap-3">
               <Button
-                variant="ghost"
-                onClick={() => navigate('/login')}
-                className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
-              >
-                家长登录
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/child-login')}
-                className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
-              >
-                孩子登录
-              </Button>
-              <Button
-                onClick={() => navigate('/register')}
-                className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl px-6 shadow-lg shadow-purple-500/25"
-              >
-                注册家庭
-              </Button>
+              variant="ghost"
+              onClick={() => navigate('/debt')}
+              className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
+            >
+              还款工具
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/login')}
+              className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
+            >
+              登录
+            </Button>
+            <Button
+              onClick={() => navigate('/register')}
+              className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl px-6 shadow-lg shadow-purple-500/25"
+            >
+              注册家庭
+            </Button>
             </div>
           </div>
         </div>

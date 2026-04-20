@@ -65,8 +65,8 @@ import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 // Import components
 import { BookCard, BookFilter, BatchActionBar, EmptyState } from '@/components/parent/library';
-import type { Book, Child, LibraryStats, BorrowRecord, BookList } from '@/types/library';
-import { bookTypes, readStages } from '@/types/library';
+import type { Book, BorrowRecord, BookList, ReadStatus } from '@/types/library';
+import { bookTypes } from '@/types/library';
 
 // Schema
 const bookSchema = z.object({
@@ -80,6 +80,7 @@ const bookSchema = z.object({
   totalPages: z.number().min(0, '页数不能为负数').optional(),
   wordCount: z.number().min(0, '字数不能为负数').optional(),
   suitableAge: z.string().optional(),
+  childId: z.number().optional(),
 });
 
 type BookFormData = z.infer<typeof bookSchema>;
@@ -120,17 +121,6 @@ async function batchFinishBooks(childId: number, readStage?: string, bookIds?: n
   return data.data;
 }
 
-async function fetchLibraryStats(childId?: number): Promise<LibraryStats> {
-  const params = childId ? `?childId=${childId}` : '';
-  const { data } = await apiClient.get(`/library/stats${params}`);
-  return data.data;
-}
-
-async function fetchChildren(): Promise<Child[]> {
-  const { data } = await apiClient.get('/children');
-  return data.data || [];
-}
-
 async function createBook(book: BookFormData): Promise<Book> {
   const { data } = await apiClient.post('/library', book);
   return data.data;
@@ -157,11 +147,22 @@ const formatWordCount = (count: number | undefined): string => {
   return String(count);
 };
 
+const getScopedStorageKey = (key: string, childId: number | null) => `${key}_${childId ?? 'pending'}`;
+
 export default function LibraryPage() {
+  const { selectedChildId, selectedChild } = useSelectedChild();
+  const storageKeys = useMemo(() => ({
+    monthlyGoal: getScopedStorageKey('library_monthly_goal', selectedChildId),
+    bookLists: getScopedStorageKey('library_book_lists', selectedChildId),
+    borrowRecords: getScopedStorageKey('library_borrow_records', selectedChildId),
+    checkInRecords: getScopedStorageKey('library_checkin_records', selectedChildId),
+    importHistory: getScopedStorageKey('library_import_history', selectedChildId),
+  }), [selectedChildId]);
+
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
-  const [selectedReadStatus, setSelectedReadStatus] = useState<'all' | 'finished' | 'reading' | 'unread'>('all');
+  const [selectedReadStatus, setSelectedReadStatus] = useState<ReadStatus>('all');
   const [selectedAgeRange, setSelectedAgeRange] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('');
   const [searchInput, setSearchInput] = useState('');
@@ -192,11 +193,8 @@ export default function LibraryPage() {
 
   // Goal state
   const [showGoalDialog, setShowGoalDialog] = useState(false);
-  const [monthlyGoal, setMonthlyGoal] = useState<number>(() => {
-    const saved = localStorage.getItem('library_monthly_goal');
-    return saved ? parseInt(saved, 10) : 10;
-  });
-  const [goalInput, setGoalInput] = useState(String(monthlyGoal));
+  const [monthlyGoal, setMonthlyGoal] = useState<number>(10);
+  const [goalInput, setGoalInput] = useState('10');
 
   // Batch dialogs
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
@@ -204,20 +202,14 @@ export default function LibraryPage() {
   const [batchTypeValue, setBatchTypeValue] = useState('');
 
   // Book lists
-  const [bookLists, setBookLists] = useState<BookList[]>(() => {
-    const saved = localStorage.getItem('library_book_lists');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [bookLists, setBookLists] = useState<BookList[]>([]);
   const [showBookListDialog, setShowBookListDialog] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [selectedListId, setSelectedListId] = useState<string>('');
   const [showAddToListDialog, setShowAddToListDialog] = useState(false);
 
   // Borrow records
-  const [borrowRecords, setBorrowRecords] = useState<BorrowRecord[]>(() => {
-    const saved = localStorage.getItem('library_borrow_records');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [borrowRecords, setBorrowRecords] = useState<BorrowRecord[]>([]);
   const [showBorrowDialog, setShowBorrowDialog] = useState(false);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedBorrowBook, setSelectedBorrowBook] = useState<Book | null>(null);
@@ -226,25 +218,18 @@ export default function LibraryPage() {
   const [dueDate, setDueDate] = useState('');
 
   // Check in
-  const [checkInRecords, setCheckInRecords] = useState<string[]>(() => {
-    const saved = localStorage.getItem('library_checkin_records');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [checkInRecords, setCheckInRecords] = useState<string[]>([]);
   const [showCheckInDialog, setShowCheckInDialog] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const hasCheckedInToday = checkInRecords.includes(today);
 
   // Import history
-  const [importHistory, setImportHistory] = useState<Array<{ date: string; count: number; filename: string }>>(() => {
-    const saved = localStorage.getItem('library_import_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [importHistory, setImportHistory] = useState<Array<{ date: string; count: number; filename: string }>>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { selectedChildId } = useSelectedChild();
 
   const {
     register,
@@ -269,9 +254,23 @@ export default function LibraryPage() {
   const selectedTypeValue = watch('type');
   const coverUrl = watch('coverUrl');
 
+  useEffect(() => {
+    const savedGoal = localStorage.getItem(storageKeys.monthlyGoal);
+    const parsedGoal = savedGoal ? parseInt(savedGoal, 10) : 10;
+    const nextGoal = Number.isNaN(parsedGoal) ? 10 : parsedGoal;
+
+    setMonthlyGoal(nextGoal);
+    setGoalInput(String(nextGoal));
+    setBookLists(JSON.parse(localStorage.getItem(storageKeys.bookLists) || '[]'));
+    setBorrowRecords(JSON.parse(localStorage.getItem(storageKeys.borrowRecords) || '[]'));
+    setCheckInRecords(JSON.parse(localStorage.getItem(storageKeys.checkInRecords) || '[]'));
+    setImportHistory(JSON.parse(localStorage.getItem(storageKeys.importHistory) || '[]'));
+  }, [storageKeys]);
+
   const { data: books = [], isLoading } = useQuery({
     queryKey: ['library', searchQuery, selectedType, sortBy, selectedChildId],
     queryFn: () => fetchBooks(searchQuery, selectedType, sortBy, selectedChildId || undefined),
+    enabled: !!selectedChildId,
   });
 
   // Filter books
@@ -292,10 +291,15 @@ export default function LibraryPage() {
       result = result.filter(book => {
         if (selectedReadStatus === 'finished') {
           return book.readState?.status === 'finished';
-        } else if (selectedReadStatus === 'reading') {
+        }
+        if (selectedReadStatus === 'reading') {
           return book.activeReadings?.length > 0 && book.readState?.status !== 'finished';
-        } else if (selectedReadStatus === 'unread') {
+        }
+        if (selectedReadStatus === 'want_to_read') {
           return !book.activeReadings?.length && book.readState?.status !== 'finished';
+        }
+        if (selectedReadStatus === 'paused') {
+          return book.readState?.status === 'paused';
         }
         return true;
       });
@@ -339,16 +343,66 @@ export default function LibraryPage() {
       .slice(0, 5);
   }, [books]);
 
-  const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['libraryStats', selectedChildId],
-    queryFn: () => fetchLibraryStats(selectedChildId || undefined),
-    enabled: !!selectedChildId,
-  });
+  const currentReadingBooks = useMemo(
+    () => books.filter(b => b.activeReadings?.length > 0 && b.readState?.status !== 'finished'),
+    [books]
+  );
 
-  const { data: children = [] } = useQuery({
-    queryKey: ['children'],
-    queryFn: fetchChildren,
-  });
+  const finishedBooksList = useMemo(
+    () => books.filter(b => b.readState?.status === 'finished'),
+    [books]
+  );
+
+  const unreadBooks = useMemo(
+    () => books.filter(b => !b.activeReadings?.length && b.readState?.status !== 'finished'),
+    [books]
+  );
+
+  const featuredReadingBook = currentReadingBooks[0] || null;
+  const totalReadPages = useMemo(
+    () => books.reduce((sum, book) => sum + (book.totalReadPages || 0), 0),
+    [books]
+  );
+  const totalReadMinutes = useMemo(
+    () => books.reduce((sum, book) => sum + (book.totalReadMinutes || 0), 0),
+    [books]
+  );
+  const totalReadHours = Math.floor(totalReadMinutes / 60);
+  const remainingReadMinutes = totalReadMinutes % 60;
+  const thisMonthRead = useMemo(() => {
+    const now = new Date();
+    return finishedBooksList.filter((book) => {
+      if (!book.readState?.finishedAt) return false;
+      const finishedAt = new Date(book.readState.finishedAt);
+      return finishedAt.getFullYear() === now.getFullYear() && finishedAt.getMonth() === now.getMonth();
+    }).length;
+  }, [finishedBooksList]);
+  const weeklyReadEstimate = Math.max(0, Math.ceil(thisMonthRead / 4));
+  const totalWordsRead = useMemo(
+    () => books.reduce((sum, book) => sum + (book.wordCount || 0), 0),
+    [books]
+  );
+  const favoriteTypeLabel = useMemo(() => {
+    const typeCount = books.reduce<Record<string, number>>((acc, book) => {
+      acc[book.type] = (acc[book.type] || 0) + 1;
+      return acc;
+    }, {});
+    const topType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return bookTypes.find((type) => type.value === topType)?.label || '暂无';
+  }, [books]);
+  const popularBooksCount = useMemo(
+    () => books.filter((book) => (book.readCount || 0) > 0).length,
+    [books]
+  );
+  const dailyReadMinutes = Math.round(totalReadMinutes / 30);
+
+  const ensureSelectedChild = (action: () => void, message = '请先在左侧选择孩子，再继续管理图书馆') => {
+    if (!selectedChildId) {
+      toast.error(message);
+      return;
+    }
+    action();
+  };
 
   // Batch selection
   const toggleBookSelection = (bookId: number) => {
@@ -525,7 +579,7 @@ export default function LibraryPage() {
     if (editingBook) {
       updateMutation.mutate({ id: editingBook.id, data });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({ ...data, childId: selectedChildId || undefined });
     }
   };
 
@@ -610,9 +664,7 @@ export default function LibraryPage() {
       if (selectedChildId) {
         formData.append('childId', selectedChildId.toString());
       }
-      const parentToken = localStorage.getItem('parent_token');
-      const childToken = localStorage.getItem('child_token');
-      const token = parentToken || childToken;
+      const token = localStorage.getItem('auth_token');
       const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
       const response = await fetch(`${baseUrl}/library/import`, {
         method: 'POST',
@@ -648,7 +700,7 @@ export default function LibraryPage() {
                 const newHistoryItem = { date: new Date().toISOString(), count: data.data.imported || 0, filename: file.name };
                 const newHistory = [newHistoryItem, ...importHistory].slice(0, 10);
                 setImportHistory(newHistory);
-                localStorage.setItem('library_import_history', JSON.stringify(newHistory));
+                localStorage.setItem(storageKeys.importHistory, JSON.stringify(newHistory));
               } else if (data.status === 'error') {
                 throw new Error(data.message);
               }
@@ -719,8 +771,177 @@ export default function LibraryPage() {
     );
   }
 
+  if (!selectedChildId) {
+    return (
+      <div className="space-y-6">
+        <Card className="overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 shadow-sm">
+          <CardContent className="p-8">
+            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-2xl">
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">当前孩子视角</Badge>
+                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground">先选择孩子，再进入图书馆</h1>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  图书馆按孩子独立管理。选择当前孩子后，页面会只展示这个孩子的书目、阅读进度、借阅记录和习惯养成辅助信息。
+                </p>
+              </div>
+              <div className="rounded-3xl border border-indigo-100 bg-white/90 p-5 shadow-sm">
+                <div className="flex size-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                  <LibraryIcon className="size-7" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-foreground">建议下一步</p>
+                <p className="mt-1 text-sm text-muted-foreground">在左侧切换当前孩子后，再添加图书或导入书单。</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            ['书目管理', '按孩子维护个人书库、分类、封面和阅读阶段。'],
+            ['阅读进度', '聚焦这个孩子的在读书、已读书和阅读记录。'],
+            ['习惯养成', '将目标、打卡、借阅和书单都放在同一个孩子上下文里。'],
+          ].map(([title, description]) => (
+            <Card key={title} className="rounded-2xl border border-border/70 shadow-sm">
+              <CardContent className="p-5">
+                <p className="text-sm font-semibold text-foreground">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Reading Overview */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.35fr_1fr]">
+        <Card className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-amber-50 via-white to-orange-50/60 shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-amber-700">当前孩子图书馆</p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                  围绕 {selectedChild?.name || '当前孩子'} 组织书目、进度与记录
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  这里是 {selectedChild?.name || '当前孩子'} 的阅读工作台。图书、进度、目标和阅读辅助信息都在同一个孩子视角下查看。
+                </p>
+              </div>
+              <Button onClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')} className="rounded-xl shadow-sm">
+                <Plus className="mr-2 h-4 w-4" />
+                添加图书
+              </Button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="rounded-2xl border border-emerald-100 bg-white/80 p-4">
+                <p className="text-xs text-muted-foreground">在读书籍</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{currentReadingBooks.length}</p>
+              </div>
+              <div className="rounded-2xl border border-blue-100 bg-white/80 p-4">
+                <p className="text-xs text-muted-foreground">已读书籍</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{finishedBooksList.length}</p>
+              </div>
+              <div className="rounded-2xl border border-violet-100 bg-white/80 p-4">
+                <p className="text-xs text-muted-foreground">阅读总页数</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{totalReadPages}</p>
+              </div>
+              <div className="rounded-2xl border border-orange-100 bg-white/80 p-4">
+                <p className="text-xs text-muted-foreground">本周阅读</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{weeklyReadEstimate}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">当前在读</p>
+                <p className="mt-1 text-sm text-muted-foreground">优先推进最近正在读的书。</p>
+              </div>
+              <Badge variant="secondary" className="rounded-full px-3 py-1">
+                {currentReadingBooks.length} 本
+              </Badge>
+            </div>
+
+            {featuredReadingBook ? (
+              <button
+                onClick={() => navigate(`/parent/library/${featuredReadingBook.id}`)}
+                className="mt-5 flex w-full items-center gap-4 rounded-2xl border border-border/70 bg-slate-50/70 p-4 text-left transition-colors hover:bg-slate-50"
+              >
+                <div className="h-24 w-[72px] overflow-hidden rounded-xl bg-muted">
+                  {featuredReadingBook.coverUrl ? (
+                    <img src={featuredReadingBook.coverUrl} alt={featuredReadingBook.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <BookOpen className="h-6 w-6 text-muted-foreground/50" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-semibold text-foreground">{featuredReadingBook.name}</p>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">{featuredReadingBook.author || '未知作者'}</p>
+                  <div className="mt-3">
+                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>阅读进度</span>
+                      <span>{featuredReadingBook.totalReadPages || 0}/{featuredReadingBook.totalPages || 0} 页</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-sky-500"
+                        style={{
+                          width: `${featuredReadingBook.totalPages > 0 ? Math.round((featuredReadingBook.totalReadPages / featuredReadingBook.totalPages) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center">
+                <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                <p className="mt-3 text-sm font-medium text-foreground">还没有在读书籍</p>
+                <p className="mt-1 text-sm text-muted-foreground">添加图书后，可以把其中一本标记为开始阅读。</p>
+                <Button variant="outline" className="mt-4 rounded-xl" onClick={() => setShowAddForm(true)}>
+                  添加第一本书
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Reading Status Tabs */}
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { key: 'all', label: `全部 (${books.length})` },
+              { key: 'reading', label: `在读 (${currentReadingBooks.length})` },
+              { key: 'finished', label: `已读 (${finishedBooksList.length})` },
+              { key: 'unread', label: `未开始 (${unreadBooks.length})` },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setSelectedReadStatus(item.key as typeof selectedReadStatus)}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm font-medium transition-all',
+                  selectedReadStatus === item.key
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filter Component */}
       <BookFilter
         searchInput={searchInput}
@@ -740,8 +961,8 @@ export default function LibraryPage() {
           setBatchMode(!batchMode);
           if (batchMode) clearSelection();
         }}
-        onImportClick={() => importInputRef.current?.click()}
-        onAddBookClick={() => setShowAddForm(true)}
+        onImportClick={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
+        onAddBookClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')}
         importing={importing}
         importProgress={importProgress}
         resultCount={filteredBooks.length}
@@ -787,9 +1008,9 @@ export default function LibraryPage() {
                       导入完成
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
-                      成功导入 {importResult.imported} 条阅读记录
-                      {importResult.createdBooks > 0 && `，创建 ${importResult.createdBooks} 本新书`}
-                      {importResult.matchedBooks > 0 && `，匹配 ${importResult.matchedBooks} 条到现有书籍`}
+                      成功导入 {importResult.imported} 本图书
+                      {importResult.createdBooks > 0 && `，新建 ${importResult.createdBooks} 本`}
+                      {importResult.matchedBooks > 0 && `，匹配 ${importResult.matchedBooks} 本已有图书`}
                       {importResult.skipped > 0 && `，跳过 ${importResult.skipped} 条`}
                     </p>
                   </div>
@@ -851,8 +1072,8 @@ export default function LibraryPage() {
               <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-amber-600" />
               </div>
-              <h3 className="font-semibold text-foreground">为你推荐</h3>
-              <span className="text-xs text-muted-foreground ml-2">根据你的阅读偏好</span>
+              <h3 className="font-semibold text-foreground">同类延伸</h3>
+              <span className="text-xs text-muted-foreground ml-2">基于当前书库里的阅读偏好</span>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-2">
               {recommendedBooks.map((book) => (
@@ -881,54 +1102,6 @@ export default function LibraryPage() {
         </Card>
       )}
 
-      {/* Currently Reading */}
-      {books.filter(b => b.activeReadings?.length > 0 && b.readState?.status !== 'finished').length > 0 && (
-        <Card className="border border-primary/20 bg-gradient-to-r from-primary/5 to-transparent rounded-xl overflow-hidden">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <Play className="w-4 h-4 text-primary" />
-              </div>
-              <h3 className="font-semibold text-foreground">正在阅读</h3>
-              <Badge variant="secondary" className="ml-auto">
-                {books.filter(b => b.activeReadings?.length > 0 && b.readState?.status !== 'finished').length} 本
-              </Badge>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {books
-                .filter(b => b.activeReadings?.length > 0 && b.readState?.status !== 'finished')
-                .slice(0, 5)
-                .map((book) => {
-                  const totalPages = book.totalPages || 0;
-                  const readPages = book.totalReadPages || 0;
-                  const progress = totalPages > 0 ? Math.round((readPages / totalPages) * 100) : 0;
-                  return (
-                    <div
-                      key={book.id}
-                      onClick={() => navigate(`/parent/library/${book.id}`)}
-                      className="flex-shrink-0 w-32 cursor-pointer group"
-                    >
-                      <div className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted mb-2">
-                        {book.coverUrl ? (
-                          <img src={book.coverUrl} alt={book.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <BookOpen className="w-8 h-8 text-muted-foreground/50" />
-                          </div>
-                        )}
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
-                          <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground text-center truncate">{progress}% 已读</p>
-                    </div>
-                  );
-                })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Reading Goal */}
       <Card className="border border-border rounded-xl overflow-hidden">
         <CardContent className="p-5">
@@ -939,7 +1112,7 @@ export default function LibraryPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">本月阅读目标</h3>
-                <p className="text-sm text-muted-foreground">已读 {stats?.thisMonthRead || 0} / {monthlyGoal} 本</p>
+                <p className="text-sm text-muted-foreground">{selectedChild?.name || '当前孩子'} 已读 {thisMonthRead} / {monthlyGoal} 本</p>
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => { setGoalInput(String(monthlyGoal)); setShowGoalDialog(true); }}>
@@ -950,18 +1123,18 @@ export default function LibraryPage() {
             <div className="h-3 bg-muted rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${Math.min(((stats?.thisMonthRead || 0) / monthlyGoal) * 100, 100)}%` }}
+                animate={{ width: `${Math.min((thisMonthRead / monthlyGoal) * 100, 100)}%` }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
                 className={cn(
                   "h-full rounded-full transition-colors",
-                  (stats?.thisMonthRead || 0) >= monthlyGoal ? "bg-gradient-to-r from-green-400 to-emerald-500" : "bg-gradient-to-r from-amber-400 to-orange-500"
+                  thisMonthRead >= monthlyGoal ? "bg-gradient-to-r from-green-400 to-emerald-500" : "bg-gradient-to-r from-amber-400 to-orange-500"
                 )}
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-muted-foreground">
               <span>0%</span>
-              <span className={cn("font-medium", (stats?.thisMonthRead || 0) >= monthlyGoal ? "text-green-500" : "text-amber-500")}>
-                {Math.round(((stats?.thisMonthRead || 0) / monthlyGoal) * 100)}% 完成{(stats?.thisMonthRead || 0) >= monthlyGoal && " "}
+              <span className={cn("font-medium", thisMonthRead >= monthlyGoal ? "text-green-500" : "text-amber-500")}>
+                {Math.round((thisMonthRead / monthlyGoal) * 100)}% 完成{thisMonthRead >= monthlyGoal && " "}
               </span>
               <span>100%</span>
             </div>
@@ -984,7 +1157,7 @@ export default function LibraryPage() {
                 <TrendingUp className="w-4 h-4" />
                 <span className="text-xs">本周阅读</span>
               </div>
-              <p className="text-lg font-semibold text-foreground">{Math.ceil((stats?.thisMonthRead || 0) / 4)}</p>
+              <p className="text-lg font-semibold text-foreground">{weeklyReadEstimate}</p>
               <p className="text-xs text-muted-foreground">本</p>
             </div>
             <div className="text-center border-x border-border">
@@ -992,7 +1165,7 @@ export default function LibraryPage() {
                 <Calendar className="w-4 h-4" />
                 <span className="text-xs">日均阅读</span>
               </div>
-              <p className="text-lg font-semibold text-foreground">{stats?.totalHours ? Math.round((stats.totalHours * 60 + (stats.remainingMinutes || 0)) / 30) : 0}</p>
+              <p className="text-lg font-semibold text-foreground">{dailyReadMinutes}</p>
               <p className="text-xs text-muted-foreground">分钟</p>
             </div>
             <div className="text-center">
@@ -1066,7 +1239,7 @@ export default function LibraryPage() {
                   <FolderHeart className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground">我的书单</h3>
+                  <h3 className="font-semibold text-foreground">{selectedChild?.name || '当前孩子'}的书单</h3>
                   <p className="text-sm text-muted-foreground">共 {bookLists.length} 个书单</p>
                 </div>
               </div>
@@ -1084,7 +1257,7 @@ export default function LibraryPage() {
                         e.stopPropagation();
                         const newLists = bookLists.filter(l => l.id !== list.id);
                         setBookLists(newLists);
-                        localStorage.setItem('library_book_lists', JSON.stringify(newLists));
+                        localStorage.setItem(storageKeys.bookLists, JSON.stringify(newLists));
                         toast.success('书单已删除');
                       }}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all"
@@ -1120,41 +1293,41 @@ export default function LibraryPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="已读书籍"
-          value={stats?.finishedBooks || 0}
-          subtext={stats?.thisMonthRead && stats.thisMonthRead > 0 ? `本月已读 ${stats.thisMonthRead} 本` : ''}
+          value={finishedBooksList.length}
+          subtext={thisMonthRead > 0 ? `本月已读 ${thisMonthRead} 本` : '本月还没有读完新书'}
           icon={BookOpen}
           color="green"
           className="rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm"
           onClick={() => { setSelectedType('all'); setSortBy('recently_finished'); toast.info('已筛选：已读完的书籍'); }}
-          isLoading={isLoadingStats}
+          isLoading={false}
         />
         <MetricCard
           title="阅读总量"
-          value={stats?.totalPages || 0}
-          subtext={`${formatWordCount(stats?.totalWords)} 字`}
+          value={totalReadPages}
+          subtext={`${formatWordCount(totalWordsRead)} 字`}
           icon={BookMarked}
           color="blue"
           className="rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm"
-          isLoading={isLoadingStats}
+          isLoading={false}
         />
         <MetricCard
           title="阅读时长"
-          value={`${stats?.totalHours || 0}h ${stats?.remainingMinutes || 0}m`}
+          value={`${totalReadHours}h ${remainingReadMinutes}m`}
           subtext="累计阅读时间"
           icon={Clock}
           color="orange"
           className="rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm"
-          isLoading={isLoadingStats}
+          isLoading={false}
         />
         <MetricCard
-          title="热门书籍"
-          value={stats?.topBooks?.length || 0}
-          subtext={stats?.favoriteType ? `最爱: ${stats.favoriteType}` : ''}
+          title="阅读偏好"
+          value={popularBooksCount}
+          subtext={`偏好类型: ${favoriteTypeLabel}`}
           icon={BarChart2}
           color="purple"
           className="rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm"
           onClick={() => { setSortBy('most_read'); toast.info('已按阅读热度排序'); }}
-          isLoading={isLoadingStats}
+          isLoading={false}
         />
       </div>
 
@@ -1163,7 +1336,7 @@ export default function LibraryPage() {
         <EmptyState
           hasBooks={books.length > 0}
           onAddByISBN={() => { setShowAddForm(true); setAddMode('isbn'); }}
-          onImport={() => importInputRef.current?.click()}
+          onImport={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
           onManualAdd={() => { setShowAddForm(true); setAddMode('manual'); }}
           onClearFilters={() => {
             setSearchInput('');
@@ -1231,139 +1404,234 @@ export default function LibraryPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10"
+            className="relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">{editingBook ? '编辑图书' : '添加图书'}</h2>
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 bg-slate-50/70 p-6">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
+                    {editingBook ? '编辑模式' : '新增模式'}
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                    当前孩子：{selectedChild?.name || '未选择'}
+                  </Badge>
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-gray-900">
+                  {editingBook ? '编辑图书信息' : '为当前孩子添加图书'}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  先确定录入方式，再补充基础信息、阅读属性和展示信息。这样后面做统计和筛选也会更稳定。
+                </p>
+              </div>
               <Button variant="ghost" size="icon" onClick={closeForm} className="rounded-full"><X className="w-5 h-5" /></Button>
             </div>
             <div className="flex-1 overflow-auto p-6">
               {!editingBook && (
-                <div className="mb-6">
-                  <Label className="text-sm font-medium text-gray-700 mb-3 block">添加方式</Label>
-                  <div className="flex gap-2">
-                    {(['manual', 'isbn', 'search'] as const).map((mode) => (
+                <div className="mb-6 rounded-2xl border border-border bg-slate-50/70 p-4">
+                  <div className="mb-3">
+                    <Label className="text-sm font-medium text-gray-700">录入方式</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">先选择最顺手的方式，识别到的信息会自动带入下面的表单。</p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {([
+                      { value: 'manual', title: '手动输入', description: '适合录入家里已有的图书。' },
+                      { value: 'isbn', title: 'ISBN 查询', description: '适合通过封底 ISBN 快速带入信息。' },
+                      { value: 'search', title: '书名搜索', description: '适合先查找，再补全细节。' },
+                    ] as const).map((mode) => (
                       <button
-                        key={mode}
+                        key={mode.value}
                         type="button"
-                        onClick={() => setAddMode(mode)}
+                        onClick={() => setAddMode(mode.value)}
                         className={cn(
-                          'flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all border-2',
-                          addMode === mode ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                          'rounded-2xl border px-4 py-4 text-left transition-all',
+                          addMode === mode.value
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
                         )}
                       >
-                        {mode === 'manual' && '手动输入'}
-                        {mode === 'isbn' && 'ISBN查询'}
-                        {mode === 'search' && '书名搜索'}
+                        <p className={cn('text-sm font-semibold', addMode === mode.value ? 'text-primary' : 'text-foreground')}>{mode.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{mode.description}</p>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
+
               {!editingBook && addMode === 'isbn' && (
-                <div className="mb-6 p-4 bg-blue-50 rounded-2xl">
-                  <Label className="text-sm font-medium text-gray-700 mb-2 block">输入ISBN号</Label>
-                  <div className="flex gap-2">
-                    <Input value={isbnInput} onChange={(e) => setIsbnInput(e.target.value)} placeholder="输入10位或13位ISBN号" className="flex-1 rounded-xl h-12 bg-white" onKeyDown={(e) => e.key === 'Enter' && handleISBNLookup()} />
-                    <Button type="button" onClick={handleISBNLookup} disabled={isbnLoading} className="px-6 h-12 rounded-xl">
-                      {isbnLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '查询'}
+                <div className="mb-6 rounded-2xl border border-sky-100 bg-sky-50/80 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium text-gray-700">输入 ISBN 号</Label>
+                      <Input
+                        value={isbnInput}
+                        onChange={(e) => setIsbnInput(e.target.value)}
+                        placeholder="输入 10 位或 13 位 ISBN 号"
+                        className="mt-2 h-12 rounded-xl bg-white"
+                        onKeyDown={(e) => e.key === 'Enter' && handleISBNLookup()}
+                      />
+                    </div>
+                    <Button type="button" onClick={handleISBNLookup} disabled={isbnLoading} className="h-12 rounded-xl px-6">
+                      {isbnLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : '查询并填充'}
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">ISBN通常印在书籍封底，形如 978-7-xxx-xxxxx-x</p>
+                  <p className="mt-2 text-xs text-muted-foreground">ISBN 通常印在书籍封底，形如 `978-7-xxx-xxxxx-x`。</p>
                 </div>
               )}
+
               {!editingBook && addMode === 'search' && (
-                <div className="mb-6 p-4 bg-green-50 rounded-2xl">
-                  <Label className="text-sm font-medium text-gray-700 mb-2 block">搜索书籍</Label>
-                  <div className="flex gap-2">
-                    <Input value={titleSearch} onChange={(e) => setTitleSearch(e.target.value)} placeholder="输入书名搜索..." className="flex-1 rounded-xl h-12 bg-white" onKeyDown={(e) => e.key === 'Enter' && handleTitleSearch()} />
-                    <Button type="button" onClick={handleTitleSearch} disabled={isSearching} className="px-6 h-12 rounded-xl">
-                      {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '搜索'}
+                <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium text-gray-700">按书名搜索</Label>
+                      <Input
+                        value={titleSearch}
+                        onChange={(e) => setTitleSearch(e.target.value)}
+                        placeholder="输入书名搜索"
+                        className="mt-2 h-12 rounded-xl bg-white"
+                        onKeyDown={(e) => e.key === 'Enter' && handleTitleSearch()}
+                      />
+                    </div>
+                    <Button type="button" onClick={handleTitleSearch} disabled={isSearching} className="h-12 rounded-xl px-6">
+                      {isSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : '搜索'}
                     </Button>
                   </div>
                   {searchResults.length > 0 && (
-                    <div className="mt-4 space-y-2 max-h-60 overflow-auto">
+                    <div className="mt-4 grid gap-2">
                       {searchResults.map((book, idx) => (
-                        <button key={idx} type="button" onClick={() => handleSelectSearchResult(book)} className="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-left">
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectSearchResult(book)}
+                          className="flex items-center gap-3 rounded-2xl border border-white bg-white/90 p-3 text-left transition-all hover:border-emerald-300 hover:bg-emerald-50"
+                        >
                           {book.coverUrl ? (
-                            <img src={book.coverUrl} alt={book.name} className="w-10 h-14 object-cover rounded" loading="lazy" />
+                            <img src={book.coverUrl} alt={book.name} className="h-16 w-12 rounded-lg object-cover" loading="lazy" />
                           ) : (
-                            <div className="w-10 h-14 bg-gray-100 rounded flex items-center justify-center"><BookOpen className="w-5 h-5 text-gray-400" /></div>
+                            <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-gray-100">
+                              <BookOpen className="h-5 w-5 text-gray-400" />
+                            </div>
                           )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-gray-900 truncate">{book.name}</p>
-                            <p className="text-xs text-gray-500 truncate">{book.author || '未知作者'}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-gray-900">{book.name}</p>
+                            <p className="mt-1 truncate text-xs text-gray-500">{book.author || '未知作者'}</p>
                           </div>
+                          <span className="text-xs font-medium text-emerald-600">选用</span>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
               )}
-              <form id="book-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">书籍封面</Label>
-                  <div className="mt-2 flex items-center gap-4">
-                    <div className="w-24 h-32 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
-                      {coverUrl ? <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" /> : <BookOpen className="w-8 h-8 text-gray-300" />}
+
+              <form id="book-form" onSubmit={handleSubmit(onSubmit)} className="grid gap-6 xl:grid-cols-[1.3fr_0.8fr]">
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-sm font-semibold text-foreground">基础信息</p>
+                      <p className="mt-1 text-xs text-muted-foreground">这些字段决定书目识别、排序和后续搜索效果。</p>
                     </div>
-                    <div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <Label className="text-sm font-medium text-gray-700">书名 *</Label>
+                        <Input {...register('name')} placeholder="输入书名" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                        {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name.message}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">作者</Label>
+                        <Input {...register('author')} placeholder="输入作者" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">出版社</Label>
+                        <Input {...register('publisher')} placeholder="输入出版社" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">ISBN</Label>
+                        <Input {...register('isbn')} placeholder="输入 ISBN 号" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">适读年龄</Label>
+                        <Input {...register('suitableAge')} placeholder="如：3-6岁" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-sm font-semibold text-foreground">阅读属性</p>
+                      <p className="mt-1 text-xs text-muted-foreground">用于后续筛选、推荐和阅读记录管理。</p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <Label className="text-sm font-medium text-gray-700">图书类型</Label>
+                        <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-3">
+                          {bookTypes.map((type) => (
+                            <button
+                              key={type.value}
+                              type="button"
+                              onClick={() => setValue('type', type.value as any)}
+                              className={cn(
+                                'rounded-xl border px-3 py-3 text-xs font-medium transition-all',
+                                selectedTypeValue === type.value
+                                  ? 'border-transparent bg-primary text-white shadow-sm'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              )}
+                            >
+                              {type.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">总页数</Label>
+                        <Input type="number" {...register('totalPages', { valueAsNumber: true })} placeholder="输入总页数" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">总字数</Label>
+                        <Input type="number" {...register('wordCount', { valueAsNumber: true })} placeholder="输入总字数" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label className="text-sm font-medium text-gray-700">性格养成标签</Label>
+                        <Input {...register('characterTag')} placeholder="如：勇敢、诚实、坚持" className="mt-2 h-12 rounded-xl bg-gray-50 border-0" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-sm font-semibold text-foreground">封面与展示</p>
+                      <p className="mt-1 text-xs text-muted-foreground">封面会直接影响卡片浏览体验和书单展示效果。</p>
+                    </div>
+                    <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-slate-50 p-5 text-center">
+                      <div className="flex h-40 w-28 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm">
+                        {coverUrl ? <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" /> : <BookOpen className="h-10 w-10 text-gray-300" />}
+                      </div>
                       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
-                      <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="rounded-xl"><Upload className="w-4 h-4 mr-2" />上传封面</Button>
-                      <p className="text-xs text-gray-400 mt-2">支持 JPG、PNG，最大 2MB</p>
+                      <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="mt-4 rounded-xl">
+                        <Upload className="mr-2 h-4 w-4" />
+                        上传封面
+                      </Button>
+                      <p className="mt-2 text-xs text-gray-400">支持 JPG、PNG，最大 2MB</p>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">书名 *</Label>
-                  <Input {...register('name')} placeholder="输入书名" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                  {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">作者</Label>
-                  <Input {...register('author')} placeholder="输入作者" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">性格养成标签</Label>
-                  <Input {...register('characterTag')} placeholder="如：勇敢、诚实、坚持" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">图书类型</Label>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    {bookTypes.map((type) => (
-                      <button key={type.value} type="button" onClick={() => setValue('type', type.value as any)} className={cn('px-3 py-2 rounded-xl text-xs font-medium transition-all border', selectedTypeValue === type.value ? 'border-transparent text-white bg-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white')}>
-                        {type.label}
-                      </button>
-                    ))}
+
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-5">
+                    <p className="text-sm font-semibold text-amber-900">录入建议</p>
+                    <ul className="mt-3 space-y-2 text-xs leading-5 text-amber-800">
+                      <li>优先保证书名、类型和页数准确，这会影响列表筛选和阅读进度。</li>
+                      <li>如果暂时没有完整信息，可以先保存核心字段，后面再补封面和标签。</li>
+                      <li>当前录入会自动归到 {selectedChild?.name || '当前孩子'} 名下。</li>
+                    </ul>
                   </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">ISBN</Label>
-                  <Input {...register('isbn')} placeholder="输入ISBN号" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">出版社</Label>
-                  <Input {...register('publisher')} placeholder="输入出版社" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">总页数</Label>
-                  <Input type="number" {...register('totalPages', { valueAsNumber: true })} placeholder="输入总页数" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">总字数</Label>
-                  <Input type="number" {...register('wordCount', { valueAsNumber: true })} placeholder="输入总字数" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">适读年龄</Label>
-                  <Input {...register('suitableAge')} placeholder="如：3-6岁" className="mt-2 rounded-xl h-12 bg-gray-50 border-0" />
                 </div>
               </form>
             </div>
-            <div className="p-6 border-t border-gray-100 bg-gray-50">
+            <div className="border-t border-gray-100 bg-gray-50 p-6">
               <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={closeForm} className="flex-1 rounded-xl h-12">取消</Button>
-                <Button type="submit" form="book-form" className="flex-1 rounded-xl h-12 bg-primary text-primary-foreground" disabled={createMutation.isPending || updateMutation.isPending}>
+                <Button type="button" variant="outline" onClick={closeForm} className="h-12 flex-1 rounded-xl">取消</Button>
+                <Button type="submit" form="book-form" className="h-12 flex-1 rounded-xl bg-primary text-primary-foreground" disabled={createMutation.isPending || updateMutation.isPending}>
                   {createMutation.isPending || updateMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : editingBook ? '保存修改' : '添加图书'}
                 </Button>
               </div>
@@ -1377,15 +1645,22 @@ export default function LibraryPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>开始阅读</AlertDialogTitle>
-            <AlertDialogDescription>选择孩子开始阅读「{startReadingBook?.name}」</AlertDialogDescription>
+            <AlertDialogDescription>
+              {selectedChildId ? `将为当前孩子开始阅读「${startReadingBook?.name}」` : `请先选择当前孩子后，再开始阅读「${startReadingBook?.name}」`}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            {children.map((child) => (
-              <AlertDialogAction key={child.id} onClick={() => startReadingMutation.mutate({ bookId: startReadingBook!.id, childId: child.id })}>
-                {child.avatar} {child.name}
-              </AlertDialogAction>
-            ))}
+            <AlertDialogAction
+              disabled={!selectedChildId || startReadingMutation.isPending}
+              onClick={() => {
+                if (selectedChildId && startReadingBook) {
+                  startReadingMutation.mutate({ bookId: startReadingBook.id, childId: selectedChildId });
+                }
+              }}
+            >
+              {startReadingMutation.isPending ? '开始中...' : '确认开始'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1444,7 +1719,7 @@ export default function LibraryPage() {
               const newGoal = parseInt(goalInput, 10);
               if (newGoal > 0 && newGoal <= 100) {
                 setMonthlyGoal(newGoal);
-                localStorage.setItem('library_monthly_goal', String(newGoal));
+                localStorage.setItem(storageKeys.monthlyGoal, String(newGoal));
                 toast.success(`月度阅读目标已设置为 ${newGoal} 本`);
                 setShowGoalDialog(false);
               } else {
@@ -1502,7 +1777,7 @@ export default function LibraryPage() {
                 const newList = { id: Date.now().toString(), name: newListName.trim(), bookIds: [], createdAt: new Date().toISOString() };
                 const newLists = [...bookLists, newList];
                 setBookLists(newLists);
-                localStorage.setItem('library_book_lists', JSON.stringify(newLists));
+                localStorage.setItem(storageKeys.bookLists, JSON.stringify(newLists));
                 toast.success('书单创建成功');
                 setNewListName('');
                 setShowBookListDialog(false);
@@ -1528,7 +1803,7 @@ export default function LibraryPage() {
                 const newBookIds = [...new Set([...list.bookIds, ...Array.from(selectedBookIds)])];
                 const newLists = bookLists.map(l => l.id === selectedListId ? { ...l, bookIds: newBookIds } : l);
                 setBookLists(newLists);
-                localStorage.setItem('library_book_lists', JSON.stringify(newLists));
+                localStorage.setItem(storageKeys.bookLists, JSON.stringify(newLists));
                 toast.success(`已添加 ${selectedBookIds.size} 本书到书单`);
                 setSelectedListId('');
                 setShowAddToListDialog(false);
@@ -1568,7 +1843,7 @@ export default function LibraryPage() {
                 const newRecord = { id: Date.now().toString(), bookId: selectedBorrowBook.id, borrowerName: borrowerName.trim(), borrowDate, dueDate, status: 'borrowed' as const };
                 const newRecords = [...borrowRecords, newRecord];
                 setBorrowRecords(newRecords);
-                localStorage.setItem('library_borrow_records', JSON.stringify(newRecords));
+                localStorage.setItem(storageKeys.borrowRecords, JSON.stringify(newRecords));
                 toast.success('借出记录已保存');
                 setBorrowerName('');
                 setBorrowDate('');
@@ -1596,7 +1871,7 @@ export default function LibraryPage() {
                 if (record) {
                   const newRecords = borrowRecords.map(r => r.id === record.id ? { ...r, status: 'returned' as const, returnDate: new Date().toISOString().split('T')[0] } : r);
                   setBorrowRecords(newRecords);
-                  localStorage.setItem('library_borrow_records', JSON.stringify(newRecords));
+                  localStorage.setItem(storageKeys.borrowRecords, JSON.stringify(newRecords));
                   toast.success('书籍已归还');
                 }
                 setShowReturnDialog(false);
@@ -1626,7 +1901,7 @@ export default function LibraryPage() {
               if (!checkInRecords.includes(today)) {
                 const newRecords = [...checkInRecords, today];
                 setCheckInRecords(newRecords);
-                localStorage.setItem('library_checkin_records', JSON.stringify(newRecords));
+                localStorage.setItem(storageKeys.checkInRecords, JSON.stringify(newRecords));
                 toast.success('打卡成功！继续保持！');
               }
               setShowCheckInDialog(false);

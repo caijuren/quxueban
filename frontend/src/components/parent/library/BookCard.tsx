@@ -51,6 +51,9 @@ export function BookCard({
   const totalPages = book.totalPages || 0;
   const readPages = book.totalReadPages || 0;
   const progress = totalPages > 0 ? Math.round((readPages / totalPages) * 100) : 0;
+  const lastReadLabel = book.lastReadDate
+    ? new Date(book.lastReadDate).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+    : '暂无记录';
 
   let readStatus = '未开始';
   let statusColor = 'text-muted-foreground';
@@ -271,7 +274,7 @@ export function BookCard({
         </div>
       )}
 
-      <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 h-full flex flex-col">
+      <Card className="border border-border shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 h-full flex flex-col">
         <div className="flex flex-col h-full">
           <div
             className="aspect-[3/4] relative cursor-pointer"
@@ -280,7 +283,7 @@ export function BookCard({
             {renderCover()}
           </div>
 
-          <div className="flex-1 flex flex-col p-3">
+          <div className="flex-1 flex flex-col p-3.5">
             <div className="flex-1">
               <h4 className="font-semibold text-foreground text-sm line-clamp-2 min-h-[2.5rem]">
                 {formatBookName(book.name)}
@@ -295,6 +298,17 @@ export function BookCard({
                 <Badge className={cn("text-xs px-1.5 py-0", statusColor, statusBg)}>
                   {readStatus}
                 </Badge>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded-lg bg-slate-50 px-2 py-1.5">
+                  <p className="text-muted-foreground">已读页数</p>
+                  <p className="mt-1 font-semibold text-foreground">{readPages}/{totalPages || '--'}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 px-2 py-1.5">
+                  <p className="text-muted-foreground">最近阅读</p>
+                  <p className="mt-1 font-semibold text-foreground">{lastReadLabel}</p>
+                </div>
               </div>
             </div>
 
@@ -315,7 +329,7 @@ export function BookCard({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-xs bg-green-50 text-green-600 hover:bg-green-100 w-full"
+                    className="text-xs bg-green-50 text-green-600 hover:bg-green-100 w-full rounded-lg"
                     disabled
                   >
                     <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -328,7 +342,7 @@ export function BookCard({
                       e.stopPropagation();
                       onStartReading();
                     }}
-                    className="text-xs w-full"
+                    className="text-xs w-full rounded-lg"
                   >
                     {book.activeReadings?.length > 0 ? '继续' : '开始'}
                   </Button>
@@ -336,7 +350,7 @@ export function BookCard({
                 {!batchMode && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="w-8 h-8 ml-2">
+                      <Button variant="ghost" size="icon" className="w-8 h-8 ml-2 rounded-lg">
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>

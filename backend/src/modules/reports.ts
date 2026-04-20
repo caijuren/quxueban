@@ -1,542 +1,433 @@
-import { Router, Response } from 'express'
-import { prisma } from '../config/database'
-import { AppError } from '../middleware/errorHandler'
-import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
+import { Router, Response } from 'express';
+import { prisma } from '../config/database';
+import { AppError } from '../middleware/errorHandler';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
-export const reportsRouter: Router = Router()
-
-// All routes require authentication
-reportsRouter.use(authMiddleware)
+export const reportsRouter: Router = Router();
 
 // ============================================
-// Reports Routes
+// Report Routes
 // ============================================
 
 /**
- * GET /daily - Get daily report
- * Query: { date?, childId? }
- * Returns: { completionRate, stats, taskDetails, totalStudyTime }
+ * GET /reports - Get all reports for the family
+ * Query params: type, childId
  */
-reportsRouter.get('/daily', async (req: AuthRequest, res: Response) => {
-  const { userId, familyId, role } = req.user!
-  const { date, childId } = req.query
+reportsRouter.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!;
+  const { type, childId } = req.query;
 
-  const reportDate = date ? new Date(date as string) : new Date()
-  reportDate.setHours(0, 0, 0, 0)
+  // Get user's family
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { familyId: true },
+  });
 
-  const dayStart = new Date(reportDate)
-  dayStart.setHours(0, 0, 0, 0)
-  const dayEnd = new Date(reportDate)
-  dayEnd.setHours(23, 59, 59, 999)
-
-  // Determine target child
-  let targetChildId = userId
-  if (role === 'parent' && childId) {
-    // Verify child belongs to family
-    const child = await prisma.user.findFirst({
-      where: { id: parseInt(childId as string), familyId, role: 'child' },
-    })
-    if (!child) {
-      throw new AppError(404, 'Child not found')
-    }
-    targetChildId = child.id
-  } else if (role === 'parent' && !childId) {
-    // Parent viewing all children's report
-    return getAllChildrenDailyReport(familyId, reportDate, res)
+  if (!user) {
+    throw new AppError(404, '用户不存在');
   }
 
-  // Get checkins for the day
-  const checkins = await prisma.dailyCheckin.findMany({
-    where: {
-      childId: targetChildId,
-      checkDate: {
-        gte: dayStart,
-        lte: dayEnd,
-      },
-    },
+  const where: any = {
+    familyId: user.familyId,
+  };
+
+  if (type) {
+    where.type = type as string;
+  }
+
+  if (childId) {
+    where.childId = parseInt(childId as string);
+  }
+
+  const reports = await prisma.report.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
     include: {
-      plan: {
-        include: { task: true },
+      child: {
+        select: { id: true, name: true, avatar: true },
       },
     },
-  })
-
-  // Get weekly plans for the week
-  const weekNo = getWeekNo(reportDate)
-  const weeklyPlans = await prisma.weeklyPlan.findMany({
-    where: {
-      childId: targetChildId,
-      weekNo,
-    },
-    include: { task: true },
-  })
-
-  // Calculate stats
-  const totalTasks = checkins.length
-  const completedTasks = checkins.filter(c => c.status === 'completed' || c.status === 'advance').length
-  const partialTasks = checkins.filter(c => c.status === 'partial').length
-  const postponedTasks = checkins.filter(c => c.status === 'postponed').length
-  const notCompletedTasks = checkins.filter(c => c.status === 'not_completed').length
-  const makeupTasks = checkins.filter(c => c.status === 'makeup').length
-  const advanceTasks = checkins.filter(c => c.status === 'advance').length
-
-  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-
-  // Calculate total study time
-  let totalStudyTime = 0
-  for (const checkin of checkins) {
-    if (checkin.plan?.task?.timePerUnit) {
-      totalStudyTime += checkin.plan.task.timePerUnit * (checkin.value || 1)
-    }
-  }
-
-  // Task details
-  const taskDetails = checkins.map(c => ({
-    taskId: c.taskId,
-    taskName: c.plan?.task?.name || 'Unknown Task',
-    category: c.plan?.task?.category || '',
-    status: c.status,
-    value: c.value,
-    timeSpent: c.plan?.task?.timePerUnit ? c.plan.task.timePerUnit * (c.value || 1) : 0,
-  }))
+  });
 
   res.json({
     status: 'success',
-    data: {
-      date: reportDate.toISOString().split('T')[0],
-      childId: targetChildId,
-      completionRate,
-      stats: {
-        total: totalTasks,
-        completed: completedTasks,
-        partial: partialTasks,
-        postponed: postponedTasks,
-        notCompleted: notCompletedTasks,
-        makeup: makeupTasks,
-        advance: advanceTasks,
-      },
-      taskDetails,
-      totalStudyTime,
-      weeklyProgress: weeklyPlans.map(p => ({
-        taskName: p.task.name,
-        target: p.target,
-        progress: p.progress,
-      })),
-    },
-  })
-})
+    data: reports.map((report) => ({
+      ...report,
+      childName: report.child?.name,
+      childAvatar: report.child?.avatar,
+    })),
+  });
+});
 
 /**
- * GET /weekly - Get weekly report
- * Query: { weekNo?, childId? }
+ * GET /reports/:id - Get a single report
  */
-reportsRouter.get('/weekly', async (req: AuthRequest, res: Response) => {
-  const { userId, familyId, role } = req.user!
-  const { weekNo, childId } = req.query
+reportsRouter.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!;
+  const { id } = req.params;
 
-  const reportWeekNo = (weekNo as string) || getWeekNo(new Date())
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { familyId: true },
+  });
 
-  // Determine target child
-  let targetChildId = userId
-  if (role === 'parent' && childId) {
-    const child = await prisma.user.findFirst({
-      where: { id: parseInt(childId as string), familyId, role: 'child' },
-    })
-    if (!child) {
-      throw new AppError(404, 'Child not found')
-    }
-    targetChildId = child.id
-  } else if (role === 'parent' && !childId) {
-    return getAllChildrenWeeklyReport(familyId, reportWeekNo, res)
+  if (!user) {
+    throw new AppError(404, '用户不存在');
   }
 
-  // Get weekly plans
-  const weeklyPlans = await prisma.weeklyPlan.findMany({
+  const report = await prisma.report.findFirst({
     where: {
-      childId: targetChildId,
-      weekNo: reportWeekNo,
-    },
-    include: { task: true },
-  })
-
-  // Get week date range
-  const weekDates = getWeekDates(reportWeekNo)
-
-  // Get all checkins for the week
-  const checkins = await prisma.dailyCheckin.findMany({
-    where: {
-      childId: targetChildId,
-      checkDate: {
-        gte: weekDates.start,
-        lte: weekDates.end,
-      },
+      id: parseInt(id),
+      familyId: user.familyId,
     },
     include: {
-      plan: {
-        include: { task: true },
+      child: {
+        select: { id: true, name: true, avatar: true },
       },
     },
-  })
+  });
 
-  // Calculate totals
-  const totalTarget = weeklyPlans.reduce((sum, p) => sum + p.target, 0)
-  const totalProgress = weeklyPlans.reduce((sum, p) => sum + p.progress, 0)
-  const completionRate = totalTarget > 0 ? Math.round((totalProgress / totalTarget) * 100) : 0
-
-  // Daily stats
-  const dailyStats = []
-  for (let i = 0; i < 7; i++) {
-    const dayDate = new Date(weekDates.start)
-    dayDate.setDate(dayDate.getDate() + i)
-    const dayStart = new Date(dayDate)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(dayDate)
-    dayEnd.setHours(23, 59, 59, 999)
-
-    const dayCheckins = checkins.filter(c => {
-      const checkDate = new Date(c.checkDate)
-      return checkDate >= dayStart && checkDate <= dayEnd
-    })
-
-    const completed = dayCheckins.filter(c => c.status === 'completed' || c.status === 'advance').length
-    const total = dayCheckins.length
-
-    let studyTime = 0
-    for (const c of dayCheckins) {
-      if (c.plan?.task?.timePerUnit) {
-        studyTime += c.plan.task.timePerUnit * (c.value || 1)
-      }
-    }
-
-    dailyStats.push({
-      day: i,
-      date: dayDate.toISOString().split('T')[0],
-      completed,
-      total,
-      completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
-      studyTime,
-    })
-  }
-
-  // Task breakdown
-  const taskBreakdown = weeklyPlans.map(p => {
-    const taskCheckins = checkins.filter(c => c.taskId === p.taskId)
-    const completed = taskCheckins.filter(c => c.status === 'completed' || c.status === 'advance').length
-
-    return {
-      taskId: p.taskId,
-      taskName: p.task.name,
-      category: p.task.category,
-      type: p.task.type,
-      target: p.target,
-      progress: p.progress,
-      completionRate: p.target > 0 ? Math.round((p.progress / p.target) * 100) : 0,
-      checkinsCompleted: completed,
-    }
-  })
-
-  // Total study time
-  let totalStudyTime = 0
-  for (const c of checkins) {
-    if (c.plan?.task?.timePerUnit) {
-      totalStudyTime += c.plan.task.timePerUnit * (c.value || 1)
-    }
+  if (!report) {
+    throw new AppError(404, '报告不存在');
   }
 
   res.json({
     status: 'success',
     data: {
-      weekNo: reportWeekNo,
-      childId: targetChildId,
-      totalTarget,
-      totalProgress,
-      completionRate,
-      totalStudyTime,
-      dailyStats,
-      taskBreakdown,
+      ...report,
+      childName: report.child?.name,
+      childAvatar: report.child?.avatar,
     },
-  })
-})
+  });
+});
 
 /**
- * POST /push-dingtalk - Push report to DingTalk webhook (Parent only)
- * Body: { reportType, childId?, message? }
+ * POST /reports/generate - Generate a new report
  */
-reportsRouter.post('/push-dingtalk', requireRole('parent'), async (req: AuthRequest, res: Response) => {
-  const { reportType, childId, message } = req.body
-  const { familyId } = req.user!
+reportsRouter.post('/generate', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!;
+  const { type, childId, startDate, endDate, subjects } = req.body;
 
-  if (!reportType || !['daily', 'weekly'].includes(reportType)) {
-    throw new AppError(400, 'Invalid reportType. Must be "daily" or "weekly"')
+  if (!type || !startDate || !endDate) {
+    throw new AppError(400, '缺少必要参数');
   }
 
-  // Get family settings for DingTalk webhook
-  const family = await prisma.family.findUnique({
-    where: { id: familyId },
-  })
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { familyId: true, name: true },
+  });
 
-  const settings = family?.settings as { dingtalkWebhook?: string } | null
-  const webhookUrl = settings?.dingtalkWebhook
-
-  if (!webhookUrl) {
-    throw new AppError(400, 'DingTalk webhook URL not configured in family settings')
+  if (!user) {
+    throw new AppError(404, '用户不存在');
   }
 
-  // Get report data
-  let reportData: any
-  let childName = 'All Children'
+  // Get statistics data for the period
+  const start = new Date(startDate);
+  const end = new Date(endDate);
 
-  if (reportType === 'daily') {
-    const targetChildId = childId ? parseInt(childId) : undefined
+  // Get tasks data
+  const tasksWhere: any = {
+    familyId: user.familyId,
+    createdAt: {
+      gte: start,
+      lte: end,
+    },
+  };
 
-    if (targetChildId) {
-      const child = await prisma.user.findFirst({
-        where: { id: targetChildId, familyId, role: 'child' },
-      })
-      if (!child) {
-        throw new AppError(404, 'Child not found')
+  if (childId) {
+    tasksWhere.appliesTo = {
+      array_contains: parseInt(childId),
+    };
+  }
+
+  // Get weekly plans for the period
+  const weeklyPlans = await prisma.weeklyPlan.findMany({
+    where: {
+      familyId: user.familyId,
+      ...(childId ? { childId: parseInt(childId) } : {}),
+      createdAt: {
+        gte: start,
+        lte: end,
+      },
+    },
+    include: {
+      task: true,
+      child: {
+        select: { name: true },
+      },
+    },
+  });
+
+  // Calculate statistics
+  const totalTasks = weeklyPlans.length;
+  const totalTarget = weeklyPlans.reduce((sum, plan) => sum + plan.target, 0);
+  const totalProgress = weeklyPlans.reduce((sum, plan) => sum + plan.progress, 0);
+  const completionRate = totalTarget > 0 ? Math.round((totalProgress / totalTarget) * 100) : 0;
+  const totalTime = weeklyPlans.reduce((sum, plan) => {
+    const taskTime = plan.task?.timePerUnit || 30;
+    return sum + (plan.progress * taskTime);
+  }, 0);
+
+  // Calculate subject distribution
+  const subjectStats: Record<string, number> = {};
+  weeklyPlans.forEach((plan) => {
+    const subject = (plan.task?.tags as any)?.subject || '其他';
+    const taskTime = plan.task?.timePerUnit || 30;
+    subjectStats[subject] = (subjectStats[subject] || 0) + (plan.progress * taskTime);
+  });
+
+  // Calculate daily trend
+  const dailyTrend: Array<{ day: string; rate: number }> = [];
+  const dailyStats: Record<string, { completed: number; total: number }> = {};
+
+  weeklyPlans.forEach((plan) => {
+    const assignedDays = plan.assignedDays as string[] || [];
+    assignedDays.forEach((day) => {
+      if (!dailyStats[day]) {
+        dailyStats[day] = { completed: 0, total: 0 };
       }
-      childName = child.name
-    }
+      dailyStats[day].total += 1;
+      if (plan.progress >= plan.target) {
+        dailyStats[day].completed += 1;
+      }
+    });
+  });
 
-    // Get today's report
-    const today = new Date()
-    const dayStart = new Date(today)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(today)
-    dayEnd.setHours(23, 59, 59, 999)
+  Object.entries(dailyStats).forEach(([day, stats]) => {
+    dailyTrend.push({
+      day,
+      rate: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0,
+    });
+  });
 
-    const checkins = await prisma.dailyCheckin.findMany({
-      where: {
-        familyId,
-        ...(targetChildId && { childId: targetChildId }),
-        checkDate: { gte: dayStart, lte: dayEnd },
+  // Generate AI analysis content
+  const childName = childId ? weeklyPlans[0]?.child?.name : '全部孩子';
+  const reportTitle = generateReportTitle(type, childName, start, end);
+  const content = generateReportContent({
+    completionRate,
+    totalTasks,
+    totalTime,
+    subjectStats,
+    childName,
+    start,
+    end,
+  });
+
+  // Save report to database
+  const report = await prisma.report.create({
+    data: {
+      familyId: user.familyId,
+      childId: childId ? parseInt(childId) : null,
+      type,
+      title: reportTitle,
+      content,
+      startDate: start,
+      endDate: end,
+      isAutoGenerated: false,
+    },
+    include: {
+      child: {
+        select: { id: true, name: true, avatar: true },
       },
-      include: { plan: { include: { task: true } } },
-    })
+    },
+  });
 
-    const completed = checkins.filter(c => c.status === 'completed' || c.status === 'advance').length
-    const total = checkins.length
-    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
+  res.json({
+    status: 'success',
+    data: {
+      ...report,
+      childName: report.child?.name,
+      childAvatar: report.child?.avatar,
+    },
+  });
+});
 
-    reportData = {
-      date: today.toISOString().split('T')[0],
-      completionRate,
-      completed,
-      total,
-    }
-  } else {
-    // Weekly report
-    const weekNo = getWeekNo(new Date())
+/**
+ * PUT /reports/:id/favorite - Toggle favorite status
+ */
+reportsRouter.put('/:id/favorite', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!;
+  const { id } = req.params;
+  const { isFavorite } = req.body;
 
-    const weeklyPlans = await prisma.weeklyPlan.findMany({
-      where: { familyId, weekNo },
-      include: { task: true, child: true },
-    })
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { familyId: true },
+  });
 
-    const totalTarget = weeklyPlans.reduce((sum, p) => sum + p.target, 0)
-    const totalProgress = weeklyPlans.reduce((sum, p) => sum + p.progress, 0)
-    const completionRate = totalTarget > 0 ? Math.round((totalProgress / totalTarget) * 100) : 0
-
-    reportData = {
-      weekNo,
-      completionRate,
-      totalProgress,
-      totalTarget,
-    }
+  if (!user) {
+    throw new AppError(404, '用户不存在');
   }
 
-  // Build markdown message for DingTalk
-  const title = reportType === 'daily' ? '📚 每日学习报告' : '📊 每周学习报告'
-  let markdownContent = `## ${title}\n\n`
-  markdownContent += `**家庭**: ${family?.name}\n`
-  markdownContent += `**孩子**: ${childName}\n\n`
+  const report = await prisma.report.findFirst({
+    where: {
+      id: parseInt(id),
+      familyId: user.familyId,
+    },
+  });
 
-  if (reportType === 'daily') {
-    markdownContent += `**日期**: ${reportData.date}\n`
-    markdownContent += `**完成率**: ${reportData.completionRate}%\n`
-    markdownContent += `**完成任务**: ${reportData.completed}/${reportData.total}\n`
-  } else {
-    markdownContent += `**周次**: ${reportData.weekNo}\n`
-    markdownContent += `**完成率**: ${reportData.completionRate}%\n`
-    markdownContent += `**进度**: ${reportData.totalProgress}/${reportData.totalTarget}\n`
+  if (!report) {
+    throw new AppError(404, '报告不存在');
   }
 
-  if (message) {
-    markdownContent += `\n**备注**: ${message}\n`
+  await prisma.report.update({
+    where: { id: parseInt(id) },
+    data: { isFavorite },
+  });
+
+  res.json({
+    status: 'success',
+    message: isFavorite ? '已收藏' : '已取消收藏',
+  });
+});
+
+/**
+ * DELETE /reports/:id - Delete a report
+ */
+reportsRouter.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!;
+  const { id } = req.params;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { familyId: true },
+  });
+
+  if (!user) {
+    throw new AppError(404, '用户不存在');
   }
 
-  markdownContent += `\n---\n*自动推送自学习计划系统*`
+  const report = await prisma.report.findFirst({
+    where: {
+      id: parseInt(id),
+      familyId: user.familyId,
+    },
+  });
 
-  // Send to DingTalk
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        msgtype: 'markdown',
-        markdown: {
-          title,
-          text: markdownContent,
-        },
-      }),
-    })
-
-    const result = await response.json() as { errcode: number; errmsg: string }
-
-    if (result.errcode !== 0) {
-      throw new AppError(500, `DingTalk API error: ${result.errmsg}`)
-    }
-
-    res.json({
-      status: 'success',
-      message: 'Report pushed to DingTalk successfully',
-      data: {
-        reportType,
-        childName,
-        sent: true,
-      },
-    })
-  } catch (error) {
-    if (error instanceof AppError) throw error
-    throw new AppError(500, 'Failed to push to DingTalk. Please check webhook URL.')
+  if (!report) {
+    throw new AppError(404, '报告不存在');
   }
-})
+
+  await prisma.report.delete({
+    where: { id: parseInt(id) },
+  });
+
+  res.json({
+    status: 'success',
+    message: '报告已删除',
+  });
+});
 
 // ============================================
 // Helper Functions
 // ============================================
 
-async function getAllChildrenDailyReport(familyId: number, reportDate: Date, res: Response) {
-  const dayStart = new Date(reportDate)
-  dayStart.setHours(0, 0, 0, 0)
-  const dayEnd = new Date(reportDate)
-  dayEnd.setHours(23, 59, 59, 999)
+function generateReportTitle(
+  type: string,
+  childName: string,
+  start: Date,
+  end: Date
+): string {
+  const typeNames: Record<string, string> = {
+    weekly: '周报',
+    monthly: '月报',
+    semester: '学期报',
+    subject: '学科分析',
+    time: '时间分析',
+    behavior: '行为分析',
+    custom: '自定义分析',
+  };
 
-  const children = await prisma.user.findMany({
-    where: { familyId, role: 'child', status: 'active' },
-  })
+  const startStr = start.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  const endStr = end.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 
-  const reports = await Promise.all(
-    children.map(async (child) => {
-      const checkins = await prisma.dailyCheckin.findMany({
-        where: {
-          childId: child.id,
-          checkDate: { gte: dayStart, lte: dayEnd },
-        },
-        include: { plan: { include: { task: true } } },
-      })
-
-      const completed = checkins.filter(c => c.status === 'completed' || c.status === 'advance').length
-      const total = checkins.length
-      const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
-
-      let studyTime = 0
-      for (const c of checkins) {
-        if (c.plan?.task?.timePerUnit) {
-          studyTime += c.plan.task.timePerUnit * (c.value || 1)
-        }
-      }
-
-      return {
-        childId: child.id,
-        childName: child.name,
-        avatar: child.avatar,
-        completionRate,
-        completed,
-        total,
-        studyTime,
-      }
-    })
-  )
-
-  res.json({
-    status: 'success',
-    data: {
-      date: reportDate.toISOString().split('T')[0],
-      children: reports,
-    },
-  })
+  return `${childName}的${typeNames[type] || '分析报告'} (${startStr}-${endStr})`;
 }
 
-async function getAllChildrenWeeklyReport(familyId: number, weekNo: string, res: Response) {
-  const children = await prisma.user.findMany({
-    where: { familyId, role: 'child', status: 'active' },
-  })
+function generateReportContent({
+  completionRate,
+  totalTasks,
+  totalTime,
+  subjectStats,
+  childName,
+  start,
+  end,
+}: {
+  completionRate: number;
+  totalTasks: number;
+  totalTime: number;
+  subjectStats: Record<string, number>;
+  childName: string;
+  start: Date;
+  end: Date;
+}): any {
+  const totalHours = Math.round(totalTime / 60);
+  const subjects = Object.entries(subjectStats)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, time]) => ({ name, time }));
 
-  const weekDates = getWeekDates(weekNo)
-
-  const reports = await Promise.all(
-    children.map(async (child) => {
-      const weeklyPlans = await prisma.weeklyPlan.findMany({
-        where: { childId: child.id, weekNo },
-        include: { task: true },
-      })
-
-      const checkins = await prisma.dailyCheckin.findMany({
-        where: {
-          childId: child.id,
-          checkDate: { gte: weekDates.start, lte: weekDates.end },
-        },
-        include: { plan: { include: { task: true } } },
-      })
-
-      const totalTarget = weeklyPlans.reduce((sum, p) => sum + p.target, 0)
-      const totalProgress = weeklyPlans.reduce((sum, p) => sum + p.progress, 0)
-      const completionRate = totalTarget > 0 ? Math.round((totalProgress / totalTarget) * 100) : 0
-
-      let studyTime = 0
-      for (const c of checkins) {
-        if (c.plan?.task?.timePerUnit) {
-          studyTime += c.plan.task.timePerUnit * (c.value || 1)
-        }
-      }
-
-      return {
-        childId: child.id,
-        childName: child.name,
-        avatar: child.avatar,
-        totalTarget,
-        totalProgress,
-        completionRate,
-        studyTime,
-      }
-    })
-  )
-
-  res.json({
-    status: 'success',
-    data: {
-      weekNo,
-      children: reports,
-    },
-  })
-}
-
-function getWeekNo(date: Date): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNum = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
-  return `${d.getUTCFullYear()}-${weekNum.toString().padStart(2, '0')}`
-}
-
-function getWeekDates(weekNo: string): { start: Date; end: Date } {
-  const [year, week] = weekNo.split('-').map(Number)
-  const simple = new Date(year, 0, 1 + (week - 1) * 7)
-  const dayOfWeek = simple.getDay()
-  const ISOweekStart = new Date(simple)
-  if (dayOfWeek <= 4) {
-    ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1)
+  // Generate summary
+  let summary = '';
+  if (completionRate >= 80) {
+    summary = `${childName}在${start.toLocaleDateString('zh-CN')}至${end.toLocaleDateString('zh-CN')}期间表现优秀，整体完成率达到${completionRate}%，共完成${totalTasks}个任务，累计学习${totalHours}小时。`;
+  } else if (completionRate >= 60) {
+    summary = `${childName}在${start.toLocaleDateString('zh-CN')}至${end.toLocaleDateString('zh-CN')}期间表现良好，整体完成率为${completionRate}%，共完成${totalTasks}个任务，累计学习${totalHours}小时，仍有提升空间。`;
   } else {
-    ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay())
+    summary = `${childName}在${start.toLocaleDateString('zh-CN')}至${end.toLocaleDateString('zh-CN')}期间完成率为${completionRate}%，共完成${totalTasks}个任务，累计学习${totalHours}小时，建议关注任务难度和时间安排。`;
   }
-  const ISOweekEnd = new Date(ISOweekStart)
-  ISOweekEnd.setDate(ISOweekStart.getDate() + 6)
 
-  ISOweekStart.setHours(0, 0, 0, 0)
-  ISOweekEnd.setHours(23, 59, 59, 999)
+  // Generate highlights
+  const highlights: string[] = [];
+  if (completionRate >= 80) {
+    highlights.push(`完成率达到${completionRate}%，超过预期目标`);
+  }
+  if (totalTasks >= 10) {
+    highlights.push(`本周完成了${totalTasks}个任务，学习积极性高`);
+  }
+  if (totalHours >= 10) {
+    highlights.push(`累计学习${totalHours}小时，保持了良好的学习习惯`);
+  }
+  if (subjects.length > 0) {
+    highlights.push(`${subjects[0].name}投入时间最多，展现了浓厚的学习兴趣`);
+  }
 
-  return { start: ISOweekStart, end: ISOweekEnd }
+  // Generate suggestions
+  const suggestions: string[] = [];
+  if (completionRate < 60) {
+    suggestions.push('完成率偏低，建议检查任务难度是否合适，适当调整任务量');
+  }
+  if (subjects.length > 0) {
+    const topSubject = subjects[0];
+    const topTime = Math.round(topSubject.time / 60);
+    if (topTime > totalHours * 0.5) {
+      suggestions.push(`${topSubject.name}占用时间较多（${topTime}小时），建议平衡各学科时间分配`);
+    }
+  }
+  if (completionRate < 80) {
+    suggestions.push('建议制定更合理的学习计划，提高任务完成率');
+  }
+
+  // Generate predictions
+  let predictions = '';
+  if (completionRate >= 80) {
+    predictions = `基于当前的学习状态，预计下周完成率将保持在${Math.min(completionRate + 5, 100)}%左右。建议继续保持良好的学习习惯，适当增加挑战性任务。`;
+  } else if (completionRate >= 60) {
+    predictions = `通过优化学习计划和时间管理，预计下周完成率可提升至${Math.min(completionRate + 10, 85)}%。建议关注薄弱环节，加强练习。`;
+  } else {
+    predictions = `需要重点关注学习状态，建议家长加强陪伴和指导。预计通过调整，下周完成率可提升至${Math.min(completionRate + 15, 70)}%。`;
+  }
+
+  return {
+    summary,
+    highlights,
+    suggestions,
+    predictions,
+    dataAnalysis: {
+      completionRate,
+      totalTasks,
+      totalTime,
+      subjectDistribution: subjectStats,
+      dailyTrend: [],
+    },
+  };
 }

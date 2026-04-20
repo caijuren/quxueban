@@ -131,8 +131,8 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* === 背景颜色 === */
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.2 0 0);
+  --background: oklch(0.98 0.003 260);
+  --foreground: oklch(0.23 0.02 260);
 
   /* === 卡片 === */
   --card: oklch(1 0 0);
@@ -143,7 +143,7 @@
   --popover-foreground: oklch(0.2 0 0);
 
   /* === 主色调 === */
-  --primary: oklch(0.55 0.15 260); /* 专业蓝色 */
+  --primary: oklch(0.55 0.16 277); /* 靛蓝色 Indigo #6366f1 */
   --primary-foreground: oklch(1 0 0);
 
   /* === 次要色 === */
@@ -152,10 +152,10 @@
 
   /* === 柔和色 === */
   --muted: oklch(0.97 0.01 0);
-  --muted-foreground: oklch(0.5 0 0);
+  --muted-foreground: oklch(0.5 0.02 260);
 
   /* === 强调色 === */
-  --accent: oklch(0.55 0.15 260);
+  --accent: oklch(0.55 0.16 277);
   --accent-foreground: oklch(1 0 0);
 
   /* === 危险/错误色 === */
@@ -163,20 +163,20 @@
   --destructive-foreground: oklch(1 0 0);
 
   /* === 边框和输入框 === */
-  --border: oklch(0.92 0 0);
+  --border: oklch(0.93 0.005 260);
   --input: oklch(0.95 0 0);
-  --ring: oklch(0.55 0.15 260);
+  --ring: oklch(0.55 0.16 277);
 
   /* === 功能颜色 (新增) === */
   --success: oklch(0.6 0.15 160); /* 专业绿色 */
   --success-foreground: oklch(1 0 0);
   --warning: oklch(0.75 0.15 80); /* 专业橙色 */
   --warning-foreground: oklch(0.2 0 0);
-  --info: oklch(0.55 0.15 260); /* 专业蓝色 */
+  --info: oklch(0.55 0.16 277); /* 靛蓝色 */
   --info-foreground: oklch(1 0 0);
 
   /* === 图表颜色 === */
-  --chart-1: oklch(0.55 0.15 260);
+  --chart-1: oklch(0.55 0.16 277);
   --chart-2: oklch(0.6 0.15 160);
   --chart-3: oklch(0.75 0.15 80);
   --chart-4: oklch(0.6 0.2 20);
@@ -184,13 +184,13 @@
 
   /* === 侧边栏 === */
   --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.2 0 0);
-  --sidebar-primary: oklch(0.55 0.15 260);
+  --sidebar-foreground: oklch(0.23 0.02 260);
+  --sidebar-primary: oklch(0.55 0.16 277);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.97 0.01 0);
-  --sidebar-accent-foreground: oklch(0.2 0 0);
-  --sidebar-border: oklch(0.92 0 0);
-  --sidebar-ring: oklch(0.55 0.15 260);
+  --sidebar-accent: oklch(0.96 0.02 277);
+  --sidebar-accent-foreground: oklch(0.23 0.02 260);
+  --sidebar-border: oklch(0.93 0.005 260);
+  --sidebar-ring: oklch(0.55 0.16 277);
 
   /* === Hero 区域 (新增) === */
   --hero: oklch(0.2 0 0);

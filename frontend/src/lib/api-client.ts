@@ -2,14 +2,20 @@ import axios, { AxiosError } from 'axios';
 
 /**
  * Get API base URL based on environment
- * - Development: uses Vite proxy (/api -> localhost:3000)
- * - Production: uses environment variable VITE_API_BASE_URL
+ * - Local dev in browser: use Vite same-origin proxy to avoid localhost/127.0.0.1 CORS mismatches
+ * - Otherwise: prefer explicit environment configuration
  */
 const getBaseUrl = () => {
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_BASE_URL || '/api';
+  if (typeof window !== 'undefined') {
+    const { hostname, protocol } = window.location;
+    const isLocalDev = protocol === 'http:' && (hostname === '127.0.0.1' || hostname === 'localhost');
+    if (isLocalDev) {
+      return '/api';
+    }
   }
-  return '/api';
+
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  return configuredBaseUrl || '/api';
 };
 
 /**
@@ -29,6 +35,7 @@ export const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(
   (config) => {
+    // 获取认证令牌
     const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -40,7 +47,8 @@ apiClient.interceptors.request.use(
     // 只在请求体中没有 childId 时才注入
     const selectedChildIdStr = localStorage.getItem('selected_child_id');
     const url = config.url || '';
-    const isFileUpload = config.headers?.['Content-Type']?.includes('multipart/form-data');
+    const contentType = config.headers?.['Content-Type'];
+    const isFileUpload = typeof contentType === 'string' ? contentType.includes('multipart/form-data') : false;
     if (selectedChildIdStr && selectedChildIdStr !== 'null' && !url.includes('/auth/') && !url.includes('/settings/') && !isFileUpload) {
       const selectedChildId = parseInt(selectedChildIdStr);
       if (!isNaN(selectedChildId)) {
@@ -78,11 +86,12 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    // Handle 401 Unauthorized - 清除认证状态，触发全局事件
-    if (error.response?.status === 401) {
-      localStorage.removeItem('auth_state');
+    // Handle auth-related failures - 清除认证状态，触发全局事件
+    if (error.response?.status === 401 || error.response?.status === 431) {
+      // 清除认证令牌
       localStorage.removeItem('auth_token');
-      // 触发全局登出事件，让 AuthProvider 更新状态
+      localStorage.removeItem('auth_user');
+      // 触发全局登出事件
       window.dispatchEvent(new Event('auth:logout'));
     }
 

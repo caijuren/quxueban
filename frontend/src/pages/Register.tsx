@@ -7,11 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-type UserRole = 'parent' | 'child';
-
 export default function Register() {
   const { register, isLoading } = useAuth();
-  const [role, setRole] = useState<UserRole>('parent');
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -20,23 +17,19 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       toast.error('两次输入的密码不一致');
       return;
     }
-    
+
     if (formData.password.length < 6) {
       toast.error('密码至少6位');
       return;
     }
 
     try {
-      await register({
-        username: formData.username,
-        password: formData.password,
-        role
-      });
+      await register(formData.username, formData.password);
       toast.success('注册成功！');
     } catch {
       toast.error('注册失败，请重试');
@@ -66,39 +59,6 @@ export default function Register() {
             </div>
             <h1 className="text-2xl font-bold text-gray-800">创建账号</h1>
             <p className="text-gray-500 mt-1 text-sm">开始你的学习之旅</p>
-          </div>
-
-          {/* Role selection */}
-          <div className="mb-6">
-            <Label className="text-sm font-medium text-gray-700 mb-3 block">选择身份</Label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setRole('parent')}
-                className={cn(
-                  "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
-                  role === 'parent'
-                    ? "border-purple-500 bg-purple-50 text-purple-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                )}
-              >
-                <span className="text-2xl">👨‍👩‍👧</span>
-                <span className="text-sm font-medium">家长</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole('child')}
-                className={cn(
-                  "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
-                  role === 'child'
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                )}
-              >
-                <span className="text-2xl">🧒</span>
-                <span className="text-sm font-medium">孩子</span>
-              </button>
-            </div>
           </div>
 
           {/* Form */}

@@ -1,0 +1,119 @@
+:root {
+  /* 色彩体系 - 品牌主色 */
+  --color-primary: #6C63FF;
+  --color-primary-light: #8A82FF;
+  --color-primary-dark: #5A53D6;
+  
+  /* 情感辅助色 */
+  --color-secondary-blue: #4FC3F7;
+  --color-secondary-green: #4DB6AC;
+  --color-secondary-orange: #FFB74D;
+  --color-secondary-red: #FF8A80;
+  
+  /* 中性色 */
+  --color-background: #F9F7FF;
+  --color-card: #FFFFFF;
+  --color-border: #ECEAFD;
+  --color-text-secondary: #B0A9FF;
+  --color-text-primary: #55527C;
+  
+  /* 数据色 */
+  --color-data-1: #6C63FF;
+  --color-data-2: #4FC3F7;
+  --color-data-3: #4DB6AC;
+  --color-data-4: #FFB74D;
+  --color-data-5: #FF8A80;
+  
+  /* 形状与质感 */
+  --radius-card: 20px;
+  --radius-button: 12px;
+  --radius-avatar: 50%;
+  
+  /* 阴影 */
+  --shadow-card: 0 6px 20px rgba(108, 99, 255, 0.1);
+  --shadow-hover: 0 10px 30px rgba(108, 99, 255, 0.15);
+  
+  /* 间距系统 */
+  --spacing-base: 8px;
+  --spacing-sm: calc(var(--spacing-base) * 2); /* 16px */
+  --spacing-md: calc(var(--spacing-base) * 3); /* 24px */
+  --spacing-lg: calc(var(--spacing-base) * 4); /* 32px */
+  --spacing-xl: calc(var(--spacing-base) * 5); /* 40px */
+  
+  /* 字体 */
+  --font-family-chinese: 'MiSans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-english: 'Nunito', sans-serif;
+  
+  /* 字阶 */
+  --font-size-h1: 24px;
+  --font-size-h2: 20px;
+  --font-size-h3: 16px;
+  --font-size-body: 14px;
+  --font-size-caption: 12px;
+  
+  /* 字重 */
+  --font-weight-bold: 700;
+  --font-weight-semibold: 600;
+  --font-weight-normal: 400;
+  
+  /* 行高 */
+  --line-height-h1: 1.4;
+  --line-height-h2: 1.4;
+  --line-height-h3: 1.5;
+  --line-height-body: 1.6;
+  --line-height-caption: 1.5;
+  
+  /* 过渡 */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* 导入字体 */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+
+/* 全局样式 */
+body {
+  font-family: var(--font-family-chinese);
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-body);
+}
+
+/* 标题样式 */
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-h1);
+  color: var(--color-text-primary);
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-h2);
+  color: var(--color-text-primary);
+}
+
+h3 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-h3);
+  color: var(--color-text-primary);
+}
+
+/* 正文字体 */
+p {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+}
+
+/* 辅助文字 */
+.caption {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-caption);
+  color: var(--color-text-secondary);
+}

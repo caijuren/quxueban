@@ -142,38 +142,37 @@ childrenRouter.get('/:childId/stats', async (req: AuthRequest, res: Response) =>
   startOfWeek.setHours(0, 0, 0, 0)
   
   const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 7)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
   endOfWeek.setHours(23, 59, 59, 999)
 
-  // 获取本周学习时间
-  const weeklyStudyTime = await prisma.taskCompletion.aggregate({
+  // 获取本周打卡记录
+  const weeklyCheckins = await prisma.dailyCheckin.findMany({
     where: {
       childId: parseInt(childId as string),
-      completedAt: {
+      checkDate: {
         gte: startOfWeek,
         lte: endOfWeek
-      }
+      },
+      status: 'completed'
     },
-    _sum: { minutes: true }
-  })
-
-  // 获取完成的任务数
-  const completedTasks = await prisma.taskCompletion.count({
-    where: {
-      childId: parseInt(childId as string),
-      completedAt: {
-        gte: startOfWeek,
-        lte: endOfWeek
-      }
+    select: {
+      value: true,
+      completedValue: true
     }
   })
+
+  // 计算本周学习时间（分钟）
+  const weeklyStudyMinutes = weeklyCheckins.reduce((sum, checkin) => {
+    return sum + (checkin.completedValue || checkin.value || 0)
+  }, 0)
+
+  // 获取完成的任务数（本周打卡数）
+  const completedTasks = weeklyCheckins.length
 
   // 获取成就数
-  const achievements = await prisma.achievement.count({
-    where: {
-      childId: parseInt(childId as string)
-    }
-  })
+  const achievements = await prisma.$queryRaw`
+    SELECT COUNT(*) as count FROM achievement_logs WHERE child_id = ${parseInt(childId as string)}
+  `.then((result: any) => Number(result[0]?.count ?? 0))
 
   // 获取今日学习时间
   const startOfDay = new Date(now)
@@ -182,16 +181,25 @@ childrenRouter.get('/:childId/stats', async (req: AuthRequest, res: Response) =>
   const endOfDay = new Date(now)
   endOfDay.setHours(23, 59, 59, 999)
 
-  const dailyMinutes = await prisma.taskCompletion.aggregate({
+  const dailyCheckins = await prisma.dailyCheckin.findMany({
     where: {
       childId: parseInt(childId as string),
-      completedAt: {
+      checkDate: {
         gte: startOfDay,
         lte: endOfDay
-      }
+      },
+      status: 'completed'
     },
-    _sum: { minutes: true }
+    select: {
+      value: true,
+      completedValue: true
+    }
   })
+
+  // 计算今日学习时间（分钟）
+  const dailyMinutes = dailyCheckins.reduce((sum, checkin) => {
+    return sum + (checkin.completedValue || checkin.value || 0)
+  }, 0)
 
   // 计算本周进度（示例：基于完成任务数）
   // 假设每周目标是20个任务
@@ -203,10 +211,10 @@ childrenRouter.get('/:childId/stats', async (req: AuthRequest, res: Response) =>
     data: {
       childId: child.id,
       childName: child.name,
-      weeklyStudyTime: weeklyStudyTime._sum.minutes || 0,
+      weeklyStudyTime: weeklyStudyMinutes,
       completedTasks,
       achievements,
-      dailyMinutes: dailyMinutes._sum.minutes || 0,
+      dailyMinutes: dailyMinutes,
       weeklyProgress
     } 
   })

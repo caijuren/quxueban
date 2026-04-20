@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
@@ -56,6 +57,12 @@ interface Book {
   coverUrl: string;
   readCount: number;
   totalPages: number;
+  lastReadDate?: string | null;
+  activeReadings: Array<{
+    id: number;
+    childId: number;
+    readPages: number;
+  }>;
   readingLogs: ReadingLog[];
   readState?: {
     id: number;
@@ -84,6 +91,10 @@ async function startNewReading(bookId: number, childId: number): Promise<void> {
   await apiClient.post(`/library/${bookId}/start`, { childId });
 }
 
+async function updateBookState(bookId: number, childId: number, status: string, finishedAt?: string): Promise<void> {
+  await apiClient.post(`/library/${bookId}/state`, { childId, status, finishedAt });
+}
+
 const typeLabels: Record<string, string> = {
   children: '儿童故事',
   tradition: '传统文化',
@@ -98,26 +109,42 @@ export default function BookDetailPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [logToDelete, setLogToDelete] = useState<number | null>(null);
   const { selectedChildId } = useSelectedChild();
+  const detailStoragePrefix = useMemo(
+    () => `${selectedChildId ?? 'pending'}_${id ?? 'book'}`,
+    [selectedChildId, id]
+  );
   
   // P1-9: 书籍详情增强 - 评分、评论、笔记
   const [bookRating, setBookRating] = useState<number>(() => {
-    const saved = localStorage.getItem(`book_rating_${id}`);
+    const saved = localStorage.getItem(`book_rating_${detailStoragePrefix}`);
     return saved ? parseInt(saved, 10) : 0;
   });
   const [bookReview, setBookReview] = useState<string>(() => {
-    return localStorage.getItem(`book_review_${id}`) || '';
+    return localStorage.getItem(`book_review_${detailStoragePrefix}`) || '';
   });
   const [bookNotes, setBookNotes] = useState<string>(() => {
-    return localStorage.getItem(`book_notes_${id}`) || '';
+    return localStorage.getItem(`book_notes_${detailStoragePrefix}`) || '';
   });
   const [isFavorite, setIsFavorite] = useState<boolean>(() => {
-    const saved = localStorage.getItem(`book_favorite_${id}`);
+    const saved = localStorage.getItem(`book_favorite_${detailStoragePrefix}`);
     return saved ? saved === 'true' : false;
   });
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [showNotesForm, setShowNotesForm] = useState(false);
   const [reviewInput, setReviewInput] = useState('');
   const [notesInput, setNotesInput] = useState('');
+
+  useEffect(() => {
+    const savedRating = localStorage.getItem(`book_rating_${detailStoragePrefix}`);
+    const savedReview = localStorage.getItem(`book_review_${detailStoragePrefix}`) || '';
+    const savedNotes = localStorage.getItem(`book_notes_${detailStoragePrefix}`) || '';
+    const savedFavorite = localStorage.getItem(`book_favorite_${detailStoragePrefix}`);
+
+    setBookRating(savedRating ? parseInt(savedRating, 10) : 0);
+    setBookReview(savedReview);
+    setBookNotes(savedNotes);
+    setIsFavorite(savedFavorite === 'true');
+  }, [detailStoragePrefix]);
 
   const { data: book, isLoading, error } = useQuery({
     queryKey: ['book', id],
@@ -168,6 +195,16 @@ export default function BookDetailPage() {
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
+  const updateReadStateMutation = useMutation({
+    mutationFn: ({ status }: { status: string }) => updateBookState(Number(id), selectedChildId!, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['book', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      toast.success('阅读状态已更新');
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
   // 计算阅读进度
   const calculateProgress = () => {
     if (!book || !book.totalPages) return 0;
@@ -177,7 +214,7 @@ export default function BookDetailPage() {
   // P1-9: 保存评分
   const handleRateBook = (rating: number) => {
     setBookRating(rating);
-    localStorage.setItem(`book_rating_${id}`, String(rating));
+    localStorage.setItem(`book_rating_${detailStoragePrefix}`, String(rating));
     toast.success(`已评分 ${rating} 星`);
   };
   
@@ -185,7 +222,7 @@ export default function BookDetailPage() {
   const handleSaveReview = () => {
     if (reviewInput.trim()) {
       setBookReview(reviewInput.trim());
-      localStorage.setItem(`book_review_${id}`, reviewInput.trim());
+      localStorage.setItem(`book_review_${detailStoragePrefix}`, reviewInput.trim());
       toast.success('评论已保存');
       setShowReviewForm(false);
     }
@@ -195,7 +232,7 @@ export default function BookDetailPage() {
   const handleSaveNotes = () => {
     if (notesInput.trim()) {
       setBookNotes(notesInput.trim());
-      localStorage.setItem(`book_notes_${id}`, notesInput.trim());
+      localStorage.setItem(`book_notes_${detailStoragePrefix}`, notesInput.trim());
       toast.success('笔记已保存');
       setShowNotesForm(false);
     }
@@ -205,7 +242,7 @@ export default function BookDetailPage() {
   const handleToggleFavorite = () => {
     const newValue = !isFavorite;
     setIsFavorite(newValue);
-    localStorage.setItem(`book_favorite_${id}`, String(newValue));
+    localStorage.setItem(`book_favorite_${detailStoragePrefix}`, String(newValue));
     toast.success(newValue ? '已添加到收藏' : '已取消收藏');
   };
 
@@ -241,6 +278,7 @@ export default function BookDetailPage() {
 
   const progress = calculateProgress();
   const isFinished = book.readState?.status === 'finished';
+  const readingStatus = isFinished ? '已读完' : book.activeReadings?.length > 0 ? '在读中' : book.readState?.status === 'paused' ? '搁置中' : '想读';
 
   return (
     <div className="space-y-6">
@@ -253,7 +291,7 @@ export default function BookDetailPage() {
       </div>
 
       {/* Book Info Card */}
-      <Card className="border-0 shadow-lg rounded-3xl overflow-hidden">
+      <Card className="border border-border/70 shadow-sm rounded-3xl overflow-hidden">
         <CardContent className="p-6">
           <div className="flex gap-6">
             {/* Cover */}
@@ -288,6 +326,20 @@ export default function BookDetailPage() {
                   <span>已读 {book.totalReadMinutes} 分钟</span>
                 </div>
               </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <div className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+                  {readingStatus}
+                </div>
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+                  已读 {book.readCount} 次
+                </div>
+                {book.totalPages > 0 && (
+                  <div className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                    {book.totalReadPages}/{book.totalPages} 页
+                  </div>
+                )}
+              </div>
               
               {/* Reading Progress */}
               <div className="mt-4">
@@ -303,12 +355,71 @@ export default function BookDetailPage() {
                 </div>
               </div>
               
-              {/* P1-9: 评分和收藏 */}
-              <div className="mt-4 flex items-center gap-4 flex-wrap">
-                <div className="px-4 py-2 rounded-xl bg-primary/10 text-primary font-medium">
-                  📚 已读 {book.readCount} 次
+              {/* Quick Actions */}
+              <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-border bg-slate-50/80 p-4">
+                  <p className="text-xs text-muted-foreground">当前状态</p>
+                  <p className="mt-2 text-base font-semibold text-foreground">{readingStatus}</p>
                 </div>
-                
+                <div className="rounded-2xl border border-border bg-slate-50/80 p-4">
+                  <p className="text-xs text-muted-foreground">累计记录</p>
+                  <p className="mt-2 text-base font-semibold text-foreground">{book.readingLogs.length} 条</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-slate-50/80 p-4">
+                  <p className="text-xs text-muted-foreground">最近阅读</p>
+                  <p className="mt-2 text-base font-semibold text-foreground">
+                    {book.lastReadDate ? new Date(book.lastReadDate).toLocaleDateString('zh-CN') : '暂无'}
+                  </p>
+                </div>
+              </div>
+
+              {/* P1-9: 评分和收藏 */}
+              <div className="mt-5 flex items-center gap-4 flex-wrap">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={readingStatus === '想读' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-lg"
+                    onClick={() => updateReadStateMutation.mutate({ status: 'want_to_read' })}
+                    disabled={!selectedChildId || updateReadStateMutation.isPending}
+                  >
+                    想读
+                  </Button>
+                  <Button
+                    variant={readingStatus === '在读中' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-lg"
+                    onClick={() => {
+                      if (book.activeReadings?.length > 0) {
+                        updateReadStateMutation.mutate({ status: 'reading' });
+                      } else if (selectedChildId) {
+                        startNewReadingMutation.mutate(selectedChildId);
+                      }
+                    }}
+                    disabled={!selectedChildId || startNewReadingMutation.isPending || updateReadStateMutation.isPending}
+                  >
+                    在读
+                  </Button>
+                  <Button
+                    variant={readingStatus === '已读完' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-lg"
+                    onClick={() => updateReadStateMutation.mutate({ status: 'finished' })}
+                    disabled={!selectedChildId || updateReadStateMutation.isPending}
+                  >
+                    已读
+                  </Button>
+                  <Button
+                    variant={readingStatus === '搁置中' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-lg"
+                    onClick={() => updateReadStateMutation.mutate({ status: 'paused' })}
+                    disabled={!selectedChildId || updateReadStateMutation.isPending}
+                  >
+                    搁置
+                  </Button>
+                </div>
+
                 {/* 评分 */}
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -375,166 +486,171 @@ export default function BookDetailPage() {
         </CardContent>
       </Card>
 
-      {/* P1-9: 评论和笔记卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 评论卡片 */}
-        <Card className="border-0 shadow-lg rounded-3xl overflow-hidden">
+      {/* Notes & Insights */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
+        {/* 阅读记录主区 */}
+        <Card className="border border-border/70 shadow-sm rounded-3xl overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <MessageSquare className="size-5 text-blue-500" />
-                <h3 className="font-semibold text-gray-900">我的评论</h3>
+                <BookOpen className="size-5 text-primary" />
+                <h3 className="font-semibold text-gray-900">阅读记录</h3>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setReviewInput(bookReview);
-                  setShowReviewForm(true);
-                }}
-                className="rounded-lg"
-              >
-                <Edit3 className="size-4 mr-1" />
-                {bookReview ? '编辑' : '写评论'}
+              <Button onClick={() => setShowAddForm(true)} className="gap-2 rounded-xl">
+                <Plus className="size-4" />
+                添加记录
               </Button>
             </div>
-            {bookReview ? (
-              <div className="bg-blue-50 rounded-xl p-4">
-                <Quote className="size-4 text-blue-400 mb-2" />
-                <p className="text-gray-700 leading-relaxed">{bookReview}</p>
+
+            {book.readingLogs.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 py-12 text-center">
+                <BookOpen className="size-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-base font-medium text-gray-700">还没有阅读记录</p>
+                <p className="text-sm mt-2 text-gray-500">记录每次阅读的页数、时长和备注，才能看见真实的阅读进展。</p>
+                <Button onClick={() => setShowAddForm(true)} className="mt-4 rounded-xl">添加第一条记录</Button>
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">
-                <MessageSquare className="size-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">暂无评论，写下你的读后感吧</p>
+              <div className="space-y-3">
+                {book.readingLogs.map((log, index) => (
+                  <motion.div
+                    key={log.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="border border-border/70 shadow-sm rounded-2xl hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium text-gray-800">
+                                {new Date(log.readDate).toLocaleDateString('zh-CN')}
+                              </span>
+                              {log.startPage > 0 && log.endPage > 0 && (
+                                <Badge variant="secondary" className="rounded-full">
+                                  第 {log.startPage}-{log.endPage} 页
+                                </Badge>
+                              )}
+                              {log.minutes > 0 && (
+                                <Badge variant="outline" className="rounded-full">
+                                  {log.minutes} 分钟
+                                </Badge>
+                              )}
+                              {log.readStage && (
+                                <Badge variant="outline" className="rounded-full">
+                                  {log.readStage}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-gray-700">
+                              {log.effect && (
+                                <div className="flex items-center gap-2">
+                                  <Star className="size-4 text-amber-500" />
+                                  <span>阅读效果：{log.effect}</span>
+                                </div>
+                              )}
+                              {log.performance && (
+                                <div className="flex items-center gap-2">
+                                  <MessageSquare className="size-4 text-purple-500" />
+                                  <span>孩子表现：{log.performance}</span>
+                                </div>
+                              )}
+                              {log.note && (
+                                <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-gray-600">
+                                  {log.note}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLogToDelete(log.id)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* 笔记卡片 */}
-        <Card className="border-0 shadow-lg rounded-3xl overflow-hidden">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <FileText className="size-5 text-green-500" />
-                <h3 className="font-semibold text-gray-900">阅读笔记</h3>
+        {/* Notes & Insights */}
+        <div className="space-y-4">
+          <Card className="border border-border/70 shadow-sm rounded-3xl overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="size-5 text-blue-500" />
+                  <h3 className="font-semibold text-gray-900">我的评论</h3>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setReviewInput(bookReview);
+                    setShowReviewForm(true);
+                  }}
+                  className="rounded-lg"
+                >
+                  <Edit3 className="size-4 mr-1" />
+                  {bookReview ? '编辑' : '写评论'}
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setNotesInput(bookNotes);
-                  setShowNotesForm(true);
-                }}
-                className="rounded-lg"
-              >
-                <Edit3 className="size-4 mr-1" />
-                {bookNotes ? '编辑' : '记笔记'}
-              </Button>
-            </div>
-            {bookNotes ? (
-              <div className="bg-green-50 rounded-xl p-4">
-                <pre className="text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{bookNotes}</pre>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-400">
-                <FileText className="size-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">暂无笔记，记录阅读心得和摘抄</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Reading Logs */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">阅读记录</h3>
-          <Button onClick={() => setShowAddForm(true)} className="gap-2 rounded-xl">
-            <Plus className="size-4" />
-            添加记录
-          </Button>
-        </div>
-
-        {book.readingLogs.length === 0 ? (
-          <Card className="border-0 shadow-lg rounded-3xl">
-            <CardContent className="py-12 text-center">
-              <BookOpen className="size-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">暂无阅读记录</p>
-              <Button onClick={() => setShowAddForm(true)} className="mt-4 rounded-xl">添加第一条记录</Button>
+              {bookReview ? (
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <Quote className="size-4 text-blue-400 mb-2" />
+                  <p className="text-gray-700 leading-relaxed">{bookReview}</p>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <MessageSquare className="size-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">暂无评论，写下你的读后感吧</p>
+                </div>
+              )}
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-3">
-            {book.readingLogs.map((log, index) => (
-              <motion.div
-                key={log.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card className="border-0 shadow-md rounded-2xl hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <Calendar className="size-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">
-                            {new Date(log.readDate).toLocaleDateString('zh-CN')}
-                          </span>
-                          {log.readStage && (
-                            <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs">
-                              {log.readStage}
-                            </span>
-                          )}
-                          {log.startPage > 0 && log.endPage > 0 && (
-                            <span className="px-2 py-0.5 rounded-lg bg-green-100 text-green-700 text-xs">
-                              第 {log.startPage}-{log.endPage} 页
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="mt-3 space-y-2">
-                          {log.effect && (
-                            <div className="flex items-center gap-2">
-                              <Star className="size-4 text-amber-500" />
-                              <span className="text-gray-700">阅读效果：{log.effect}</span>
-                            </div>
-                          )}
-                          {log.performance && (
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="size-4 text-purple-500" />
-                              <span className="text-gray-700">表现：{log.performance}</span>
-                            </div>
-                          )}
-                          {log.evidenceUrl && (
-                            <div className="flex items-center gap-2">
-                              <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=document%20evidence%20icon&image_size=square" alt="证据" className="size-4" />
-                              <a href={log.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm">查看证据</a>
-                            </div>
-                          )}
-                          {log.note && (
-                            <p className="text-gray-500 text-sm mt-2 pl-6">{log.note}</p>
-                          )}
-                        </div>
-                      </div>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setLogToDelete(log.id)}
-                        className="text-gray-400 hover:text-red-500"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
+          <Card className="border border-border/70 shadow-sm rounded-3xl overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="size-5 text-green-500" />
+                  <h3 className="font-semibold text-gray-900">阅读笔记</h3>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setNotesInput(bookNotes);
+                    setShowNotesForm(true);
+                  }}
+                  className="rounded-lg"
+                >
+                  <Edit3 className="size-4 mr-1" />
+                  {bookNotes ? '编辑' : '记笔记'}
+                </Button>
+              </div>
+              {bookNotes ? (
+                <div className="bg-green-50 rounded-xl p-4">
+                  <pre className="text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{bookNotes}</pre>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <FileText className="size-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">暂无笔记，记录阅读心得和摘抄</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Add Reading Log Dialog */}
@@ -544,9 +660,10 @@ export default function BookDetailPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="fixed inset-x-4 top-8 bottom-8 lg:inset-auto lg:top-1/2 lg:-translate-y-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:w-[480px] lg:max-h-[80vh] bg-white rounded-3xl shadow-2xl z-50 p-6 overflow-auto"
+            className="fixed inset-x-4 top-8 bottom-8 lg:inset-auto lg:top-1/2 lg:-translate-y-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:w-[560px] lg:max-h-[84vh] bg-white rounded-3xl shadow-2xl z-50 p-6 overflow-auto"
           >
-            <h3 className="text-lg font-semibold mb-4">添加阅读记录</h3>
+            <h3 className="text-lg font-semibold mb-2">添加阅读记录</h3>
+            <p className="text-sm text-muted-foreground mb-5">记录这次阅读读了多少、读了多久，以及孩子的表现和备注。</p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -571,55 +688,26 @@ export default function BookDetailPage() {
               }}
               className="space-y-4"
             >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">阅读日期</label>
-                <input
-                  type="date"
-                  name="readDate"
-                  defaultValue={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">阅读效果</label>
-                <select
-                  name="effect"
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="">选择效果</option>
-                  <option value="很好">很好 ⭐⭐⭐⭐⭐</option>
-                  <option value="较好">较好 ⭐⭐⭐⭐</option>
-                  <option value="一般">一般 ⭐⭐⭐</option>
-                  <option value="需加强">需加强 ⭐⭐</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">孩子表现</label>
-                <input
-                  type="text"
-                  name="performance"
-                  placeholder="孩子阅读时的表现"
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">阅读阶段</label>
-                <input
-                  type="text"
-                  name="readStage"
-                  placeholder="如：中班上"
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">阅读时长（分钟）</label>
-                <input
-                  type="number"
-                  name="minutes"
-                  placeholder="30"
-                  min="0"
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">阅读日期</label>
+                  <input
+                    type="date"
+                    name="readDate"
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">阅读时长（分钟）</label>
+                  <input
+                    type="number"
+                    name="minutes"
+                    placeholder="30"
+                    min="0"
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -644,6 +732,37 @@ export default function BookDetailPage() {
                 </div>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">阅读阶段</label>
+                <input
+                  type="text"
+                  name="readStage"
+                  placeholder="如：中班上 / 自主阅读 / 亲子共读"
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">孩子表现</label>
+                <input
+                  type="text"
+                  name="performance"
+                  placeholder="如：比较专注、需要提醒、愿意复述内容"
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">阅读效果</label>
+                <select
+                  name="effect"
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">选择效果</option>
+                  <option value="很好">很好 ⭐⭐⭐⭐⭐</option>
+                  <option value="较好">较好 ⭐⭐⭐⭐</option>
+                  <option value="一般">一般 ⭐⭐⭐</option>
+                  <option value="需加强">需加强 ⭐⭐</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">证据链接（可选）</label>
                 <input
                   type="url"
@@ -653,11 +772,11 @@ export default function BookDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">心得</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">备注 / 心得</label>
                 <textarea
                   name="note"
                   rows={3}
-                  placeholder="记录阅读心得..."
+                  placeholder="记录读了哪一章、孩子的反馈、值得记下的内容..."
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500"
                 />
               </div>

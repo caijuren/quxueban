@@ -1,0 +1,20 @@
+{
+  "name": "@quxueban/shared",
+  "version": "1.0.0",
+  "description": "Shared components and utilities for quxueban",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.32.1",
+  "dependencies": {
+    "axios": "^1.15.0",
+    "clsx": "^2.1.1",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0"
+  }
+}

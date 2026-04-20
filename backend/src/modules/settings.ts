@@ -246,3 +246,281 @@ settingsRouter.delete('/family-data', async (req: AuthRequest, res: Response) =>
     throw new AppError(500, `删除失败: ${error.message}`)
   }
 })
+
+/**
+ * GET /export - Export all family data
+ * Returns a JSON file with all family data
+ */
+settingsRouter.get('/export', async (req: AuthRequest, res: Response) => {
+  const { familyId, userId } = req.user!
+
+  try {
+    // Fetch all family data
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      select: {
+        id: true,
+        name: true,
+        familyCode: true,
+        settings: true,
+        createdAt: true,
+      },
+    })
+
+    if (!family) {
+      throw new AppError(404, '家庭不存在')
+    }
+
+    // Fetch children
+    const children = await prisma.user.findMany({
+      where: { familyId, role: 'child', status: 'active' },
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch tasks
+    const tasks = await prisma.task.findMany({
+      where: { familyId, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        type: true,
+        timePerUnit: true,
+        scheduleRule: true,
+        tags: true,
+        appliesTo: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch weekly plans
+    const weeklyPlans = await prisma.weeklyPlan.findMany({
+      where: { familyId },
+      select: {
+        id: true,
+        childId: true,
+        taskId: true,
+        weekNo: true,
+        target: true,
+        progress: true,
+        status: true,
+        assignedDays: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch daily checkins
+    const dailyCheckins = await prisma.dailyCheckin.findMany({
+      where: { familyId },
+      select: {
+        id: true,
+        childId: true,
+        taskId: true,
+        planId: true,
+        status: true,
+        value: true,
+        completedValue: true,
+        checkDate: true,
+        notes: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch books
+    const books = await prisma.book.findMany({
+      where: { familyId, status: 'active' },
+      select: {
+        id: true,
+        name: true,
+        author: true,
+        isbn: true,
+        publisher: true,
+        type: true,
+        totalPages: true,
+        wordCount: true,
+        description: true,
+        coverUrl: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch reading logs
+    const readingLogs = await prisma.readingLog.findMany({
+      where: { familyId },
+      select: {
+        id: true,
+        childId: true,
+        bookId: true,
+        pages: true,
+        minutes: true,
+        readDate: true,
+        effect: true,
+        performance: true,
+        note: true,
+        readStage: true,
+        focusRating: true,
+        tags: true,
+        startPage: true,
+        endPage: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch achievements
+    const achievements = await prisma.achievement.findMany({
+      where: { familyId, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        icon: true,
+        condition: true,
+        createdAt: true,
+      },
+    })
+
+    // Fetch achievement logs
+    const achievementLogs = await prisma.achievementLog.findMany({
+      where: { familyId },
+      select: {
+        id: true,
+        childId: true,
+        achievementId: true,
+        unlockedAt: true,
+      },
+    })
+
+    // Compile export data
+    const exportData = {
+      exportInfo: {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        exportedBy: userId,
+      },
+      family,
+      children,
+      tasks,
+      weeklyPlans,
+      dailyCheckins,
+      books,
+      readingLogs,
+      achievements,
+      achievementLogs,
+    }
+
+    // Set headers for file download
+    const filename = `quxueban_backup_${family.name}_${new Date().toISOString().split('T')[0]}.json`
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+
+    res.json({
+      status: 'success',
+      data: exportData,
+    })
+  } catch (error: any) {
+    console.error('Export data error:', error)
+    throw new AppError(500, `导出失败: ${error.message}`)
+  }
+})
+
+/**
+ * DELETE /account - Delete user account and all associated data
+ * WARNING: This is a destructive operation that cannot be undone
+ */
+settingsRouter.delete('/account', async (req: AuthRequest, res: Response) => {
+  const { familyId, userId } = req.user!
+
+  try {
+    // Check if user is the only parent in the family
+    const parentCount = await prisma.user.count({
+      where: { familyId, role: 'parent', status: 'active' },
+    })
+
+    const isOnlyParent = parentCount === 1
+
+    await prisma.$transaction(async (prisma) => {
+      if (isOnlyParent) {
+        // If only parent, delete all family data
+        // Delete in correct order to respect foreign keys
+
+        // Delete achievement logs
+        await prisma.achievementLog.deleteMany({ where: { familyId } })
+
+        // Delete achievements
+        await prisma.achievement.deleteMany({ where: { familyId } })
+
+        // Delete reading progress logs
+        await prisma.readingProgressLog.deleteMany({
+          where: {
+            activeReadingId: {
+              in: (await prisma.activeReading.findMany({
+                where: { familyId },
+                select: { id: true },
+              })).map(a => a.id),
+            },
+          },
+        })
+
+        // Delete active readings
+        await prisma.activeReading.deleteMany({ where: { familyId } })
+
+        // Delete book AI insights
+        await prisma.bookAIInsight.deleteMany({ where: { familyId } })
+
+        // Delete book read states
+        await prisma.bookReadState.deleteMany({ where: { familyId } })
+
+        // Delete reading logs
+        await prisma.readingLog.deleteMany({ where: { familyId } })
+
+        // Delete books
+        await prisma.book.deleteMany({ where: { familyId } })
+
+        // Delete daily checkins
+        await prisma.dailyCheckin.deleteMany({ where: { familyId } })
+
+        // Delete weekly plans
+        await prisma.weeklyPlan.deleteMany({ where: { familyId } })
+
+        // Delete child tasks
+        await prisma.childTask.deleteMany({ where: { familyId } })
+
+        // Delete tasks
+        await prisma.task.deleteMany({ where: { familyId } })
+
+        // Delete task templates
+        await prisma.taskTemplate.deleteMany({ where: { familyId } })
+
+        // Delete AI configs
+        await prisma.userAIConfig.deleteMany({ where: { familyId } })
+
+        // Delete all users in family
+        await prisma.user.deleteMany({ where: { familyId } })
+
+        // Delete family
+        await prisma.family.delete({ where: { id: familyId } })
+      } else {
+        // If not the only parent, just delete this user
+        await prisma.user.update({
+          where: { id: userId },
+          data: { status: 'inactive' },
+        })
+      }
+    })
+
+    res.json({
+      status: 'success',
+      message: isOnlyParent
+        ? '账户及所有数据已永久删除'
+        : '账户已注销',
+    })
+  } catch (error: any) {
+    console.error('Delete account error:', error)
+    throw new AppError(500, `注销失败: ${error.message}`)
+  }
+})

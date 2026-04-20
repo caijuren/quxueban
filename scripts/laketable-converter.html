@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>语雀 Laketable 转 Excel 工具</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .header p {
+      opacity: 0.9;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      margin-bottom: 20px;
+    }
+    .upload-area {
+      border: 3px dashed #ddd;
+      border-radius: 12px;
+      padding: 60px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+    .upload-area .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .upload-area h3 {
+      color: #333;
+      margin-bottom: 8px;
+    }
+    .upload-area p {
+      color: #666;
+      font-size: 14px;
+    }
+    #fileInput {
+      display: none;
+    }
+    .preview {
+      margin-top: 20px;
+    }
+    .preview h4 {
+      color: #333;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+    .field-mapping {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .field-mapping h5 {
+      color: #555;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .mapping-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .mapping-row .from {
+      color: #667eea;
+      font-weight: 500;
+      min-width: 120px;
+    }
+    .mapping-row .arrow {
+      color: #999;
+    }
+    .mapping-row .to {
+      color: #333;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .data-preview {
+      max-height: 300px;
+      overflow: auto;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #555;
+      position: sticky;
+      top: 0;
+    }
+    tr:hover {
+      background: #f8f9fa;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .stat-item {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .stat-item .number {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .stat-item .label {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    .success {
+      background: #efe;
+      color: #3c3;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    .instructions {
+      background: #f0f7ff;
+      border-left: 4px solid #667eea;
+      padding: 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 20px;
+    }
+    .instructions h4 {
+      color: #667eea;
+      margin-bottom: 8px;
+    }
+    .instructions ol {
+      margin-left: 20px;
+      color: #555;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📚 语雀 Laketable 转 Excel 工具</h1>
+      <p>将语雀数据表转换为系统可导入的 Excel 格式</p>
+    </div>
+
+    <div class="card">
+      <div class="instructions">
+        <h4>使用步骤：</h4>
+        <ol>
+          <li>在语雀中导出「语雀数据表 (.laketable)」格式</li>
+          <li>将文件拖拽到下方区域，或点击选择文件</li>
+          <li>确认字段映射关系</li>
+          <li>点击「下载 Excel」按钮获取转换后的文件</li>
+          <li>在系统图书库页面上传该 Excel 文件</li>
+        </ol>
+      </div>
+
+      <div class="upload-area" id="uploadArea">
+        <div class="icon">📁</div>
+        <h3>点击或拖拽上传 .laketable 文件</h3>
+        <p>支持语雀导出的 Laketable 格式</p>
+        <input type="file" id="fileInput" accept=".laketable,.json">
+      </div>
+
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const result = document.getElementById('result');
+
+    // 字段映射配置
+    const fieldMapping = {
+      '书名': ['书名', '书籍名称', 'name', 'title', '书籍', 'book'],
+      '作者': ['作者', 'author', 'writer', '作者信息'],
+      '类型': ['类型', '分类', 'category', 'type', '书籍类型'],
+      '页数': ['页数', 'pages', '总页数', 'page'],
+      'ISBN': ['ISBN', 'isbn', 'ISBN号'],
+      '出版社': ['出版社', 'publisher', '出版商'],
+      '封面': ['封面', '封面链接', '图片', 'cover', 'coverUrl', '图片链接'],
+      '阅读阶段': ['阅读阶段', '阶段', 'stage', '阅读进度'],
+      '适读年龄': ['适读年龄', '年龄', 'age', '适合年龄'],
+      '字数': ['字数', 'wordCount', '总字数', 'words'],
+    };
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    function handleFile(file) {
+      result.innerHTML = '<p style="text-align:center;color:#666;">正在读取文件...</p>';
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          processData(data, file.name);
+        } catch (err) {
+          result.innerHTML = `<div class="error">解析文件失败: ${err.message}</div>`;
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function processData(data, filename) {
+      console.log('Laketable 数据结构:', Object.keys(data));
+      
+      // 提取表格数据
+      let rows = [];
+      
+      if (data.data && Array.isArray(data.data)) {
+        rows = data.data;
+      } else if (data.rows && Array.isArray(data.rows)) {
+        rows = data.rows;
+      } else if (data.records && Array.isArray(data.records)) {
+        rows = data.records;
+      } else {
+        for (const key of Object.keys(data)) {
+          if (Array.isArray(data[key]) && data[key].length > 0) {
+            rows = data[key];
+            break;
+          }
+        }
+      }
+      
+      if (rows.length === 0) {
+        result.innerHTML = `<div class="error">未找到数据记录</div>`;
+        return;
+      }
+
+      // 自动检测字段映射
+      const detectedFields = detectFields(rows[0]);
+      
+      // 转换数据
+      const convertedRows = rows.map(row => convertRow(row, detectedFields));
+      const validRows = convertedRows.filter(row => row['书名']);
+      
+      displayResult(rows, validRows, detectedFields, filename);
+    }
+
+    function detectFields(sampleRow) {
+      const detected = {};
+      const rowFields = Object.keys(sampleRow);
+      
+      for (const [standardField, possibleNames] of Object.entries(fieldMapping)) {
+        for (const name of possibleNames) {
+          if (rowFields.includes(name)) {
+            detected[standardField] = name;
+            break;
+          }
+        }
+      }
+      
+      // 如果没有检测到书名，尝试找第一个字符串字段
+      if (!detected['书名']) {
+        for (const field of rowFields) {
+          if (typeof sampleRow[field] === 'string' && sampleRow[field].length < 100) {
+            detected['书名'] = field;
+            break;
+          }
+        }
+      }
+      
+      return detected;
+    }
+
+    function convertRow(row, mapping) {
+      const newRow = {};
+      
+      for (const [standardField, sourceField] of Object.entries(mapping)) {
+        if (sourceField && row[sourceField] !== undefined) {
+          let value = row[sourceField];
+          
+          // 处理对象类型（如图片）
+          if (typeof value === 'object' && value !== null) {
+            if (value.url) value = value.url;
+            else if (value.link) value = value.link;
+            else if (value.text) value = value.text;
+            else if (value.title) value = value.title;
+            else value = JSON.stringify(value);
+          }
+          
+          newRow[standardField] = value;
+        }
+      }
+      
+      // 复制其他未映射的字段
+      for (const [key, value] of Object.entries(row)) {
+        if (!Object.values(mapping).includes(key) && !key.startsWith('_')) {
+          if (typeof value !== 'object') {
+            newRow[key] = value;
+          }
+        }
+      }
+      
+      return newRow;
+    }
+
+    function displayResult(originalRows, convertedRows, mapping, filename) {
+      const hasNameField = convertedRows.some(row => row['书名']);
+      
+      let html = `
+        <div class="stats">
+          <div class="stat-item">
+            <div class="number">${originalRows.length}</div>
+            <div class="label">原始记录</div>
+          </div>
+          <div class="stat-item">
+            <div class="number">${convertedRows.length}</div>
+            <div class="label">有效记录</div>
+          </div>
+          <div class="stat-item">
+            <div class="number">${Object.keys(mapping).length}</div>
+            <div class="label">映射字段</div>
+          </div>
+        </div>
+      `;
+
+      if (!hasNameField) {
+        html += `<div class="error">⚠️ 未检测到书名字段，请检查数据格式</div>`;
+      } else {
+        html += `<div class="success">✅ 成功识别 ${convertedRows.length} 条书籍记录</div>`;
+      }
+
+      // 字段映射展示
+      html += `
+        <div class="preview">
+          <h4>📋 字段映射关系</h4>
+          <div class="field-mapping">
+      `;
+      
+      for (const [standard, source] of Object.entries(mapping)) {
+        if (source) {
+          html += `
+            <div class="mapping-row">
+              <span class="from">${source}</span>
+              <span class="arrow">→</span>
+              <span class="to">${standard}</span>
+            </div>
+          `;
+        }
+      }
+      
+      html += `</div></div>`;
+
+      // 数据预览
+      if (convertedRows.length > 0) {
+        const previewRows = convertedRows.slice(0, 5);
+        const columns = Object.keys(convertedRows[0]);
+        
+        html += `
+          <div class="preview">
+            <h4>👁️ 数据预览（前 5 条）</h4>
+            <div class="data-preview">
+              <table>
+                <thead>
+                  <tr>
+                    ${columns.map(col => `<th>${col}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${previewRows.map(row => `
+                    <tr>
+                      ${columns.map(col => `<td>${row[col] || '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      // 操作按钮
+      html += `
+        <div class="actions">
+          <button class="btn btn-primary" onclick="downloadExcel()">
+            📥 下载 Excel 文件
+          </button>
+          <button class="btn btn-secondary" onclick="location.reload()">
+            🔄 重新选择
+          </button>
+        </div>
+      `;
+
+      result.innerHTML = html;
+      
+      // 保存数据供下载使用
+      window.convertedData = convertedRows;
+      window.originalFilename = filename.replace('.laketable', '').replace('.json', '');
+    }
+
+    function downloadExcel() {
+      const data = window.convertedData;
+      if (!data || data.length === 0) {
+        alert('没有可下载的数据');
+        return;
+      }
+
+      // 创建工作簿
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '书籍列表');
+      
+      // 下载文件
+      const filename = `${window.originalFilename || 'books'}-import.xlsx`;
+      XLSX.writeFile(wb, filename);
+    }
+  </script>
+</body>
+</html>

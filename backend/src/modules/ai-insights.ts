@@ -198,9 +198,9 @@ aiInsightsRouter.post('/ai/test', async (req: AuthRequest, res: Response) => {
 })
 
 // Test endpoint for AI analysis
-aiInsightsRouter.post('/test/generate', async (req: Request, res: Response) => {
+aiInsightsRouter.post('/test/generate', async (req: AuthRequest, res: Response) => {
   const { bookId = 1, childId = 2 } = req.body
-  const familyId = 1 // 临时硬编码为测试家庭
+  const { familyId } = req.user!
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -291,9 +291,9 @@ aiInsightsRouter.post('/test/generate', async (req: Request, res: Response) => {
 /**
  * GET / - Get AI insights for a book
  */
-aiInsightsRouter.get('/books/:bookId', async (req: Request, res: Response) => {
+aiInsightsRouter.get('/books/:bookId', async (req: AuthRequest, res: Response) => {
   const bookId = parseInt(req.params.bookId as string)
-  const familyId = 1 // 临时硬编码为测试家庭
+  const { familyId } = req.user!
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -345,9 +345,9 @@ aiInsightsRouter.get('/books/:bookId', async (req: Request, res: Response) => {
 /**
  * POST /generate - Generate AI insights for a book
  */
-aiInsightsRouter.post('/books/:bookId/generate', async (req: Request, res: Response) => {
+aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: Response) => {
   const bookId = parseInt(req.params.bookId as string)
-  const familyId = 1 // 临时硬编码为测试家庭
+  const { familyId } = req.user!
   const { childId } = req.body
 
   // Validate childId if provided

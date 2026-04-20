@@ -251,39 +251,61 @@ export default function ChildrenPage() {
       const avatar = avatarMode === 'custom' ? customAvatar : selectedAvatar;
       const submitData = { ...data, avatar: avatar || '🦊' };
       
-      console.log('Updating child:', currentChild.id, currentChild.name);
-      console.log('Submit data:', submitData);
-      
       updateMutation.mutate({ id: currentChild.id, data: submitData });
     } else {
       // 创建模式：直接提交
       const avatar = avatarMode === 'custom' ? customAvatar : selectedAvatar;
       const submitData = { ...data, avatar: avatar || '🦊' };
       
-      console.log('Creating new child');
-      console.log('Submit data:', submitData);
-      
       createMutation.mutate(submitData);
     }
   };
 
   const handleDelete = () => childToDelete && deleteMutation.mutate(childToDelete.id);
-  const switchToChildView = (_childId: number) => navigate('/child');
+  const switchToChildView = (childId: number) => navigate(`/parent/children/${childId}`);
 
   const renderAvatar = (child: Child) => {
     const avatar = child.avatar || '👶';
     if (avatar.startsWith('data:') || avatar.startsWith('http')) {
       return (
-        <img 
-          src={avatar} 
-          alt={child.name} 
-          className="size-20 rounded-2xl object-cover shadow-lg shadow-purple-500/20"
-        />
+        <div className="flex-shrink-0">
+          <img 
+            src={avatar} 
+            alt={child.name} 
+            className="size-20 rounded-2xl object-cover shadow-sm"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              if (target.parentElement) {
+                target.parentElement.innerHTML = '<div class="size-20 rounded-2xl bg-primary/80 flex items-center justify-center text-4xl shadow-sm">👶</div>';
+              }
+            }}
+          />
+        </div>
+      );
+    } else if (avatar.startsWith('/')) {
+      return (
+        <div className="flex-shrink-0">
+          <img 
+            src={avatar} 
+            alt={child.name} 
+            className="size-20 rounded-2xl object-cover shadow-sm"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              if (target.parentElement) {
+                target.parentElement.innerHTML = '<div class="size-20 rounded-2xl bg-primary/80 flex items-center justify-center text-4xl shadow-sm">👶</div>';
+              }
+            }}
+          />
+        </div>
       );
     }
+    // emoji 或短字符直接展示；长字符串（如数字ID）回退到名字首字母
+    const display = avatar.length <= 2 && !/^[a-zA-Z0-9]+$/.test(avatar) ? avatar : child.name.charAt(0);
     return (
-      <div className="size-20 rounded-2xl bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-4xl shadow-lg shadow-purple-500/20">
-        {avatar}
+      <div className="size-20 rounded-2xl bg-primary/80 flex items-center justify-center text-4xl shadow-sm">
+        {display}
       </div>
     );
   };
@@ -328,7 +350,7 @@ export default function ChildrenPage() {
           {Array.isArray(children) && children.map((child, index) => (
             <motion.div key={child.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
               <Card className="overflow-hidden border-0 shadow-lg shadow-gray-200/50 rounded-3xl hover:shadow-xl transition-all duration-300">
-                <div className="h-2 bg-gradient-to-r from-purple-500 via-blue-500 to-emerald-500" />
+                <div className="h-2 bg-primary" />
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
                     {/* Avatar */}
@@ -355,7 +377,7 @@ export default function ChildrenPage() {
                           <p className="text-lg font-bold text-gray-900">{child.streak}</p>
                           <p className="text-xs text-gray-500">连续学习</p>
                         </div>
-                        <div className="text-center p-3 rounded-2xl bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-100">
+                        <div className="text-center p-3 rounded-2xl bg-primary/5 border border-primary/10">
                           <Award className="size-4 text-purple-500 mx-auto mb-1" />
                           <p className="text-lg font-bold text-gray-900">{child.achievements}</p>
                           <p className="text-xs text-gray-500">成就</p>
@@ -382,7 +404,7 @@ export default function ChildrenPage() {
                         <Button variant="outline" size="sm" className="flex-1 gap-1 rounded-xl h-10" onClick={() => switchToChildView(child.id)}>
                           <Eye className="size-4" />查看详情
                         </Button>
-                        <Button size="sm" className="flex-1 gap-1 rounded-xl h-10 bg-gradient-to-r from-purple-500 to-blue-500 text-white" onClick={() => switchToChildView(child.id)}>
+                        <Button size="sm" className="flex-1 gap-1 rounded-xl h-10 bg-primary text-primary-foreground" onClick={() => switchToChildView(child.id)}>
                           切换视图<ArrowRight className="size-4" />
                         </Button>
                       </div>
@@ -399,12 +421,12 @@ export default function ChildrenPage() {
       {!isLoading && (!Array.isArray(children) || children.length === 0) && (
         <Card className="border-0 shadow-lg rounded-3xl">
           <CardContent className="py-16 text-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
               <User className="size-10 text-gray-400" />
             </div>
             <h3 className="font-semibold text-gray-900 text-lg">还没有添加孩子</h3>
             <p className="text-gray-500 mt-1">点击上方按钮添加第一个孩子</p>
-            <Button onClick={openCreateDialog} className="mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white">添加孩子</Button>
+            <Button onClick={openCreateDialog} className="mt-4 rounded-xl bg-primary text-primary-foreground">添加孩子</Button>
           </CardContent>
         </Card>
       )}
@@ -436,7 +458,7 @@ export default function ChildrenPage() {
                         className={cn(
                           "flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all",
                           avatarMode === 'preset'
-                            ? "bg-purple-100 text-purple-700"
+                            ? "bg-primary/10 text-primary"
                             : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                         )}
                       >
@@ -448,7 +470,7 @@ export default function ChildrenPage() {
                         className={cn(
                           "flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-all",
                           avatarMode === 'custom'
-                            ? "bg-purple-100 text-purple-700"
+                            ? "bg-primary/10 text-primary"
                             : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                         )}
                       >
@@ -571,12 +593,27 @@ export default function ChildrenPage() {
                   <div>
                     <Label className="text-sm font-medium text-gray-700">兴趣爱好</Label>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {['科幻', '恐龙', '绘画', '足球', '音乐', '舞蹈', '阅读', '数学', '科学', '手工'].map((interest) => (
-                        <label key={interest} className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full text-sm">
-                          <input type="checkbox" {...register('interests', { valueAsArray: true })} value={interest} className="text-purple-500" />
-                          <span className="text-gray-700">{interest}</span>
-                        </label>
-                      ))}
+                      {['科幻', '恐龙', '绘画', '足球', '音乐', '舞蹈', '阅读', '数学', '科学', '手工'].map((interest) => {
+                        const field = register('interests') as any;
+                        return (
+                          <label key={interest} className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full text-sm">
+                            <input 
+                              type="checkbox" 
+                              checked={field.value?.includes(interest) || false}
+                              onChange={(e) => {
+                                const currentValue = field.value || [];
+                                if (e.target.checked) {
+                                  field.onChange([...currentValue, interest]);
+                                } else {
+                                  field.onChange(currentValue.filter((item: string) => item !== interest));
+                                }
+                              }}
+                              className="text-purple-500" 
+                            />
+                            <span className="text-gray-700">{interest}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -594,7 +631,7 @@ export default function ChildrenPage() {
                   type="submit"
                   form="child-form"
                   disabled={createMutation.isPending || updateMutation.isPending}
-                  className="w-full h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+                  className="w-full h-12 rounded-xl text-base font-semibold bg-primary text-primary-foreground shadow-sm"
                 >
                   {editingChild ? '保存修改' : '添加孩子'}
                 </Button>

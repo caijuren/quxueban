@@ -8,10 +8,7 @@ const envSchema = z.object({
   PORT: z.string().transform(Number).default('3000'),
   API_PREFIX: z.string().default('/api'),
   DATABASE_URL: z.string().optional().default(''),
-  CORS_ORIGIN: z.string().refine(
-    (val) => val === '*' || z.string().url().safeParse(val).success,
-    { message: 'CORS_ORIGIN must be a valid URL or "*" for all origins' }
-  ).default('*'),
+  CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:8080'),
   RATE_LIMIT_WINDOW_MS: z.string().transform(Number).default('900000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().transform(Number).default('100'),
   JWT_SECRET: z.string().default('dev-secret-key'),
@@ -21,6 +18,9 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().default(''),
   SUPABASE_ANON_KEY: z.string().default(''),
   SUPABASE_STORAGE_BUCKET: z.string().default('book-covers'),
+  INTERNAL_API_KEY: z.string().default(''),
+  // Enable mock mode for testing without database
+  ENABLE_MOCK_MODE: z.string().transform((val) => val === 'true').default('false'),
 })
 
 const parseEnv = () => {

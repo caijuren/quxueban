@@ -227,8 +227,8 @@ export default function ReadingPage() {
                 {stats?.readingCount || 0}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-purple-600" />
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <BookOpen className="w-6 h-6 text-primary" />
             </div>
           </div>
         </motion.div>
@@ -277,14 +277,14 @@ export default function ReadingPage() {
       {/* Reading List */}
       {readings.length === 0 ? (
         <div className="text-center py-16 bg-white/50 rounded-3xl border border-dashed border-gray-200">
-          <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-blue-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <BookOpen className="w-10 h-10 text-gray-400" />
           </div>
           <h3 className="font-semibold text-gray-900 text-lg">暂无在读图书</h3>
           <p className="text-gray-500 mt-1">从图书馆选择图书开始阅读</p>
           <Button
             onClick={() => (window.location.href = '/parent/library')}
-            className="mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+            className="mt-4 rounded-xl bg-primary text-primary-foreground"
           >
             去图书馆选书
           </Button>
@@ -339,7 +339,7 @@ export default function ReadingPage() {
                           已读 {reading.readPages}/
                           {reading.book.totalPages || '?'} 页
                         </span>
-                        <span className="font-medium text-purple-600">
+                        <span className="font-medium text-primary">
                           {progress}%
                         </span>
                       </div>
@@ -349,7 +349,7 @@ export default function ReadingPage() {
                             'h-full rounded-full transition-all duration-500',
                             progress >= 100
                               ? 'bg-emerald-500'
-                              : 'bg-gradient-to-r from-purple-500 to-blue-500'
+                              : 'bg-primary'
                           )}
                           style={{ width: `${progress}%` }}
                         />
@@ -370,7 +370,7 @@ export default function ReadingPage() {
                       <Button
                         size="sm"
                         onClick={() => handleUpdateProgress(reading)}
-                        className="flex-1 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                        className="flex-1 rounded-xl bg-primary text-primary-foreground"
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         更新进度

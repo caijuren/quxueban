@@ -19,15 +19,10 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface ChildLoginCredentials {
-  childName: string;
-  childPin: string;
-}
-
 export interface RegisterData {
   username: string;
   password: string;
-  role?: 'parent' | 'child';
+  role: 'parent' | 'child';
 }
 
 export interface AuthResponse {

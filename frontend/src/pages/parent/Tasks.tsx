@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info } from 'lucide-react';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,18 +81,20 @@ async function fetchTasks(childId?: number): Promise<Task[]> {
   const r = await apiClient.get('/tasks', { params });
   return r.data.data || [];
 }
-async function deleteTask(id: number): Promise<void> {
-  await apiClient.delete('/tasks/' + id);
+async function deleteTask(id: number, childId: number): Promise<void> {
+  await apiClient.delete('/tasks/' + id, { params: { childId } });
 }
 async function pushTaskToDingtalk(taskId: number, childId: number): Promise<void> {
   await apiClient.post(`/dingtalk/tasks/${taskId}/push-to-dingtalk`, { childId });
 }
 
 export default function TasksPage() {
+  const navigate = useNavigate();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [updatePlanDialogOpen, setUpdatePlanDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -116,9 +119,9 @@ export default function TasksPage() {
     targetValue: 0 as number,
   });
   // 使用localStorage存储当前选中的选项卡
-  const [activeTab, setActiveTab] = useState<'all' | 'subject' | 'type' | 'completion'>(() => {
+  const [activeTab, setActiveTab] = useState<'all' | 'subject' | 'type' | 'completion' | 'schedule'>(() => {
     const savedTab = localStorage.getItem('tasksActiveTab');
-    return (savedTab as 'all' | 'subject' | 'type' | 'completion') || 'all';
+    return (savedTab as 'all' | 'subject' | 'type' | 'completion' | 'schedule') || 'all';
   });
 
   // 当选项卡变化时，保存到localStorage
@@ -134,7 +137,7 @@ export default function TasksPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteTask,
+    mutationFn: ({ id, childId }: { id: number; childId: number }) => deleteTask(id, childId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('删除成功');
@@ -368,6 +371,20 @@ export default function TasksPage() {
     }).filter(group => group.tasks.length > 0);
   };
 
+  const getScheduleGroups = () => {
+    const scheduleRuleMap: Record<ScheduleRule, string> = {
+      'daily': '每日任务',
+      'school': '在校日任务',
+      'weekend': '周末任务',
+      'flexible': '智能分配'
+    };
+    const scheduleRules: ScheduleRule[] = ['daily', 'school', 'weekend', 'flexible'];
+    return scheduleRules.map(rule => {
+      const ruleTasks = tasks.filter(task => (task.scheduleRule || 'daily') === rule);
+      return { rule: scheduleRuleMap[rule], tasks: ruleTasks };
+    }).filter(group => group.tasks.length > 0);
+  };
+
   const handlePushTaskToDingtalk = (taskId: number) => {
     if (!selectedChildId) {
       toast.error('请先选择一个孩子');
@@ -460,6 +477,17 @@ export default function TasksPage() {
             >
               完成方式
             </button>
+            <button
+              onClick={() => setActiveTab('schedule')}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                activeTab === 'schedule'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              分配规则
+            </button>
           </div>
           
           {/* Action Buttons */}
@@ -471,6 +499,14 @@ export default function TasksPage() {
             >
               <Download className="w-4 h-4 mr-1.5 text-primary" />
               <span className="text-sm">导出</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setUpdatePlanDialogOpen(true)}
+              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
+            >
+              <RefreshCw className="w-4 h-4 mr-1.5 text-primary" />
+              <span className="text-sm">同步计划</span>
             </Button>
             <Button
               onClick={() => { resetForm(); setCreateDialogOpen(true); }}
@@ -499,7 +535,8 @@ export default function TasksPage() {
                   key={task.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
+                  onClick={() => navigate(`/parent/tasks/${task.id}`)}
+                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
                 >
                   <div className="p-4">
                     <div className="flex items-start gap-3">
@@ -535,21 +572,7 @@ export default function TasksPage() {
                         </div>
                       </div>
                       
-                      {/* 操作按钮 */}
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEdit(task)}
-                          className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                          className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+
                     </div>
                   </div>
                 </motion.div>
@@ -569,7 +592,8 @@ export default function TasksPage() {
                         key={task.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
+                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
+                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
                       >
                         <div className="p-4">
                           <div className="flex items-start gap-3">
@@ -605,27 +629,7 @@ export default function TasksPage() {
                               </div>
                             </div>
                             
-                            {/* 操作按钮 */}
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => handleEdit(task)}
-                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handlePushTaskToDingtalk(task.id)}
-                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600"
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
+
                           </div>
                         </div>
                       </motion.div>
@@ -648,7 +652,8 @@ export default function TasksPage() {
                         key={task.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
+                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
+                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
                       >
                         <div className="p-4">
                           <div className="flex items-start gap-3">
@@ -684,27 +689,7 @@ export default function TasksPage() {
                               </div>
                             </div>
                             
-                            {/* 操作按钮 */}
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => handleEdit(task)}
-                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handlePushTaskToDingtalk(task.id)}
-                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600"
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
+
                           </div>
                         </div>
                       </motion.div>
@@ -727,7 +712,8 @@ export default function TasksPage() {
                         key={task.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group"
+                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
+                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
                       >
                         <div className="p-4">
                           <div className="flex items-start gap-3">
@@ -763,27 +749,67 @@ export default function TasksPage() {
                               </div>
                             </div>
                             
-                            {/* 操作按钮 */}
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => handleEdit(task)}
-                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handlePushTaskToDingtalk(task.id)}
-                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600"
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* By Schedule Rule */}
+          {activeTab === 'schedule' && (
+            <div className="space-y-6">
+              {getScheduleGroups().map(group => (
+                <div key={group.rule}>
+                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.rule} ({group.tasks.length}个任务)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {group.tasks.map(task => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
+                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
+                      >
+                        <div className="p-4">
+                          <div className="flex items-start gap-3">
+                            {/* 左侧图标 */}
+                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
+                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
+                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
+                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
+                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
+                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
                             </div>
+                            
+                            {/* 任务内容 */}
+                            <div className="flex-1">
+                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
+                              <div className="flex flex-wrap gap-1.5">
+                                {task.category && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
+                                    {task.category}
+                                  </span>
+                                )}
+                                {task.tags?.subject && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
+                                  </span>
+                                )}
+                                {task.tags?.parentRole && (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+
                           </div>
                         </div>
                       </motion.div>
@@ -810,7 +836,7 @@ export default function TasksPage() {
         <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold text-red-600 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-destructive flex items-center justify-center">
                 <Trash2 className="w-5 h-5 text-white" />
               </div>
               确认删除
@@ -822,7 +848,7 @@ export default function TasksPage() {
           <AlertDialogFooter className="gap-3">
             <AlertDialogCancel className="rounded-xl h-11 px-6">取消</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => taskToDelete && deleteMutation.mutate(taskToDelete.id)}
+              onClick={() => taskToDelete && selectedChildId && deleteMutation.mutate({ id: taskToDelete.id, childId: selectedChildId })}
               className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-11 px-6"
             >
               删除
@@ -836,7 +862,7 @@ export default function TasksPage() {
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
           <DialogHeader className="pb-4">
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <Plus className="w-5 h-5 text-white" />
               </div>
               新建任务
@@ -862,28 +888,28 @@ export default function TasksPage() {
                 <Button
                   variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   每日任务
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   在校日任务
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   智能分配
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   周末任务
                 </Button>
@@ -908,21 +934,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.category === '校内巩固' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '校内巩固' })}
-                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   校内巩固
                 </Button>
                 <Button
                   variant={formData.category === '校内拔高' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '校内拔高' })}
-                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   校内拔高
                 </Button>
                 <Button
                   variant={formData.category === '课外课程' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '课外课程' })}
-                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   课外课程
                 </Button>
@@ -931,21 +957,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.category === '中文阅读' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '中文阅读' })}
-                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   中文阅读
                 </Button>
                 <Button
                   variant={formData.category === '英语阅读' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '英语阅读' })}
-                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   英文阅读
                 </Button>
                 <Button
                   variant={formData.category === '体育运动' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '体育运动' })}
-                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   体育锻炼
                 </Button>
@@ -970,28 +996,28 @@ export default function TasksPage() {
                 <Button
                   variant={formData.subject === '语文' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '语文' })}
-                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   语文
                 </Button>
                 <Button
                   variant={formData.subject === '数学' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '数学' })}
-                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   数学
                 </Button>
                 <Button
                   variant={formData.subject === '英语' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '英语' })}
-                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   英语
                 </Button>
                 <Button
                   variant={formData.subject === '体育' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '体育' })}
-                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   体育
                 </Button>
@@ -1005,21 +1031,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
-                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   自主完成
                 </Button>
                 <Button
                   variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
-                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   家长陪伴
                 </Button>
                 <Button
                   variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
-                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   家长主导
                 </Button>
@@ -1033,21 +1059,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.difficulty === '基础' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, difficulty: '基础' })}
-                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   基础
                 </Button>
                 <Button
                   variant={formData.difficulty === '提高' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, difficulty: '提高' })}
-                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   提高
                 </Button>
                 <Button
                   variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
-                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   挑战
                 </Button>
@@ -1112,21 +1138,21 @@ export default function TasksPage() {
                   <Button
                     variant={formData.trackingType === 'simple' ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, trackingType: 'simple', trackingUnit: '', targetValue: 0 })}
-                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                   >
                     简单记录
                   </Button>
                   <Button
                     variant={formData.trackingType === 'numeric' ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, trackingType: 'numeric' })}
-                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                   >
                     数值记录
                   </Button>
                   <Button
                     variant={formData.trackingType === 'progress' ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, trackingType: 'progress' })}
-                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                   >
                     进度记录
                   </Button>
@@ -1178,7 +1204,7 @@ export default function TasksPage() {
                   </div>
                   
                   {/* 预览提示 */}
-                  <div className="bg-purple-50 rounded-lg p-3 text-sm text-purple-700">
+                  <div className="bg-primary/5 rounded-lg p-3 text-sm text-primary">
                     <p className="flex items-center gap-2">
                       <span className="text-lg">💡</span>
                       <span>
@@ -1196,7 +1222,7 @@ export default function TasksPage() {
           </div>
           <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="rounded-xl h-11 px-6 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
+            <Button onClick={handleCreate} disabled={createMutation.isPending} className="rounded-xl h-11 px-6 bg-primary text-primary-foreground shadow-sm">
               {createMutation.isPending ? '创建中...' : '创建'}
             </Button>
           </DialogFooter>
@@ -1208,7 +1234,7 @@ export default function TasksPage() {
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
           <DialogHeader className="pb-4">
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <Edit2 className="w-5 h-5 text-white" />
               </div>
               编辑任务
@@ -1234,28 +1260,28 @@ export default function TasksPage() {
                 <Button
                   variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   每日任务
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   在校日任务
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   智能分配
                 </Button>
                 <Button
                   variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   周末任务
                 </Button>
@@ -1280,21 +1306,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.category === '校内巩固' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '校内巩固' })}
-                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   校内巩固
                 </Button>
                 <Button
                   variant={formData.category === '校内拔高' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '校内拔高' })}
-                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   校内拔高
                 </Button>
                 <Button
                   variant={formData.category === '课外课程' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '课外课程' })}
-                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   课外课程
                 </Button>
@@ -1303,21 +1329,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.category === '中文阅读' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '中文阅读' })}
-                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   中文阅读
                 </Button>
                 <Button
                   variant={formData.category === '英语阅读' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '英语阅读' })}
-                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   英文阅读
                 </Button>
                 <Button
                   variant={formData.category === '体育运动' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, category: '体育运动' })}
-                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   体育锻炼
                 </Button>
@@ -1342,28 +1368,28 @@ export default function TasksPage() {
                 <Button
                   variant={formData.subject === '语文' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '语文' })}
-                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   语文
                 </Button>
                 <Button
                   variant={formData.subject === '数学' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '数学' })}
-                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   数学
                 </Button>
                 <Button
                   variant={formData.subject === '英语' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '英语' })}
-                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   英语
                 </Button>
                 <Button
                   variant={formData.subject === '体育' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, subject: '体育' })}
-                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   体育
                 </Button>
@@ -1377,21 +1403,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
-                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   自主完成
                 </Button>
                 <Button
                   variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
-                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   家长陪伴
                 </Button>
                 <Button
                   variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
-                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   家长主导
                 </Button>
@@ -1405,21 +1431,21 @@ export default function TasksPage() {
                 <Button
                   variant={formData.difficulty === '基础' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, difficulty: '基础' })}
-                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   基础
                 </Button>
                 <Button
                   variant={formData.difficulty === '提高' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, difficulty: '提高' })}
-                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   提高
                 </Button>
                 <Button
                   variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
                   onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
-                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
                   挑战
                 </Button>
@@ -1484,21 +1510,21 @@ export default function TasksPage() {
                   <Button
                     variant={formData.trackingType === 'simple' ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, trackingType: 'simple', trackingUnit: '', targetValue: 0 })}
-                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                   >
                     简单记录
                   </Button>
                   <Button
                     variant={formData.trackingType === 'numeric' ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, trackingType: 'numeric' })}
-                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                   >
                     数值记录
                   </Button>
                   <Button
                     variant={formData.trackingType === 'progress' ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, trackingType: 'progress' })}
-                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' : 'border-gray-200 hover:bg-gray-50'}`}
+                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
                   >
                     进度记录
                   </Button>
@@ -1550,7 +1576,7 @@ export default function TasksPage() {
                   </div>
                   
                   {/* 预览提示 */}
-                  <div className="bg-purple-50 rounded-lg p-3 text-sm text-purple-700">
+                  <div className="bg-primary/5 rounded-lg p-3 text-sm text-primary">
                     <p className="flex items-center gap-2">
                       <span className="text-lg">💡</span>
                       <span>
@@ -1568,8 +1594,117 @@ export default function TasksPage() {
           </div>
           <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
-            <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="rounded-xl h-11 px-6 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25">
+            <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="rounded-xl h-11 px-6 bg-primary text-primary-foreground shadow-sm">
               {updateMutation.isPending ? '保存中...' : '保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Plan Dialog */}
+      <Dialog open={updatePlanDialogOpen} onOpenChange={setUpdatePlanDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-2xl">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                <RefreshCw className="w-5 h-5 text-white" />
+              </div>
+              更新计划
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className='p-4 bg-blue-50 rounded-xl mb-4'>
+              <div className='flex items-start gap-3'>
+                <div className='w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0'>
+                  <Info className='w-4 h-4 text-blue-600' />
+                </div>
+                <div className='flex-1'>
+                  <div className='text-sm font-medium text-blue-800 mb-1'>提示</div>
+                  <div className='text-xs text-blue-700'>
+                    此操作将根据任务的最新分配规则更新计划，确保计划与任务设置保持一致。
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">选择周</Label>
+              <Select defaultValue="current">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="选择要更新的周" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">当前周</SelectItem>
+                  <SelectItem value="next">下一周</SelectItem>
+                  <SelectItem value="all">所有计划</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">选择任务</Label>
+              <Select defaultValue="all">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="选择要更新的任务" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">所有任务</SelectItem>
+                  {tasks.map(task => (
+                    <SelectItem key={task.id} value={task.id.toString()}>{task.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-3">
+            <Button variant="outline" onClick={() => setUpdatePlanDialogOpen(false)} className="h-11 px-6 rounded-xl">
+              取消
+            </Button>
+            <Button 
+              onClick={async () => {
+                try {
+                  if (!selectedChildId) {
+                    toast.error('请先选择一个孩子');
+                    return;
+                  }
+                  
+                  // 计算当前周的周号（YYYY-WW格式），周一为周开始
+                  const getWeekNumber = (date: Date) => {
+                    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+                    const dayOfWeek = firstDayOfYear.getDay(); // 0=周日, 1=周一
+                    // 计算到第一个周一的天数
+                    const daysToFirstMonday = dayOfWeek === 0 ? 1 : (dayOfWeek === 1 ? 0 : 8 - dayOfWeek);
+                    const firstMonday = new Date(firstDayOfYear);
+                    firstMonday.setDate(firstDayOfYear.getDate() + daysToFirstMonday);
+                    
+                    if (date < firstMonday) return 1;
+                    
+                    const pastDays = (date.getTime() - firstMonday.getTime()) / 86400000;
+                    return Math.floor(pastDays / 7) + 1;
+                  };
+                  
+                  const currentDate = new Date();
+                  const year = currentDate.getFullYear();
+                  const weekNo = `${year}-${String(getWeekNumber(currentDate)).padStart(2, '0')}`;
+
+                  // 调用API更新计划
+                  await apiClient.post('/tasks/publish', {
+                    childIds: [selectedChildId],
+                    weekNo,
+                  });
+                  
+                  toast.success('计划同步成功');
+                  setUpdatePlanDialogOpen(false);
+                  
+                  // 刷新任务列表
+                  queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                  // 刷新计划数据
+                  queryClient.invalidateQueries({ queryKey: ['weekly-plan'] });
+                } catch (error) {
+                  toast.error(getErrorMessage(error));
+                }
+              }} 
+              className="h-11 px-6 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+            >
+              同步更新
             </Button>
           </DialogFooter>
         </DialogContent>

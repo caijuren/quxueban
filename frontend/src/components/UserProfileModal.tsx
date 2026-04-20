@@ -13,7 +13,7 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ open, onOpenChange }: UserProfileModalProps) {
-  const { user, updateAuth } = useAuth();
+  const { user, updateUser } = useAuth();
   const [avatar, setAvatar] = useState<string>(user?.avatar || '');
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -44,7 +44,7 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
           throw new Error('两次输入的密码不一致');
         }
         // 调用修改密码接口
-        const passwordResponse = await fetch('/api/auth/password', {
+        const passwordResponse = await fetch('/api/password', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
 
       // 上传头像
       if (avatar !== user?.avatar) {
-        const avatarResponse = await fetch('/api/auth/avatar', {
+        const avatarResponse = await fetch('/api/avatar', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -75,8 +75,8 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
       }
 
       // 更新本地用户信息
-      if (updateAuth && user) {
-        updateAuth({ token: localStorage.getItem('auth_token') || '', user: { ...user, avatar } });
+      if (updateUser && user) {
+        updateUser({ avatar });
       }
 
       toast.success('保存成功');

@@ -120,7 +120,7 @@ export default function BookInsightsPage() {
         <CardContent className="p-6">
           <div className="flex gap-6">
             {/* Cover */}
-            <div className="size-32 rounded-2xl bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-6xl shrink-0 shadow-lg">
+            <div className="size-32 rounded-2xl bg-primary/80 flex items-center justify-center text-6xl shrink-0 shadow-lg">
               {book.coverUrl ? (
                 <img src={book.coverUrl} alt={book.name} className="size-full rounded-2xl object-cover" />
               ) : (
@@ -259,7 +259,7 @@ export default function BookInsightsPage() {
               <p className="text-gray-500">还没有生成阅读分析报告</p>
               <Button 
                 onClick={() => generateMutation.mutate()}
-                className="mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                className="mt-4 rounded-xl bg-primary text-primary-foreground"
               >
                 生成分析报告
               </Button>

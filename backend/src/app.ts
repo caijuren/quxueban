@@ -2,6 +2,7 @@ import express, { Application } from 'express'
 import cors from 'cors'
 import compression from 'compression'
 import 'express-async-errors'
+import path from 'path'
 import { env } from './config/env'
 import { errorHandler } from './middleware/errorHandler'
 import { httpLogger } from './middleware/logger'
@@ -23,6 +24,9 @@ import { childrenRouter } from './modules/children'
 import { dingtalkRouter } from './modules/dingtalk'
 import { settingsRouter } from './modules/settings'
 import { aiInsightsRouter } from './modules/ai-insights'
+import { aiRouter } from './modules/ai'
+import { uploadRouter } from './modules/upload'
+// import { internalRouter } from './modules/internal'  // 暂时注释掉有问题的模块
 
 export const createApp = (): Application => {
   const app = express()
@@ -32,14 +36,16 @@ export const createApp = (): Application => {
 
   app.use(
     cors({
-      origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN,
-      credentials: env.CORS_ORIGIN !== '*',
+      origin: env.CORS_ORIGIN.includes(',')
+        ? env.CORS_ORIGIN.split(',').map(s => s.trim())
+        : env.CORS_ORIGIN,
+      credentials: true,
     })
   )
 
   // Body parsing and compression
-  app.use(express.json())
-  app.use(express.urlencoded({ extended: true }))
+  app.use(express.json({ limit: '5mb' }))
+  app.use(express.urlencoded({ extended: true, limit: '5mb' }))
   app.use(compression())
 
   // API routes - System & Health
@@ -48,7 +54,7 @@ export const createApp = (): Application => {
   // ============================================
   // Domain module routes
   // ============================================
-  app.use(`${env.API_PREFIX}/auth`, authRouter)
+  app.use(env.API_PREFIX, authRouter)
   app.use(`${env.API_PREFIX}/tasks`, tasksRouter)
   app.use(`${env.API_PREFIX}/plans`, plansRouter)
   app.use(`${env.API_PREFIX}/library`, libraryRouter)
@@ -62,6 +68,14 @@ export const createApp = (): Application => {
   app.use(`${env.API_PREFIX}/dingtalk`, dingtalkRouter)
   app.use(`${env.API_PREFIX}/settings`, settingsRouter)
   app.use(`${env.API_PREFIX}/ai-insights`, aiInsightsRouter)
+  app.use(`${env.API_PREFIX}/ai`, aiRouter)
+  app.use(`${env.API_PREFIX}/upload`, uploadRouter)
+
+  // Serve uploaded files statically
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+
+  // Internal routes for quality monitoring dashboard - 暂时禁用
+  // app.use(`${env.API_PREFIX}/internal`, internalRouter)
 
   // Error handling
   app.use(errorHandler)

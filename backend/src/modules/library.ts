@@ -607,6 +607,13 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
   const book = await prisma.book.findFirst({
     where: { id, familyId, status: 'active' },
     include: {
+      activeReadings: {
+        where: { status: 'reading' },
+        select: { id: true, childId: true, readPages: true },
+      },
+      bookReadStates: {
+        select: { id: true, status: true, finishedAt: true },
+      },
       readingLogs: {
         orderBy: { readDate: 'desc' },
         include: {
@@ -620,9 +627,20 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
     throw new AppError(404, '图书不存在')
   }
 
+  const totalReadPages = book.readingLogs.reduce((sum, log: any) => sum + (log.pages || 0), 0)
+  const totalReadMinutes = book.readingLogs.reduce((sum, log: any) => sum + (log.minutes || 0), 0)
+  const lastReadDate = book.readingLogs[0]?.readDate || null
+
   res.json({
     status: 'success',
-    data: book,
+    data: {
+      ...book,
+      readState: book.bookReadStates[0] || null,
+      totalReadPages,
+      totalReadMinutes,
+      lastReadDate,
+      readLogCount: book.readingLogs.length,
+    },
   })
 })
 
@@ -1235,5 +1253,4 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
     res.end()
   }
 })
-
 

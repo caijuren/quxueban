@@ -58,20 +58,18 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
   const [selectedMoveDay, setSelectedMoveDay] = useState<number | null>(null);
   const [selectedDayForAction, setSelectedDayForAction] = useState<number | null>(null);
 
-  // 转换后端索引到前端索引
-  // 后端: 0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
-  // 前端: 0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
+  // 后端仍然使用 JavaScript 标准索引：0=周日, 1=周一, ..., 6=周六
+  // 前端表格按周一到周日展示：0=周一, ..., 5=周六, 6=周日
   const getFrontendDayIndex = (backendIndex: number) => {
-    if (backendIndex === 0) return 6; // 周日
-    return backendIndex - 1; // 其他日期
+    if (backendIndex === 0) return 6; // 周日放到最后一列
+    return backendIndex - 1; // 周一到周六整体前移
   };
-  
-  // 转换前端索引到后端索引
+
   const getBackendDayIndex = (frontendIndex: number) => {
     if (frontendIndex === 6) return 0; // 周日
-    return frontendIndex + 1; // 其他日期
+    return frontendIndex + 1; // 周一到周六
   };
-  
+
   // 将后端索引的 assignedDays 转换为前端索引
   const assignedDays = useMemo(() => {
     // 优先使用实际分配的天数（后端已存储的 assignedDays）
@@ -79,8 +77,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
     if (task.assignedDays && task.assignedDays.length > 0) {
       backendDays = task.assignedDays;
     } else {
-      // 如果没有实际分配，根据 scheduleRule 计算默认值
-      // 使用 JavaScript 标准索引：0=周日, 1=周一, ..., 6=周六
+      // 如果没有实际分配，根据 scheduleRule 计算默认值（后端索引）
       switch (task.scheduleRule) {
         case 'daily': backendDays = [0, 1, 2, 3, 4, 5, 6]; break;
         case 'school': backendDays = [1, 2, 4, 5]; break; // 周一、周二、周四、周五
@@ -89,7 +86,6 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
         default: backendDays = [0, 1, 2, 3, 4, 5, 6];
       }
     }
-    // 转换为前端索引（0=周一, 1=周二, ..., 6=周日）
     return backendDays.map(getFrontendDayIndex);
   }, [task.scheduleRule, task.assignedDays]);
 
@@ -100,15 +96,6 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
       const date = addDays(weekStartDate, dayIndex);
       const dateStr = format(date, 'yyyy-MM-dd');
       
-      console.log('删除请求参数:', { 
-        taskId: task.taskId, 
-        action: 'remove', 
-        date: dateStr,
-        dayIndex,
-        dateObject: date,
-        dayOfWeek: date.getDay()
-      });
-      
       const response = await apiClient.post('/plans/modify', {
         taskId: task.taskId,
         action: 'remove',
@@ -116,8 +103,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
       });
       return response.data;
     },
-    onSuccess: (data) => {
-      console.log('删除成功响应:', data);
+    onSuccess: () => {
       toast.success('已删除该日安排');
       setShowDeleteConfirm(false);
       setSelectedDayForAction(null);
@@ -215,8 +201,8 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
             {/* 信息列表 */}
             <div className='space-y-3'>
               <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-xl'>
-                <div className='w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center'>
-                  <Clock className='w-4 h-4 text-blue-600' />
+                <div className='w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center'>
+                  <Clock className='w-4 h-4 text-primary' />
                 </div>
                 <div className='flex-1'>
                   <div className='text-xs text-gray-500'>每次时长</div>
@@ -225,8 +211,8 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
               </div>
               
               <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-xl'>
-                <div className='w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center'>
-                  <Target className='w-4 h-4 text-purple-600' />
+                <div className='w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center'>
+                  <Target className='w-4 h-4 text-primary' />
                 </div>
                 <div className='flex-1'>
                   <div className='text-xs text-gray-500'>分配规则</div>
@@ -275,7 +261,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
                         isAssigned 
                           ? selectedDayForAction === i 
                             ? 'bg-blue-500 text-white ring-2 ring-blue-300' 
-                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                            : 'bg-primary/10 text-primary hover:bg-primary/15'
                           : 'bg-gray-50 text-gray-300 cursor-not-allowed'
                       )}
                       disabled={!isAssigned}
@@ -293,13 +279,13 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
                   animate={{ opacity: 1, y: 0 }}
                   className='mt-3 p-3 bg-blue-50 rounded-xl border border-blue-100'
                 >
-                  <div className='text-sm text-blue-700 mb-2'>
+                  <div className='text-sm text-primary mb-2'>
                     已选择：<strong>{weekDays[selectedDayForAction]}</strong>（{format(addDays(weekStartDate, selectedDayForAction), 'M月d日')}）
                   </div>
                   <div className='flex gap-2'>
                     <button
                       onClick={() => setShowMoveDialog(true)}
-                      className='flex-1 flex items-center justify-center gap-1.5 py-2 bg-white rounded-lg text-blue-600 text-sm font-medium hover:bg-blue-100 transition-colors border border-blue-200'
+                      className='flex-1 flex items-center justify-center gap-1.5 py-2 bg-white rounded-lg text-primary text-sm font-medium hover:bg-primary/10 transition-colors border border-primary/20'
                     >
                       <Move className='w-4 h-4' />
                       移动到其他日期
@@ -391,7 +377,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
               
               <div className='p-5'>
                 <p className='text-sm text-gray-600 mb-4'>
-                  将 <strong className='text-blue-600'>{weekDays[selectedDayForAction!]}</strong> 的任务移动到：
+                  将 <strong className='text-primary'>{weekDays[selectedDayForAction!]}</strong> 的任务移动到：
                 </p>
                 
                 {/* 周历选择器 */}
@@ -412,7 +398,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                             : isSelected 
                               ? 'bg-blue-500 text-white shadow-lg scale-105' 
-                              : 'bg-gray-50 text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                              : 'bg-gray-50 text-gray-700 hover:bg-primary/10 hover:text-primary'
                         )}
                       >
                         <span className='text-xs font-medium'>{d}</span>
@@ -426,7 +412,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
                 
                 {selectedMoveDay !== null && (
                   <div className='text-sm text-center text-gray-600 mb-4 p-2 bg-blue-50 rounded-lg'>
-                    → 移动到 <strong className='text-blue-700'>{weekDays[selectedMoveDay]}</strong>
+                    → 移动到 <strong className='text-primary'>{weekDays[selectedMoveDay]}</strong>
                   </div>
                 )}
   
@@ -475,7 +461,7 @@ export default function PlansPage() {
   const [collapsedCategories, setCollapsedCategories] = useState<{[key: string]: boolean}>({});
   const [advancedExportOpen, setAdvancedExportOpen] = useState(false);
   const exportContainerRef = useRef<HTMLDivElement>(null);
-  const { selectedChildId } = useSelectedChild();
+  const { selectedChildId, selectedChild } = useSelectedChild();
   
   const toggleCategory = (category: string) => {
     setCollapsedCategories(prev => ({
@@ -689,8 +675,8 @@ export default function PlansPage() {
                         {weekDays.map((day, i) => {
                           const date = weekDates[i];
                           const isTodayDate = isToday(date);
-                          // 转换前端索引到后端索引（0=周一→1, 6=周日→0）
-                          const backendIndex = i === 6 ? 0 : i + 1;
+                          // 新索引系统：前端和后端一致，0=周一, 1=周二, ..., 5=周六, 6=周日
+                          const backendIndex = i;
                           const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(backendIndex));
                           const dayTotalMin = dayTasks.reduce((s, a) => s + a.timePerUnit, 0);
                           return (
@@ -720,7 +706,7 @@ export default function PlansPage() {
                         const getCategoryColor = (category: string) => {
                           const cat = (category || '').toLowerCase();
                           switch (cat) {
-                            case 'school': return { bg: 'bg-blue-400', text: 'text-blue-700', light: 'bg-blue-50' };
+                            case 'school': return { bg: 'bg-blue-400', text: 'text-primary', light: 'bg-blue-50' };
                             case 'advanced': return { bg: 'bg-indigo-400', text: 'text-indigo-700', light: 'bg-indigo-50' };
                             case 'extra': return { bg: 'bg-purple-400', text: 'text-purple-700', light: 'bg-purple-50' };
                             case 'chinese': return { bg: 'bg-emerald-400', text: 'text-emerald-700', light: 'bg-emerald-50' };
@@ -832,7 +818,7 @@ export default function PlansPage() {
         />
       )}
 
-      <PublishPlanDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} tasks={planTasks} onSuccess={() => setCurrentWeekStart(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }))} />
+      <PublishPlanDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} tasks={planTasks} selectedChildId={selectedChildId!} selectedChildName={selectedChild?.name} onSuccess={() => setCurrentWeekStart(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }))} />
 
       {/* Advanced Export Dialog */}
       <AdvancedExportDialog

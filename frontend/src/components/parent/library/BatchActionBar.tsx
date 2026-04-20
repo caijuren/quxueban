@@ -38,8 +38,18 @@ export function BatchActionBar({
   const isAllSelected = selectedCount === totalCount && totalCount > 0;
 
   return (
-    <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-blue-50 rounded-lg shadow-sm">
+    <Card className="sticky top-3 z-10 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 via-white to-sky-50 shadow-sm">
       <CardContent className="p-4">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">批量操作</p>
+            <p className="text-xs text-muted-foreground">统一处理当前筛选结果中的书籍，减少重复操作。</p>
+          </div>
+          <div className="rounded-full bg-white px-3 py-1 text-xs text-muted-foreground shadow-sm">
+            共 {totalCount} 本，已选 {selectedCount} 本
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -50,15 +60,15 @@ export function BatchActionBar({
                 {selectedCount}
               </div>
               <span className="text-sm text-gray-700">
-                本书已选择
+                本书已选中
               </span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={onSelectAll}>
+              <Button variant="ghost" size="sm" className="rounded-xl" onClick={onSelectAll}>
                 {isAllSelected ? '取消全选' : '全选'}
               </Button>
-              <Button variant="ghost" size="sm" onClick={onClearSelection}>
+              <Button variant="ghost" size="sm" className="rounded-xl" onClick={onClearSelection}>
                 清空
               </Button>
             </div>
@@ -75,7 +85,7 @@ export function BatchActionBar({
                   onAddToList(e.target.value);
                 }
               }}
-              className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white hover:border-primary transition-colors"
+              className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm transition-colors hover:border-primary"
               disabled={selectedCount === 0 || isProcessing}
             >
               <option value="">添加到书单...</option>
@@ -89,7 +99,7 @@ export function BatchActionBar({
             <select
               value=""
               onChange={(e) => e.target.value && onBatchTypeChange(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white hover:border-primary transition-colors"
+              className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm transition-colors hover:border-primary"
               disabled={selectedCount === 0 || isProcessing}
             >
               <option value="">修改分类...</option>
@@ -102,7 +112,7 @@ export function BatchActionBar({
             <select
               value={batchReadStage}
               onChange={(e) => onBatchReadStageChange(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white hover:border-primary transition-colors"
+              className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm transition-colors hover:border-primary"
               disabled={isProcessing}
             >
               <option value="">选择阅读阶段...</option>
@@ -114,7 +124,7 @@ export function BatchActionBar({
             <Button
               onClick={onBatchFinish}
               disabled={selectedCount === 0 && !batchReadStage || isProcessing}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg"
+              className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-600"
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
               标记已读完
@@ -124,7 +134,7 @@ export function BatchActionBar({
               onClick={onBatchDelete}
               disabled={selectedCount === 0 || isProcessing}
               variant="destructive"
-              className="rounded-lg"
+              className="rounded-xl"
             >
               <X className="w-4 h-4 mr-2" />
               删除

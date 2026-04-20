@@ -270,17 +270,20 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /checkin - Save daily checkin
- * Body: { taskId, planId, status, value, completedValue, notes }
+ * Body: { taskId, planId, status, value, completedValue, notes, date }
  *
  * Statuses: completed, partial, postponed, not_involved, not_completed, makeup, advance
  */
 plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
-  const { taskId, planId, status, value, completedValue, notes } = req.body
+  const { taskId, planId, status, value, completedValue, notes, childId, date } = req.body
   const { userId, familyId, role } = req.user!
 
-  // Only children can check in
-  if (role !== 'child') {
-    throw new AppError(403, 'Only children can check in')
+  // For parents, use provided childId; for children, use their own userId
+  const targetChildId = role === 'parent' ? childId : userId
+  
+  // Validate childId for parents
+  if (role === 'parent' && !childId) {
+    throw new AppError(400, 'Missing required field: childId')
   }
 
   if (!taskId || !status) {
@@ -293,15 +296,18 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, `Invalid status. Must be one of: ${validStatuses.join(', ')}`)
   }
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // Use provided date or today
+  // Use local time to match frontend date handling
+  const checkDate = date ? new Date(date) : new Date()
+  // Set to start of day in local time
+  checkDate.setHours(0, 0, 0, 0)
 
-  // Check if already checked in today for this task
+  // Check if already checked in for this task on the specified date
   const existingCheckin = await prisma.dailyCheckin.findFirst({
     where: {
-      childId: userId,
+      childId: targetChildId,
       taskId,
-      checkDate: today,
+      checkDate: checkDate,
     },
   })
 
@@ -336,12 +342,12 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
     const checkin = await (prisma.dailyCheckin.create as any)({
       data: {
         familyId,
-        childId: userId,
+        childId: targetChildId,
         taskId,
         planId,
         status,
         value: value || 1,
-        checkDate: today,
+        checkDate: checkDate,
         completedValue: completedValue || null,
         notes: notes || null,
       },

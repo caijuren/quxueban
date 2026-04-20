@@ -17,7 +17,8 @@ export const authRouter: Router = Router()
  */
 authRouter.post('/register', async (req, res: Response) => {
   try {
-    const { username, password, role = 'parent' } = req.body
+    const { username, password } = req.body
+    const role = 'parent' // Registration always creates parent accounts
 
     // Validate required fields
     if (!username || !password) {
@@ -40,8 +41,8 @@ authRouter.post('/register', async (req, res: Response) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Generate unique family code
-    const familyCode = `F${Date.now().toString(36).toUpperCase()}`
+    // Generate unique family code with random suffix to prevent collisions
+    const familyCode = `F${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
 
     // Create a new family for each registered user
     const family = await prisma.family.create({
@@ -72,7 +73,6 @@ authRouter.post('/register', async (req, res: Response) => {
       name: user.name,
       role: user.role,
       familyId: family.id,
-      avatar: user.avatar,
     })
 
     res.status(201).json({
@@ -109,54 +109,13 @@ authRouter.post('/login', async (req, res: Response) => {
     throw new AppError(400, '用户名和密码不能为空')
   }
 
-  // Handle mock mode
-  if (!env.DATABASE_URL) {
-    // Return mock user for testing
-    const mockUser = {
-      id: 1,
-      name: username,
-      role: 'parent',
-      familyId: 1,
-      avatar: '👤',
-      family: {
-        id: 1,
-        name: `${username}的家庭`,
-        familyCode: 'F123456',
-      },
-    }
 
-    // Generate JWT token
-    const token = generateToken({
-      id: mockUser.id,
-      name: mockUser.name,
-      role: mockUser.role,
-      familyId: mockUser.familyId,
-      avatar: mockUser.avatar,
-    })
 
-    res.json({
-      status: 'success',
-      message: '登录成功',
-      data: {
-        token,
-        user: {
-          id: mockUser.id,
-          name: mockUser.name,
-          role: mockUser.role,
-          familyId: mockUser.familyId,
-          familyName: mockUser.family.name,
-          familyCode: mockUser.family.familyCode,
-          avatar: mockUser.avatar,
-        },
-      },
-    })
-    return
-  }
-
-  // Find user by username
+  // Find user by username (parent login only finds parent users)
   const user = await prisma.user.findFirst({
     where: {
       name: username,
+      role: 'parent',
       status: 'active',
     },
     include: { family: true }
@@ -173,15 +132,12 @@ authRouter.post('/login', async (req, res: Response) => {
     throw new AppError(401, '用户名或密码错误')
   }
 
-  console.log(`[LOGIN] User ${user.name} (ID: ${user.id}), Family ${user.familyId}, FamilyCode: ${user.family.familyCode}`)
-
   // Generate JWT token
   const token = generateToken({
     id: user.id,
     name: user.name,
     role: user.role,
     familyId: user.familyId,
-    avatar: user.avatar,
   })
 
   res.json({
@@ -203,63 +159,6 @@ authRouter.post('/login', async (req, res: Response) => {
 })
 
 /**
- * POST /child/login - Simplified login for children using PIN
- * Body: { childName, childPin }
- */
-authRouter.post('/child/login', async (req, res: Response) => {
-  console.log('收到登录请求:', req.body)
-  const { childName, childPin } = req.body
-
-  if (!childName || !childPin) {
-    throw new AppError(400, 'Missing required fields: childName, childPin')
-  }
-
-  // Find child user
-  const child = await prisma.user.findFirst({
-    where: {
-      name: childName,
-      role: 'child',
-      status: 'active',
-    },
-  })
-
-  if (!child) {
-    throw new AppError(401, 'Child not found')
-  }
-
-  // Verify PIN (PIN is stored as password hash, but for children it's a simple 4-digit number)
-  const isPinValid = await bcrypt.compare(childPin, child.passwordHash)
-
-  if (!isPinValid) {
-    throw new AppError(401, 'Invalid PIN')
-  }
-
-  // Generate JWT token
-  const token = generateToken({
-    id: child.id,
-    name: child.name,
-    role: child.role,
-    familyId: child.familyId,
-    avatar: child.avatar,
-  })
-
-  res.json({
-    status: 'success',
-    message: 'Login successful',
-    data: {
-      token,
-      user: {
-        id: child.id,
-        name: child.name,
-        role: child.role,
-        familyId: child.familyId,
-        avatar: child.avatar,
-      },
-    },
-  })
-})
-
-/**
  * POST /add-child - Parent adds a new child
  * Body: { name, avatar, pin }
  * Auth required, parent only
@@ -268,8 +167,6 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
   try {
     const { name, avatar, pin, age, grade, gender, birthday, interests, personality } = req.body
     const { familyId, userId } = req.user!
-
-    console.log(`[ADD CHILD] User ${userId}, Family ${familyId}, Name: ${name}`)
 
     if (!name || !pin) {
       throw new AppError(400, 'Missing required fields: name, pin')
@@ -306,18 +203,8 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
         passwordHash,
         familyId,
         status: 'active',
-        settings: {
-          age,
-          grade,
-          gender,
-          birthday,
-          interests,
-          personality
-        }
       },
     })
-
-    console.log(`[ADD CHILD] Success: Child ${child.name} (ID: ${child.id}) created`)
 
     res.status(201).json({
       status: 'success',
@@ -331,6 +218,7 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
     })
   } catch (error: any) {
     console.error('[ADD CHILD] Error:', error)
+    if (error instanceof AppError) throw error
     throw new AppError(500, `添加孩子失败: ${error.message}`)
   }
 })
@@ -340,7 +228,7 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
  * Auth required
  */
 authRouter.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { userId, name, role, familyId, avatar } = req.user!
+  const { userId, name, role, familyId } = req.user!
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -351,7 +239,7 @@ authRouter.get('/me', authMiddleware, async (req: AuthRequest, res: Response) =>
         id: userId,
         name: name,
         role: role,
-        avatar: avatar,
+        avatar: '👤',
         familyId: familyId,
         familyName: `${name}的家庭`,
         familyCode: 'F123456',
@@ -462,7 +350,6 @@ authRouter.post('/migrate-family', authMiddleware, requireRole('parent'), async 
     name: user!.name,
     role: user!.role,
     familyId: newFamily.id,
-    avatar: user!.avatar,
   })
 
   res.json({
@@ -490,7 +377,6 @@ authRouter.post('/migrate-family', authMiddleware, requireRole('parent'), async 
 authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const { familyId, userId, name } = req.user!
   
-  console.log(`[GET CHILDREN] User ${userId}, Family ${familyId}`)
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -547,13 +433,10 @@ authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: A
       createdAt: 'asc',
     },
   })
-  
-  console.log(`[GET CHILDREN] Found ${children.length} children:`, children.map(c => c.name))
 
   // TODO: Replace with actual statistics from database
   const childrenWithStats = children.map(child => ({
     ...child,
-    pin: '1234', // Placeholder - PIN should not be returned in production
     weeklyProgress: 0,
     todayMinutes: 0,
     completedTasks: 0,
@@ -584,7 +467,6 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     const { name, avatar, pin, age, grade, gender, birthday, interests, personality } = req.body
     const { familyId, userId } = req.user!
 
-    console.log(`[UPDATE CHILD] User ${userId}, Family ${familyId}, Child ${id}, Body:`, JSON.stringify(req.body))
 
     // Check if child exists and belongs to the family
     const existingChild = await prisma.user.findFirst({
@@ -597,12 +479,11 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     })
 
     if (!existingChild) {
-      console.log(`[UPDATE CHILD] Child ${id} not found in family ${familyId}`)
       throw new AppError(404, '孩子不存在')
     }
 
     // Build update data
-    const updateData: { name?: string; avatar?: string; passwordHash?: string; settings?: any } = {}
+    const updateData: { name?: string; avatar?: string; passwordHash?: string } = {}
 
     if (name !== undefined && name !== existingChild.name) {
       // Check if another child with the same name exists (excluding current child)
@@ -624,7 +505,6 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     }
 
     if (avatar !== undefined) {
-      console.log(`[UPDATE CHILD] Setting avatar: ${avatar?.substring(0, 50)}...`)
       updateData.avatar = avatar
     }
 
@@ -636,20 +516,8 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       updateData.passwordHash = await bcrypt.hash(pin, 12)
     }
 
-    // Update settings if provided
-    const settingsUpdate = {
-      age,
-      grade,
-      gender,
-      birthday,
-      interests,
-      personality
-    }
-
-    // Only update settings if at least one field is provided
-    if (Object.values(settingsUpdate).some(value => value !== undefined)) {
-      updateData.settings = settingsUpdate
-    }
+    // Note: age, grade, gender, birthday, interests, personality
+    // are not stored on User model - these should be stored in Family.settings if needed
 
     // Update child
     const updatedChild = await prisma.user.update({
@@ -664,7 +532,6 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       },
     })
 
-    console.log(`[UPDATE CHILD] Success: Child ${id} updated`)
 
     res.json({
       status: 'success',
@@ -673,6 +540,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     })
   } catch (error: any) {
     console.error('[UPDATE CHILD] Error:', error)
+    if (error instanceof AppError) throw error
     throw new AppError(500, `更新失败: ${error.message}`)
   }
 })
@@ -684,7 +552,6 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
 authRouter.delete('/children/all', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const { familyId, userId } = req.user!
   
-  console.log(`[DELETE ALL] User ${userId}, Family ${familyId}`)
 
   // Find all children in this family
   const children = await prisma.user.findMany({
@@ -696,12 +563,10 @@ authRouter.delete('/children/all', authMiddleware, requireRole('parent'), async 
     select: { id: true, name: true },
   })
   
-  console.log(`[DELETE ALL] Found ${children.length} children:`, children.map(c => c.name))
 
   const childIds = children.map(c => c.id)
 
   if (childIds.length === 0) {
-    console.log('[DELETE ALL] No children to delete')
     res.json({
       status: 'success',
       message: '没有需要删除的孩子',
@@ -718,7 +583,6 @@ authRouter.delete('/children/all', authMiddleware, requireRole('parent'), async 
     data: { status: 'inactive' },
   })
   
-  console.log(`[DELETE ALL] Soft deleted ${result.count} children`)
 
   res.json({
     status: 'success',
@@ -742,7 +606,6 @@ authRouter.delete('/children/:id', authMiddleware, requireRole('parent'), async 
     
     const { familyId } = req.user!
 
-    console.log(`Deleting child ${id} from family ${familyId}`)
 
     // Check if child exists and belongs to the family
     const existingChild = await prisma.user.findFirst({
@@ -755,7 +618,6 @@ authRouter.delete('/children/:id', authMiddleware, requireRole('parent'), async 
     })
 
     if (!existingChild) {
-      console.log(`Child ${id} not found in family ${familyId}`)
       throw new AppError(404, '孩子不存在')
     }
 
@@ -771,6 +633,7 @@ authRouter.delete('/children/:id', authMiddleware, requireRole('parent'), async 
     })
   } catch (error: any) {
     console.error('Delete child error:', error)
+    if (error instanceof AppError) throw error
     throw new AppError(500, `删除失败: ${error.message}`)
   }
 })
@@ -855,11 +718,19 @@ authRouter.post('/avatar', authMiddleware, async (req: AuthRequest, res: Respons
     data: { avatar },
   })
 
+  const token = generateToken({
+    id: updatedUser.id,
+    name: updatedUser.name,
+    role: updatedUser.role,
+    familyId: updatedUser.familyId,
+  })
+
   res.json({
     status: 'success',
     message: '头像上传成功',
     data: {
       avatar: updatedUser.avatar,
+      token,
     },
   })
 })
@@ -908,5 +779,73 @@ authRouter.put('/password', authMiddleware, async (req: AuthRequest, res: Respon
   res.json({
     status: 'success',
     message: '密码修改成功',
+  })
+})
+
+/**
+ * PUT /me/username - Update username with password verification
+ * Auth required
+ */
+authRouter.put('/me/username', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { userId } = req.user!
+  const { name, password } = req.body
+
+  if (!name || !password) {
+    throw new AppError(400, '用户名和密码不能为空')
+  }
+
+  if (name.length < 2 || name.length > 20) {
+    throw new AppError(400, '用户名长度应在2-20个字符之间')
+  }
+
+  // Find user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  })
+
+  if (!user) {
+    throw new AppError(404, '用户不存在')
+  }
+
+  // Verify password
+  const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
+
+  if (!isPasswordValid) {
+    throw new AppError(401, '密码错误')
+  }
+
+  // Check if username is already taken by another user
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      name,
+      id: { not: userId },
+    },
+  })
+
+  if (existingUser) {
+    throw new AppError(409, '该用户名已被使用')
+  }
+
+  // Update username
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name },
+  })
+
+  // Generate new token with updated name
+  const token = generateToken({
+    id: userId,
+    name,
+    role: user.role,
+    familyId: user.familyId,
+  })
+
+  res.json({
+    status: 'success',
+    message: '用户名修改成功',
+    data: {
+      name,
+      token,
+    },
   })
 })

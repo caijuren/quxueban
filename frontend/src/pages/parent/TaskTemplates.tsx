@@ -50,8 +50,6 @@ interface ChildTask {
   customScheduleRule: ScheduleRule | null;
   weeklyTarget: number | null;
   status: 'active' | 'paused';
-  skipHolidays: boolean;
-  excludeDays: string | null;
   templateName: string;
   templateType: TaskType;
   subject: Subject;
@@ -352,7 +350,7 @@ export default function TaskTemplatesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Settings2 className="w-7 h-7 text-purple-500" />
+            <Settings2 className="w-7 h-7 text-primary" />
             任务管理中心
           </h1>
           <p className="text-gray-500 mt-1">智能任务模板库 + 多孩子实例化管理</p>
@@ -379,7 +377,7 @@ export default function TaskTemplatesPage() {
             <div className="flex justify-end mb-4">
               <Button
                 onClick={() => { resetTemplateForm(); setTemplateDialogOpen(true); }}
-                className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
+                className="bg-primary hover:bg-primary/90"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 创建模板
@@ -511,7 +509,7 @@ export default function TaskTemplatesPage() {
                     onClick={() => setSelectedChildId(child.id)}
                     className={cn(
                       "flex items-center gap-2",
-                      selectedChildId === child.id && "bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
+                      selectedChildId === child.id && "bg-primary hover:bg-primary/90"
                     )}
                   >
                     <span className="text-xl">{child.avatar}</span>
@@ -820,10 +818,7 @@ export default function TaskTemplatesPage() {
                 <Label>自定义时长（可选）</Label>
                 <Input type="number" placeholder={selectedTask.templateDuration.toString()} />
               </div>
-              <div className="flex items-center justify-between">
-                <Label>避开节假日</Label>
-                <Switch defaultChecked={selectedTask.skipHolidays} />
-              </div>
+
               <div className="space-y-2">
                 <Label>任务状态</Label>
                 <Select defaultValue={selectedTask.status}>

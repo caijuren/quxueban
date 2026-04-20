@@ -55,7 +55,8 @@ export function BookFilter({
   importProgress,
   resultCount,
 }: BookFilterProps) {
-  const hasActiveFilters = selectedReadStatus !== 'all' || selectedAgeRange !== 'all' || sortBy !== '';
+  const hasActiveFilters =
+    selectedType !== 'all' || selectedReadStatus !== 'all' || selectedAgeRange !== 'all' || sortBy !== '' || !!searchInput;
 
   const clearAllFilters = () => {
     onReadStatusChange('all');
@@ -84,7 +85,18 @@ export function BookFilter({
   return (
     <div className="space-y-3">
       {/* Filter Bar - All in one row */}
-      <div className="bg-muted/50 border border-border rounded-xl p-3">
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">书目筛选</p>
+            <p className="text-xs text-muted-foreground">按分类、状态和年龄快速定位当前孩子的书。</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>当前结果</span>
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">{resultCount} 本</span>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           {/* Search Input - Compact */}
           <div className="relative flex-shrink-0">
@@ -93,8 +105,8 @@ export function BookFilter({
               value={searchInput}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="搜索书名、作者..."
-              className="pl-8 pr-7 h-9 w-44 text-sm rounded-lg border-gray-200 bg-white focus:border-primary focus:ring-primary"
-            />
+            className="h-10 w-52 rounded-xl border-gray-200 bg-white pl-8 pr-7 text-sm focus:border-primary focus:ring-primary"
+          />
             {searchInput && (
               <button
                 onClick={() => onSearchChange('')}
@@ -110,7 +122,7 @@ export function BookFilter({
           {/* Book Type Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200",
+              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
               "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
               "bg-white border border-gray-200 shadow-sm",
               selectedType !== 'all' && "border-primary/50 bg-primary/5"
@@ -157,7 +169,7 @@ export function BookFilter({
           {/* Read Status Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200",
+              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
               "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
               "bg-white border border-gray-200 shadow-sm",
               selectedReadStatus !== 'all' && "border-primary/50 bg-primary/5"
@@ -191,7 +203,7 @@ export function BookFilter({
           {/* Age Range Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200",
+              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
               "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
               "bg-white border border-gray-200 shadow-sm",
               selectedAgeRange !== 'all' && "border-primary/50 bg-primary/5"
@@ -225,7 +237,7 @@ export function BookFilter({
           {/* Sort Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200",
+              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
               "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
               "bg-white border border-gray-200 shadow-sm",
               sortBy !== '' && "border-primary/50 bg-primary/5"
@@ -259,7 +271,7 @@ export function BookFilter({
           <div className="flex-1" />
 
           {/* View Mode Toggle */}
-          <div className="flex gap-0.5 flex-shrink-0 bg-white rounded-lg p-0.5 border border-gray-200 shadow-sm">
+          <div className="flex flex-shrink-0 gap-0.5 rounded-xl border border-gray-200 bg-white p-0.5 shadow-sm">
             <button
               onClick={() => onViewModeChange('grid')}
               className={cn(
@@ -292,9 +304,10 @@ export function BookFilter({
               variant="outline"
               onClick={onBatchModeToggle}
               className={cn(
-                "h-9 px-2.5 rounded-lg border-gray-200 shadow-sm",
+                "h-10 rounded-xl border-gray-200 px-2.5 shadow-sm",
                 batchMode && "bg-primary/10 border-primary text-primary"
               )}
+              title={batchMode ? '退出批量操作' : '进入批量操作'}
             >
               {batchMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
             </Button>
@@ -303,7 +316,8 @@ export function BookFilter({
               variant="outline"
               onClick={onImportClick}
               disabled={importing}
-              className="h-9 px-2.5 rounded-lg border-gray-200 shadow-sm relative"
+              className="relative h-10 rounded-xl border-gray-200 px-2.5 shadow-sm"
+              title="导入图书"
             >
               <Upload className="w-4 h-4" />
               {importing && (
@@ -318,59 +332,63 @@ export function BookFilter({
 
             <Button
               onClick={onAddBookClick}
-              className="h-9 px-3 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm"
+              className="h-10 rounded-xl bg-primary px-4 text-white shadow-sm hover:bg-primary/90"
             >
               <Plus className="w-4 h-4 mr-1" />
-              <span className="text-sm">添加</span>
+              <span className="text-sm">添加图书</span>
             </Button>
           </div>
         </div>
 
         {/* Search Result & Active Filters Display */}
-        {(searchInput || hasActiveFilters) && (
-          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border">
+        {hasActiveFilters && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             {searchInput && (
-              <span className="text-xs text-muted-foreground">
-                找到 <strong className="text-primary">{resultCount}</strong> 本相关书籍
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                搜索: {searchInput}
+                <button onClick={() => onSearchChange('')} className="rounded-full p-0.5 hover:bg-primary/20">
+                  <X className="w-3 h-3" />
+                </button>
               </span>
             )}
-            {hasActiveFilters && (
-              <>
-                <span className="text-xs text-muted-foreground">筛选:</span>
-                <div className="flex flex-wrap gap-1">
-                  {selectedReadStatus !== 'all' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">
-                      {readStatusOptions.find(s => s.value === selectedReadStatus)?.label}
-                      <button onClick={() => onReadStatusChange('all')} className="hover:bg-primary/20 rounded-full p-0.5">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )}
-                  {selectedAgeRange !== 'all' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">
-                      {ageRanges.find(a => a.value === selectedAgeRange)?.label}
-                      <button onClick={() => onAgeRangeChange('all')} className="hover:bg-primary/20 rounded-full p-0.5">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )}
-                  {sortBy && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">
-                      {sortOptions.find(s => s.value === sortBy)?.label}
-                      <button onClick={() => onSortChange('')} className="hover:bg-primary/20 rounded-full p-0.5">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={clearAllFilters}
-                  className="text-xs text-primary hover:underline ml-auto"
-                >
-                  清除全部
+            {selectedType !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                {selectedTypeLabel}
+                <button onClick={() => onTypeChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
+                  <X className="w-3 h-3" />
                 </button>
-              </>
+              </span>
             )}
+            {selectedReadStatus !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                {readStatusOptions.find(s => s.value === selectedReadStatus)?.label}
+                <button onClick={() => onReadStatusChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {selectedAgeRange !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                {ageRanges.find(a => a.value === selectedAgeRange)?.label}
+                <button onClick={() => onAgeRangeChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {sortBy && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                {sortOptions.find(s => s.value === sortBy)?.label}
+                <button onClick={() => onSortChange('')} className="rounded-full p-0.5 hover:bg-primary/20">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <button
+              onClick={clearAllFilters}
+              className="ml-auto text-xs font-medium text-primary hover:underline"
+            >
+              清除全部
+            </button>
           </div>
         )}
       </div>

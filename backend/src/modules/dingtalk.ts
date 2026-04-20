@@ -36,6 +36,38 @@ function appendSignatureToUrl(webhookUrl: string, secret: string): string {
   return `${webhookUrl}${separator}timestamp=${timestamp}&sign=${sign}`
 }
 
+function getAssignedDaysForPlan(plan: any): number[] {
+  let assignedDays: number[] = []
+  if (plan.assignedDays) {
+    try {
+      const parsedDays = typeof plan.assignedDays === 'string' ? JSON.parse(plan.assignedDays) : plan.assignedDays
+      if (Array.isArray(parsedDays)) {
+        assignedDays = parsedDays
+      }
+    } catch (e) {
+      console.error('Failed to parse assignedDays:', e)
+    }
+  }
+
+  if (assignedDays.length > 0) return assignedDays
+
+  const taskTags = plan.task?.tags as any || {}
+  const taskWeeklyRule = plan.task?.weeklyRule as any || {}
+  const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
+
+  switch (scheduleRule) {
+    case 'school':
+      return [1, 2, 4, 5]
+    case 'weekend':
+      return [0, 6]
+    case 'flexible':
+      return [1, 2, 3, 4, 5]
+    case 'daily':
+    default:
+      return [0, 1, 2, 3, 4, 5, 6]
+  }
+}
+
 // All routes require authentication and parent role
 dingtalkRouter.use(authMiddleware)
 dingtalkRouter.use(requireRole('parent'))
@@ -244,6 +276,249 @@ dingtalkRouter.post('/tasks/:taskId/push-to-dingtalk', async (req: AuthRequest, 
   }
 })
 
+/**
+ * POST /dashboard/share - Share task completion status to DingTalk
+ * Body: { childId, date }
+ */
+dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const { childId, date } = req.body
+
+  if (!childId) {
+    throw new AppError(400, 'Missing required field: childId')
+  }
+
+  if (!date || typeof date !== 'string') {
+    throw new AppError(400, 'Missing required field: date')
+  }
+
+  // Get child information
+  const child = await prisma.user.findFirst({
+    where: { id: childId, familyId, role: 'child' },
+  })
+
+  if (!child) {
+    throw new AppError(404, 'Child not found')
+  }
+
+  // Get webhook URL and secret from child's profile
+  const webhookUrl = child.dingtalkWebhookUrl
+  const dingtalkSecret = child.dingtalkSecret || ''
+
+  if (!webhookUrl) {
+    throw new AppError(400, 'DingTalk webhook URL not configured for this child')
+  }
+
+  // Append signature if secret is available
+  const signedUrl = appendSignatureToUrl(webhookUrl, dingtalkSecret)
+
+  // Get target date
+  let targetDate: Date
+  // 解析日期字符串为本地时间
+  const [year, month, day] = date.split('-').map(Number)
+  targetDate = new Date(year, month - 1, day)
+  targetDate.setHours(0, 0, 0, 0)
+  const targetDateEnd = new Date(targetDate)
+  targetDateEnd.setHours(23, 59, 59, 999)
+  const targetWeekNo = getWeekNo(targetDate)
+
+  // Get child's weekly plans
+  const weeklyPlans = await prisma.weeklyPlan.findMany({
+    where: {
+      childId,
+      weekNo: targetWeekNo,
+      status: 'active'
+    },
+    include: {
+      task: true
+    }
+  })
+
+  // Get target date's checkins
+  const todayCheckins = await prisma.dailyCheckin.findMany({
+    where: {
+      childId,
+      checkDate: {
+        gte: targetDate,
+        lte: targetDateEnd
+      }
+    },
+    include: {
+      plan: {
+        include: { task: true }
+      }
+    }
+  })
+
+  // Get all active plans
+  const allActivePlans = weeklyPlans
+
+  // Get target date's day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+  const todayDayOfWeek = targetDate.getDay()
+
+  // Filter plans that are scheduled for target date's day of week
+  const todayScheduledPlans = allActivePlans.filter(plan => getAssignedDaysForPlan(plan).includes(todayDayOfWeek))
+
+  // Log debug information
+  console.log('[Share Dashboard] Request date:', date)
+  console.log('[Share Dashboard] Target date:', targetDate.toISOString())
+  console.log('[Share Dashboard] Target date day of week:', todayDayOfWeek)
+  console.log('[Share Dashboard] Total active plans:', allActivePlans.length)
+  console.log('[Share Dashboard] Today scheduled plans:', todayScheduledPlans.length)
+  console.log('[Share Dashboard] Today checkins:', todayCheckins.length)
+
+  // Calculate study time (only completed and partial tasks)
+  const todayStudyMinutes = todayCheckins
+    .filter(checkin => checkin.status === 'completed' || checkin.status === 'partial')
+    .reduce((sum, checkin) => {
+      const minutes = checkin.completedValue !== null && checkin.completedValue !== undefined ? checkin.completedValue : (checkin.plan?.task?.timePerUnit || 0)
+      return sum + minutes * (checkin.value || 1)
+    }, 0)
+
+  // Group tasks by completion status
+  const tasksByStatus: any = {
+    completed: [],
+    partial: [],
+    notCompleted: [],
+    postponed: [],
+    notInvolved: []
+  }
+
+  // Create maps for quick lookup
+  const checkinMapByPlanId = new Map<number, any>()
+  const checkinMapByTaskId = new Map<number, any>()
+  todayCheckins.forEach(checkin => {
+    if (checkin.planId) {
+      checkinMapByPlanId.set(checkin.planId, checkin)
+    }
+    if (checkin.taskId) {
+      checkinMapByTaskId.set(checkin.taskId, checkin)
+    }
+  })
+
+  // Process each scheduled plan for the target date
+  todayScheduledPlans.forEach(plan => {
+    const checkin = checkinMapByPlanId.get(plan.id) || checkinMapByTaskId.get(plan.task.id)
+    if (checkin) {
+      // Task has a checkin record
+      const taskWithCheckin = {
+        ...plan.task,
+        checkinId: checkin.id,
+        checkinStatus: checkin.status,
+        actualTime: checkin.completedValue !== null && checkin.completedValue !== undefined ? checkin.completedValue : plan.task.timePerUnit,
+        notes: checkin.notes
+      }
+      if (checkin.status === 'completed') {
+        tasksByStatus.completed.push(taskWithCheckin)
+      } else if (checkin.status === 'partial') {
+        tasksByStatus.partial.push(taskWithCheckin)
+      } else if (checkin.status === 'postponed') {
+        tasksByStatus.postponed.push(taskWithCheckin)
+      } else if (checkin.status === 'not_involved') {
+        tasksByStatus.notInvolved.push(taskWithCheckin)
+      } else {
+        tasksByStatus.notCompleted.push(taskWithCheckin)
+      }
+    } else {
+      tasksByStatus.notCompleted.push({
+        ...plan.task,
+        actualTime: plan.task.timePerUnit,
+        notes: ''
+      })
+    }
+  })
+
+  const totalTasks = todayScheduledPlans.length
+  const completedTasks = tasksByStatus.completed.length
+  const partialTasks = tasksByStatus.partial.length
+  const postponedTasks = tasksByStatus.postponed.length
+  const notInvolvedTasks = tasksByStatus.notInvolved.length
+  const notCompletedTasks = tasksByStatus.notCompleted.length
+  const actionableTasks = totalTasks - notInvolvedTasks
+  const completionRate = actionableTasks > 0 ? Math.round((completedTasks / actionableTasks) * 100) : 0
+
+  // Log debug information about task grouping
+  console.log('[Share Dashboard] Completed tasks:', tasksByStatus.completed.length)
+  console.log('[Share Dashboard] Partial tasks:', tasksByStatus.partial.length)
+  console.log('[Share Dashboard] Not completed tasks:', tasksByStatus.notCompleted.length)
+  console.log('[Share Dashboard] Postponed tasks:', tasksByStatus.postponed.length)
+  console.log('[Share Dashboard] Not involved tasks:', tasksByStatus.notInvolved.length)
+  
+  // Log checkin statuses and full checkins
+  console.log('[Share Dashboard] Checkin statuses:', todayCheckins.map(c => c.status))
+  console.log('[Share Dashboard] Full checkins:', todayCheckins)
+
+  // Generate dashboard message
+  const message = generateDashboardMessage(
+    child.name,
+    totalTasks,
+    completedTasks,
+    partialTasks,
+    postponedTasks,
+    notCompletedTasks,
+    notInvolvedTasks,
+    completionRate,
+    todayStudyMinutes,
+    tasksByStatus,
+    targetDate
+  )
+
+  // Push to DingTalk
+  try {
+    console.log('[Share Dashboard] Sending to:', webhookUrl)
+    console.log('[Share Dashboard] With signature:', signedUrl !== webhookUrl)
+    console.log('[Share Dashboard] Message:', message)
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+    
+    const response = await fetch(signedUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        msgtype: 'markdown',
+        markdown: {
+          title: `${child.name}的今日学习情况`,
+          text: message,
+        },
+      }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId);
+
+    const responseText = await response.text()
+    console.log('[Share Dashboard] Response status:', response.status)
+    console.log('[Share Dashboard] Response body:', responseText)
+
+    if (!response.ok) {
+      throw new Error(`钉钉API返回错误: ${responseText}`)
+    }
+
+    // Parse response to check if DingTalk returned an error code
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+    } catch (e) {
+      responseData = null
+    }
+    
+    if (responseData && responseData.errcode !== 0) {
+      throw new Error(`钉钉API错误: ${responseData.errmsg || '未知错误'} (错误码: ${responseData.errcode})`)
+    }
+
+    res.json({
+      status: 'success',
+      message: '今日学习情况已分享至钉钉',
+    })
+  } catch (error: any) {
+    console.error('[Share Dashboard] Error:', error)
+    throw new AppError(500, `分享失败: ${error.message}`)
+  }
+})
+
 // Helper function to generate task message
 function generateTaskMessage(childName: string, task: any): string {
   let message = `# ${childName}的任务推送
@@ -356,6 +631,91 @@ function generateWeeklyPlanMessage(childName: string, plans: any[], weekStart: D
   message += `- 请按照计划完成每日任务\n`
   message += `- 如有特殊情况，请及时调整计划\n`
   message += `- 坚持就是胜利！💪\n`
+
+  return message
+}
+
+// Helper function to generate dashboard message
+function generateDashboardMessage(
+  childName: string,
+  totalTasks: number,
+  completedTasks: number,
+  partialTasks: number,
+  postponedTasks: number,
+  notCompletedTasks: number,
+  notInvolvedTasks: number,
+  completionRate: number,
+  todayStudyMinutes: number,
+  tasksByStatus: any,
+  targetDate: Date
+): string {
+  const hours = Math.floor(todayStudyMinutes / 60)
+  const minutes = todayStudyMinutes % 60
+  const studyTime = hours > 0 ? `${hours}小时${minutes}分钟` : `${minutes}分钟`
+  const actionableTasks = totalTasks - notInvolvedTasks
+
+  let message = `# ${childName}的今日学习情况
+`
+  message += `> 时间：${targetDate.getFullYear()}年${targetDate.getMonth() + 1}月${targetDate.getDate()}日\n\n`
+  message += `## 今日摘要\n`
+  message += `- **今日应做**：${actionableTasks}项\n`
+  message += `- **已完成**：${completedTasks}项\n`
+  message += `- **部分完成**：${partialTasks}项\n`
+  message += `- **未完成**：${notCompletedTasks}项\n`
+  message += `- **推迟**：${postponedTasks}项\n`
+  if (notInvolvedTasks > 0) {
+    message += `- **今日不涉及**：${notInvolvedTasks}项\n`
+  }
+  message += `- **完成率**：${completionRate}%\n`
+  message += `- **学习时长**：${studyTime}\n\n`
+
+  if (tasksByStatus.completed.length > 0) {
+    message += `### 已完成任务\n`
+    tasksByStatus.completed.forEach((task: any, index: number) => {
+      message += `${index + 1}. **${task.name}**（${task.actualTime}分钟）\n`
+      if (task.notes) {
+        message += `   备注：${task.notes}\n`
+      }
+    })
+    message += `\n`
+  }
+
+  if (tasksByStatus.partial.length > 0) {
+    message += `### 部分完成\n`
+    tasksByStatus.partial.forEach((task: any, index: number) => {
+      message += `${index + 1}. **${task.name}**（${task.actualTime}分钟）\n`
+      if (task.notes) {
+        message += `   备注：${task.notes}\n`
+      }
+    })
+    message += `\n`
+  }
+
+  const pendingTasks = [...tasksByStatus.notCompleted, ...tasksByStatus.postponed]
+  if (pendingTasks.length > 0) {
+    message += `### 待跟进任务\n`
+    pendingTasks.forEach((task: any, index: number) => {
+      const minutesLabel = task.actualTime || task.timePerUnit
+      message += `${index + 1}. **${task.name}**（预计${minutesLabel}分钟）\n`
+      if (task.notes) {
+        message += `   备注：${task.notes}\n`
+      }
+    })
+    message += `\n`
+  }
+
+  message += `### 建议\n`
+  if (completionRate < 60) {
+    message += `- 建议优先完成校内巩固类任务，避免基础任务继续积压。\n`
+  } else {
+    message += `- 今天整体节奏稳定，明天可继续保持当前完成顺序。\n`
+  }
+  if (partialTasks > 0) {
+    message += `- 部分完成的任务建议明天优先补齐，减少反复中断。\n`
+  }
+  if (todayStudyMinutes < 60) {
+    message += `- 今日学习时长偏少，建议明天预留固定学习时间段。\n`
+  }
 
   return message
 }
