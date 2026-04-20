@@ -80,13 +80,6 @@ const Index = () => {
               <span className="font-bold text-xl text-gray-900">趣学伴</span>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-              variant="ghost"
-              onClick={() => navigate('/debt')}
-              className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl"
-            >
-              还款工具
-            </Button>
             <Button
               variant="ghost"
               onClick={() => navigate('/login')}

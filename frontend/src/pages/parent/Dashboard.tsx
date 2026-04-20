@@ -19,18 +19,30 @@ import { MetricCard } from '@/components/ui/metric-card';
 // Task Category Icons
 const getTaskIcon = (category: string) => {
   switch (category) {
+    case 'school':
     case '校内巩固':
       return <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>;
+    case 'advanced':
     case '校内拔高':
       return <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>;
+    case 'extra':
     case '课外课程':
       return <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>;
+    case 'english':
     case '英语阅读':
       return <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>;
+    case 'chinese':
     case '中文阅读':
       return <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>;
+    case 'sports':
     case '体育运动':
       return <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>;
+    case 'flexible':
+    case '灵活安排':
+      return <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center"><Calendar className="w-5 h-5 text-yellow-600" /></div>;
+    case 'other':
+    case '其他':
+      return <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-gray-600" /></div>;
     default:
       return <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-gray-600" /></div>;
   }
@@ -273,12 +285,37 @@ export default function ParentDashboard() {
     staleTime: 2 * 60 * 1000,
   });
   
-  // 获取任务列表，用于构建今日待办和孩子对比
+  // 获取周计划任务，用于构建今日待办和孩子对比
   const { data: tasks = [], refetch: refetchTasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['dashboard-tasks', selectedChildId, selectedDate],
     queryFn: async () => {
-      const response = await apiClient.get('/tasks');
-      return (response.data.data || []) as Task[];
+      // 计算本周开始日期（周日）
+      const date = new Date(selectedDate);
+      const day = date.getDay();
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - day);
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+      
+      const response = await apiClient.get(`/plans/week/${weekStartStr}?childId=${selectedChildId}`);
+      const plansData = response.data.data || [];
+      
+      // 提取任务数据
+      const extractedTasks: any[] = [];
+      plansData.forEach((plan: any) => {
+        plan.allocations.forEach((allocation: any) => {
+          extractedTasks.push({
+            id: allocation.taskId,
+            name: allocation.taskName,
+            category: allocation.category,
+            scheduleRule: allocation.scheduleRule,
+            timePerUnit: allocation.timePerUnit,
+            appliesTo: [selectedChildId!],
+            assignedDays: allocation.assignedDays
+          });
+        });
+      });
+      
+      return extractedTasks;
     },
     staleTime: 5 * 60 * 1000,
     enabled: !!selectedChildId,
@@ -451,16 +488,24 @@ export default function ParentDashboard() {
   const selectedDateObj = new Date(selectedDate);
   const selectedDayOfWeek = selectedDateObj.getDay(); // 0=周日
   const todayTasks = tasks
-    .filter((t: Task) => {
+    .filter((t: any) => {
       if (!selectedChildId) return false;
       if (!t.appliesTo?.includes(selectedChildId)) return false;
+      // 检查任务是否分配到今天
+      if (t.assignedDays && Array.isArray(t.assignedDays) && !t.assignedDays.includes(selectedDayOfWeek)) {
+        return false;
+      }
       // 按 scheduleRule 过滤，基于选中的日期
       if (t.scheduleRule === 'school' && (selectedDayOfWeek === 0 || selectedDayOfWeek === 6)) return false;
       if (t.scheduleRule === 'weekend' && selectedDayOfWeek >= 1 && selectedDayOfWeek <= 5) return false;
+      // 对于 advanced 分类的任务，只在周末显示
+      if (t.category === 'advanced' && (selectedDayOfWeek >= 1 && selectedDayOfWeek <= 5)) {
+        return false;
+      }
       return true;
     })
-    .map((t: Task) => {
-      const checkin = todayCheckins.find((c: Checkin) => c.taskId === t.id);
+    .map((t: any) => {
+      const checkin = todayCheckins.find((c: Checkin) => c.taskId === parseInt(t.id));
       return {
         id: String(t.id),
         title: t.name,

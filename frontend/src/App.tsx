@@ -26,7 +26,7 @@ import ParentAchievements from "./pages/parent/Achievements";
 import ParentStatistics from "./pages/parent/Statistics";
 import ReportsPage from "./pages/parent/Reports";
 import SettingsPage from "./pages/parent/Settings";
-import DebtTracker from "./pages/DebtTracker";
+// DebtTracker 已移除
 
 
 /**
@@ -66,7 +66,7 @@ function App() {
                 <Route path="/" data-genie-title="Home Page" data-genie-key="Home" element={<PageTransition transition="slide-up"><Index /></PageTransition>} />
                 <Route path="/login" data-genie-title="Login" data-genie-key="Login" element={<PageTransition transition="fade"><Login /></PageTransition>} />
                 <Route path="/register" data-genie-title="Register" data-genie-key="Register" element={<PageTransition transition="fade"><Register /></PageTransition>} />
-                <Route path="/debt" data-genie-title="还款记录" data-genie-key="DebtTracker" element={<PageTransition transition="slide-up"><DebtTracker /></PageTransition>} />
+                {/* Debt route removed */}
                 <Route path="/parent" element={<ParentLayout />}>
                   <Route index data-genie-title="Parent Dashboard" data-genie-key="ParentDashboard" element={<PageTransition transition="slide-up"><ParentDashboard /></PageTransition>} />
                   <Route path="tasks" data-genie-title="Tasks" data-genie-key="ParentTasks" element={<PageTransition transition="slide-up"><ParentTasks /></PageTransition>} />

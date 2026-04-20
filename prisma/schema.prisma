@@ -22,6 +22,7 @@ model Family {
   users          User[]
   weeklyPlans    WeeklyPlan[]
   bookReadStates BookReadState[]
+  childTasks     ChildTask[]
 
   @@map("families")
 }
