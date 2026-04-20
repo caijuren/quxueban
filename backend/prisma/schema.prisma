@@ -19,13 +19,13 @@ model Family {
   bookAIInsights BookAIInsight[]
   bookReadStates BookReadState[]
   books          Book[]
-  childTasks     ChildTask[]
   reports        Report[]
   taskTemplates  TaskTemplate[]
   tasks          Task[]
   userAIConfigs  UserAIConfig[]
   users          User[]
   weeklyPlans    WeeklyPlan[]
+  childTasks     ChildTask[]
 
   @@map("families")
 }
@@ -97,11 +97,12 @@ model ChildTask {
   createdAt          DateTime     @default(now()) @map("created_at")
   updatedAt          DateTime     @updatedAt @map("updated_at")
   child              User         @relation(fields: [childId], references: [id])
-  family             Family       @relation(fields: [familyId], references: [id])
   taskTemplate       TaskTemplate @relation(fields: [taskTemplateId], references: [id])
+  family             Family       @relation(fields: [familyId], references: [id])
 
   @@unique([childId, taskTemplateId])
   @@map("child_tasks")
+  @@index([familyId])
 }
 
 model Task {
