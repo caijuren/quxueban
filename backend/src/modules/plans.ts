@@ -4,6 +4,46 @@ import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { env } from '../config/env'
 
+function parseAssignedDays(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((day) => Number(day))
+      .filter((day) => Number.isInteger(day))
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed)
+        ? parsed.map((day) => Number(day)).filter((day) => Number.isInteger(day))
+        : []
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
+function parseJsonObject(value: unknown): Record<string, any> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, any>
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, any>
+      }
+    } catch {
+      return {}
+    }
+  }
+
+  return {}
+}
+
 export const plansRouter: Router = Router()
 
 // All routes require authentication
@@ -415,7 +455,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
   }
 
   let children = []
-  let weeklyPlans = []
+  let weeklyPlans: any[] = []
 
   if (role === 'parent') {
     // 强制要求childId，确保数据隔离
@@ -445,22 +485,27 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
     children = [child]
 
     // Get weekly plans only for the specific child - 严格隔离
-    weeklyPlans = await prisma.weeklyPlan.findMany({
-      where: {
-        childId,  // 强制使用childId过滤
-        weekNo,
-      },
-      include: {
-        task: true,
-        child: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
-    })
+    weeklyPlans = await prisma.$queryRaw`
+      SELECT
+        wp.id,
+        wp.child_id,
+        wp.task_id,
+        wp.target,
+        wp.progress,
+        wp.week_no,
+        wp.status,
+        wp.created_at,
+        wp.updated_at,
+        t.name AS task_name,
+        t.category AS task_category,
+        t.time_per_unit,
+        t.tags AS task_tags,
+        t.weekly_rule AS task_weekly_rule,
+        t.schedule_rule AS task_schedule_rule
+      FROM weekly_plans wp
+      JOIN tasks t ON t.id = wp.task_id
+      WHERE wp.child_id = ${childId} AND wp.week_no = ${weekNo}
+    ` as any[]
   } else if (role === 'child') {
     // Children can only view their own plans
     const child = await prisma.user.findUnique({
@@ -483,29 +528,34 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
     children = [child]
 
     // Get weekly plans only for the current child
-    weeklyPlans = await prisma.weeklyPlan.findMany({
-      where: {
-        childId: userId,
-        weekNo,
-      },
-      include: {
-        task: true,
-        child: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
-    })
+    weeklyPlans = await prisma.$queryRaw`
+      SELECT
+        wp.id,
+        wp.child_id,
+        wp.task_id,
+        wp.target,
+        wp.progress,
+        wp.week_no,
+        wp.status,
+        wp.created_at,
+        wp.updated_at,
+        t.name AS task_name,
+        t.category AS task_category,
+        t.time_per_unit,
+        t.tags AS task_tags,
+        t.weekly_rule AS task_weekly_rule,
+        t.schedule_rule AS task_schedule_rule
+      FROM weekly_plans wp
+      JOIN tasks t ON t.id = wp.task_id
+      WHERE wp.child_id = ${userId} AND wp.week_no = ${weekNo}
+    ` as any[]
   } else {
     throw new AppError(403, 'Unauthorized')
   }
 
   // Group by child and format for frontend
   const plansByChild = children.map(child => {
-    const childPlans = weeklyPlans.filter(p => p.childId === child.id)
+    const childPlans = weeklyPlans.filter(p => p.child_id === child.id)
     
     return {
       id: `plan-${child.id}`,
@@ -514,13 +564,13 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
       weekStartDate: weekStart,
       allocations: childPlans.map(p => {
         // 优先使用数据库存储的 assignedDays（JavaScript 标准索引：0=周日, 6=周六）
-        const storedAssignedDays = p.assignedDays as number[] | null
+        const storedAssignedDays = parseAssignedDays((p as any).assigned_days)
         let assignedDays: number[] = []
 
         // 获取任务的 scheduleRule
-        const taskTags = p.task.tags as any || {}
-        const taskWeeklyRule = p.task.weeklyRule as any || {}
-        const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
+        const taskTags = parseJsonObject((p as any).task_tags)
+        const taskWeeklyRule = parseJsonObject((p as any).task_weekly_rule)
+        const scheduleRule = (p as any).task_schedule_rule || taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
 
         // 优先使用实际分配的天数
         if (storedAssignedDays && storedAssignedDays.length > 0) {
@@ -539,18 +589,16 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
 
         // 确保 subject 是字符串类型
         let subject = 'other'
-        if (p.task.tags && typeof p.task.tags === 'object') {
-          subject = (p.task.tags as any).subject || 'other'
-        }
+        subject = taskTags.subject || 'other'
 
         return {
-          taskId: String(p.taskId),
-          taskName: p.task.name,
-          category: p.task.category,
-          timePerUnit: p.task.timePerUnit,
+          taskId: String(p.task_id),
+          taskName: p.task_name,
+          category: p.task_category,
+          timePerUnit: p.time_per_unit,
           assignedDays: assignedDays,
           subject:subject,
-          difficulty: (p.task.tags as any)?.difficulty || 'basic',
+          difficulty: taskTags?.difficulty || 'basic',
           scheduleRule: scheduleRule,
           target: p.target,
           progress: p.progress,
