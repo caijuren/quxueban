@@ -72,6 +72,48 @@ async function ensureChildrenBelongToFamily(childIds: number[], familyId: number
   }
 }
 
+function parseTaskTags(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      return {}
+    }
+  }
+
+  return {}
+}
+
+function formatTaskRecord(task: any) {
+  const taskTags = parseTaskTags(task.tags)
+  const scheduleRuleFromTags = typeof taskTags.scheduleRule === 'string' ? taskTags.scheduleRule : null
+  const scheduleRule = task.schedule_rule || scheduleRuleFromTags || 'daily'
+
+  return {
+    id: task.id,
+    familyId: task.family_id,
+    name: task.name,
+    category: CATEGORY_REVERSE_MAP[task.category] || task.category,
+    type: TYPE_REVERSE_MAP[task.type] || task.type,
+    timePerUnit: task.time_per_unit,
+    weeklyRule: task.weekly_rule,
+    sortOrder: task.sort_order,
+    isActive: task.is_active,
+    tags: taskTags,
+    appliesTo: normalizeAppliesTo(task.applies_to),
+    scheduleRule,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+  }
+}
+
 
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
@@ -101,20 +143,40 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
 
   await ensureChildrenBelongToFamily(effectiveAppliesTo, familyId)
 
-  const task = await prisma.task.create({
-    data: {
-      familyId,
+  const createdRows = await prisma.$queryRaw`
+    INSERT INTO tasks (
+      family_id,
       name,
-      category: mappedCategory,
-      type: mappedType,
-      timePerUnit: timePerUnit || 30,
-      weeklyRule: weeklyRule || {},
-      tags: validatedTags,
-      appliesTo: effectiveAppliesTo,
-      scheduleRule,
-    },
-  })
-  res.status(201).json({ status: 'success', message: 'Task created', data: task })
+      category,
+      type,
+      time_per_unit,
+      weekly_rule,
+      sort_order,
+      is_active,
+      tags,
+      applies_to,
+      schedule_rule,
+      created_at,
+      updated_at
+    ) VALUES (
+      ${familyId},
+      ${name},
+      ${mappedCategory},
+      ${mappedType},
+      ${timePerUnit || 30},
+      ${JSON.stringify(weeklyRule || {})}::jsonb,
+      0,
+      true,
+      ${JSON.stringify(validatedTags)}::jsonb,
+      ${JSON.stringify(effectiveAppliesTo)}::jsonb,
+      ${scheduleRule},
+      NOW(),
+      NOW()
+    )
+    RETURNING id, family_id, name, category, type, time_per_unit, weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+  ` as any[]
+
+  res.status(201).json({ status: 'success', message: 'Task created', data: formatTaskRecord(createdRows[0]) })
 })
 
 tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
@@ -202,42 +264,20 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const tasks = await prisma.task.findMany({
-      where: { familyId, isActive: true },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
-    })
+    const tasks = await prisma.$queryRaw`
+      SELECT id, family_id, name, category, type, time_per_unit,
+             weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+      FROM tasks
+      WHERE family_id = ${familyId} AND is_active = true
+      ORDER BY sort_order, created_at DESC
+    ` as any[]
 
     const formattedTasks = tasks
       .filter((task) => {
-        const normalized = normalizeAppliesTo(task.appliesTo)
+        const normalized = normalizeAppliesTo(task.applies_to)
         return normalized.includes(childId) || normalized.length === 0
       })
-      .map((task) => {
-        const taskTags = typeof task.tags === 'object' && task.tags !== null ? task.tags as Record<string, unknown> : {}
-        const scheduleRuleFromTags = typeof taskTags.scheduleRule === 'string' ? taskTags.scheduleRule : null
-        const scheduleRule = task.scheduleRule || scheduleRuleFromTags || 'daily'
-
-        return {
-          id: task.id,
-          familyId: task.familyId,
-          name: task.name,
-          category: CATEGORY_REVERSE_MAP[task.category] || task.category,
-          type: TYPE_REVERSE_MAP[task.type] || task.type,
-          timePerUnit: task.timePerUnit,
-          weeklyRule: task.weeklyRule,
-          sortOrder: task.sortOrder,
-          isActive: task.isActive,
-          appliesTo: normalizeAppliesTo(task.appliesTo),
-          tags: taskTags,
-          scheduleRule,
-          trackingType: task.trackingType,
-          trackingUnit: task.trackingUnit,
-          targetValue: task.targetValue,
-          weeklyFrequency: task.weeklyFrequency,
-          createdAt: task.createdAt,
-          updatedAt: task.updatedAt,
-        }
-      })
+      .map((task) => formatTaskRecord(task))
     res.json({ status: 'success', data: formattedTasks })
   } catch (error: any) {
     console.error('[GET TASKS] Error:', error)
@@ -258,12 +298,15 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const mappedCategory = category ? (CATEGORY_MAP[category] || category) : undefined
   const mappedType = type ? (TYPE_MAP[type] || type) : undefined
 
-  const existing = await prisma.task.findFirst({
-    where: { id, familyId, isActive: true },
-  })
+  const existingRows = await prisma.$queryRaw`
+    SELECT id, applies_to
+    FROM tasks
+    WHERE id = ${id} AND family_id = ${familyId} AND is_active = true
+  ` as any[]
+  const existing = existingRows[0]
   if (!existing) throw new AppError(404, 'Task not found')
 
-  const existingAppliesTo = normalizeAppliesTo(existing.appliesTo)
+  const existingAppliesTo = normalizeAppliesTo(existing.applies_to)
   const nextAppliesTo = normalizeAppliesTo(appliesTo)
   const effectiveAppliesTo = nextAppliesTo.length > 0 ? nextAppliesTo : existingAppliesTo
 
@@ -280,54 +323,47 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   if (tags?.totalAmount?.value > 0 && tags?.totalAmount?.unit && VALID_AMOUNT_UNITS.includes(tags.totalAmount.unit)) validatedTags.totalAmount = tags.totalAmount
   if (tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule)) validatedTags.scheduleRule = tags.scheduleRule
 
-  const task = await prisma.task.update({
-    where: { id },
-    data: {
-      ...(name && { name }),
-      ...(mappedCategory && { category: mappedCategory }),
-      ...(mappedType && { type: mappedType }),
-      ...(timePerUnit !== undefined && { timePerUnit }),
-      ...(Object.keys(validatedTags).length > 0 && { tags: validatedTags }),
-      appliesTo: effectiveAppliesTo,
-      ...(tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) && { scheduleRule: tags.scheduleRule }),
-      updatedAt: new Date()
-    }
-  })
-  
-  // 从tags中提取scheduleRule
-  let taskTags = task.tags || {};
-  if (typeof taskTags === 'string') {
-    try {
-      taskTags = JSON.parse(taskTags);
-    } catch (e) {
-      taskTags = {};
-    }
-  }
-  const scheduleRule = (typeof taskTags === 'object' && taskTags !== null && 'scheduleRule' in taskTags) 
-    ? taskTags.scheduleRule 
-    : 'daily';
-  
-  // 构建包含scheduleRule的响应对象
-  const responseTask = {
-    ...task,
-    scheduleRule,
-    tags: typeof taskTags === 'object' ? taskTags : {}
-  };
-  
-  res.json({ status: 'success', message: 'Task updated', data: responseTask })
+  const nextScheduleRule = tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule)
+    ? tags.scheduleRule
+    : null
+
+  const updatedRows = await prisma.$queryRaw`
+    UPDATE tasks
+    SET
+      name = COALESCE(${name}, name),
+      category = COALESCE(${mappedCategory}, category),
+      type = COALESCE(${mappedType}, type),
+      time_per_unit = COALESCE(${timePerUnit}, time_per_unit),
+      tags = CASE
+        WHEN ${Object.keys(validatedTags).length > 0} THEN ${JSON.stringify(validatedTags)}::jsonb
+        ELSE tags
+      END,
+      applies_to = ${JSON.stringify(effectiveAppliesTo)}::jsonb,
+      schedule_rule = COALESCE(${nextScheduleRule}, schedule_rule),
+      updated_at = NOW()
+    WHERE id = ${id} AND family_id = ${familyId}
+    RETURNING id, family_id, name, category, type, time_per_unit, weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+  ` as any[]
+
+  res.json({ status: 'success', message: 'Task updated', data: formatTaskRecord(updatedRows[0]) })
 })
 
 tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
 
-  const task = await prisma.task.findFirst({
-    where: { id, familyId, isActive: true },
-    select: { id: true },
-  })
-  if (!task) throw new AppError(404, '任务不存在')
+  const task = await prisma.$queryRaw`
+    SELECT id
+    FROM tasks
+    WHERE id = ${id} AND family_id = ${familyId} AND is_active = true
+  ` as any[]
+  if (!task.length) throw new AppError(404, '任务不存在')
 
-  await prisma.task.update({ where: { id }, data: { isActive: false } })
+  await prisma.$executeRaw`
+    UPDATE tasks
+    SET is_active = false, updated_at = NOW()
+    WHERE id = ${id} AND family_id = ${familyId}
+  `
   res.json({ status: 'success', message: 'Task deleted' })
 })
 
@@ -351,10 +387,13 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   }
 
   // 获取所有活跃任务
-  let tasks = await prisma.task.findMany({
-    where: { familyId, isActive: true },
-    orderBy: { sortOrder: 'asc' },
-  })
+  let tasks = await prisma.$queryRaw`
+    SELECT id, family_id, name, category, type, time_per_unit,
+           weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+    FROM tasks
+    WHERE family_id = ${familyId} AND is_active = true
+    ORDER BY sort_order ASC
+  ` as any[]
 
   // 如果前端明确选择了任务，只发布这些任务
   if (Array.isArray(selectedTaskIds) && selectedTaskIds.length > 0) {
@@ -404,14 +443,15 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
 
       // 过滤适用于该孩子的任务
       const childTasks = tasks.filter(task => {
-        const appliesTo = task.appliesTo as number[] || []
+        const appliesTo = normalizeAppliesTo(task.applies_to)
         return appliesTo.includes(child.id)
       })
 
       for (const task of childTasks) {
         // 优先使用前端传入的规则，否则沿用任务原有规则
         const customRule = taskRules && typeof taskRules === 'object' ? taskRules[task.id] : undefined
-        const scheduleRule = customRule || task.scheduleRule || 'daily'
+        const taskTags = parseTaskTags(task.tags)
+        const scheduleRule = customRule || task.schedule_rule || taskTags.scheduleRule || 'daily'
 
         // 使用 JavaScript 标准星期索引：0=周日, 1=周一, ..., 6=周六
         let allowedDays: number[]
