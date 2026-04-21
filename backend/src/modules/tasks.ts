@@ -75,7 +75,7 @@ async function ensureChildrenBelongToFamily(childIds: number[], familyId: number
 
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
-  const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId, trackingType, trackingUnit, targetValue, weeklyFrequency } = req.body
+  const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId } = req.body
   const { familyId } = req.user!
   if (!name || !category || !type) throw new AppError(400, 'Missing required fields: name, category, type')
 
@@ -112,10 +112,6 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
       tags: validatedTags,
       appliesTo: effectiveAppliesTo,
       scheduleRule,
-      trackingType: trackingType || 'simple',
-      trackingUnit: trackingUnit || null,
-      targetValue: targetValue || null,
-      weeklyFrequency: weeklyFrequency || null,
     },
   })
   res.status(201).json({ status: 'success', message: 'Task created', data: task })
@@ -252,7 +248,7 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
 tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const { name, category, type, timePerUnit, tags, appliesTo, childId, trackingType, trackingUnit, targetValue, weeklyFrequency } = req.body
+  const { name, category, type, timePerUnit, tags, appliesTo, childId } = req.body
   
   // 强制要求提供childId参数，确保数据隔离
   if (!childId) {
@@ -294,10 +290,6 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
       ...(Object.keys(validatedTags).length > 0 && { tags: validatedTags }),
       appliesTo: effectiveAppliesTo,
       ...(tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) && { scheduleRule: tags.scheduleRule }),
-      ...(trackingType !== undefined && { trackingType }),
-      ...(trackingUnit !== undefined && { trackingUnit }),
-      ...(targetValue !== undefined && { targetValue }),
-      ...(weeklyFrequency !== undefined && { weeklyFrequency }),
       updatedAt: new Date()
     }
   })

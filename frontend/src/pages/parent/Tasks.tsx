@@ -273,13 +273,8 @@ export default function TasksPage() {
         parentRole: parentRoleMap[formData.parentRole],
         difficulty: difficultyMap[formData.difficulty],
         scheduleRule: formData.scheduleRule,
-        weeklyFrequency: formData.weeklyFrequency,
       },
       appliesTo: selectedChildId ? [selectedChildId] : [],
-      // 精细化记录字段
-      trackingType: formData.trackingType,
-      trackingUnit: formData.trackingUnit,
-      targetValue: formData.targetValue,
     });
   };
 
@@ -320,10 +315,6 @@ export default function TasksPage() {
           difficulty: difficultyMap[formData.difficulty],
         },
         appliesTo: selectedChildId ? [selectedChildId] : [],
-        // 精细化记录字段
-        trackingType: formData.trackingType,
-        trackingUnit: formData.trackingUnit,
-        targetValue: formData.targetValue,
       }
     });
   };
