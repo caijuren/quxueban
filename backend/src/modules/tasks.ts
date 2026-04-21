@@ -33,13 +33,51 @@ const SUBJECT_MAP: Record<string, string> = { chinese: '语文', math: '数学',
 const PARENT_ROLE_MAP: Record<string, string> = { independent: '独立完成', accompany: '家长陪伴', 'parent-led': '家长主导', parent: '家长主导' }
 const DIFFICULTY_MAP: Record<string, string> = { basic: '普通', advanced: '提升', challenge: '挑战' }
 
+function normalizeAppliesTo(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item) && item > 0)
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return normalizeAppliesTo(parsed)
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
+async function ensureChildrenBelongToFamily(childIds: number[], familyId: number) {
+  if (childIds.length === 0) {
+    throw new AppError(400, 'Task must be assigned to at least one child (appliesTo is required)')
+  }
+
+  const children = await prisma.user.findMany({
+    where: {
+      id: { in: childIds },
+      familyId,
+      role: 'child',
+      status: 'active',
+    },
+    select: { id: true },
+  })
+
+  if (children.length !== childIds.length) {
+    throw new AppError(400, 'Some assigned children do not belong to the current family')
+  }
+}
+
 
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
-  const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo } = req.body
+  const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId, trackingType, trackingUnit, targetValue, weeklyFrequency } = req.body
   const { familyId } = req.user!
   if (!name || !category || !type) throw new AppError(400, 'Missing required fields: name, category, type')
-  if (!appliesTo || !Array.isArray(appliesTo) || appliesTo.length === 0) throw new AppError(400, 'Task must be assigned to at least one child (appliesTo is required)')
 
   const mappedCategory = CATEGORY_MAP[category] || category
   if (!['school', 'extra', 'advanced', 'english', 'sports', 'chinese'].includes(mappedCategory)) throw new AppError(400, 'Invalid category')
@@ -56,9 +94,29 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   }
 
   const scheduleRule = tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) ? tags.scheduleRule : 'daily'
+  const normalizedAppliesTo = normalizeAppliesTo(appliesTo)
+  const effectiveAppliesTo = normalizedAppliesTo.length > 0
+    ? normalizedAppliesTo
+    : (Number.isInteger(Number(childId)) && Number(childId) > 0 ? [Number(childId)] : [])
+
+  await ensureChildrenBelongToFamily(effectiveAppliesTo, familyId)
 
   const task = await prisma.task.create({
-    data: { familyId, name, category: mappedCategory, type: mappedType, timePerUnit: timePerUnit || 30, weeklyRule: weeklyRule || {}, tags: validatedTags, appliesTo: appliesTo || [], scheduleRule },
+    data: {
+      familyId,
+      name,
+      category: mappedCategory,
+      type: mappedType,
+      timePerUnit: timePerUnit || 30,
+      weeklyRule: weeklyRule || {},
+      tags: validatedTags,
+      appliesTo: effectiveAppliesTo,
+      scheduleRule,
+      trackingType: trackingType || 'simple',
+      trackingUnit: trackingUnit || null,
+      targetValue: targetValue || null,
+      weeklyFrequency: weeklyFrequency || null,
+    },
   })
   res.status(201).json({ status: 'success', message: 'Task created', data: task })
 })
@@ -148,64 +206,42 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    // 强制使用childId过滤，确保数据隔离
-    let tasks = await prisma.$queryRaw`
-      SELECT id, family_id, name, category, type, time_per_unit,
-             weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
-      FROM tasks WHERE family_id = ${familyId} AND is_active = true ORDER BY sort_order, created_at DESC
-    `
-    
-    // 过滤：返回分配给该孩子的任务，或者未分配的任务（兼容旧数据）
-    tasks = (tasks as any[]).filter(task => {
-      let appliesTo = task.applies_to || []
-      // 处理applies_to可能是字符串的情况
-      if (typeof appliesTo === 'string') {
-        try {
-          appliesTo = JSON.parse(appliesTo)
-        } catch (e) {
-          appliesTo = []
-        }
-      }
-      // 确保appliesTo是数组
-      if (!Array.isArray(appliesTo)) {
-        appliesTo = []
-      }
-      // 如果appliesTo为空数组，说明任务未分配，也应该显示给所有孩子
-      return appliesTo.includes(childId) || appliesTo.length === 0
+    const tasks = await prisma.task.findMany({
+      where: { familyId, isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     })
-    
-    const formattedTasks = (tasks as any[]).map(task => {
-      // 优先从数据库的 schedule_rule 字段读取，其次从 tags 中提取
-      let taskTags = task.tags || {};
-      if (typeof taskTags === 'string') {
-        try {
-          taskTags = JSON.parse(taskTags);
-        } catch (e) {
-          taskTags = {};
-        }
-      }
-      const scheduleRuleFromTags = (typeof taskTags === 'object' && taskTags !== null && 'scheduleRule' in taskTags)
-        ? taskTags.scheduleRule
-        : null;
-      const scheduleRule = task.schedule_rule || scheduleRuleFromTags || 'daily';
 
-      return {
-        id: task.id,
-        familyId: task.family_id,
-        name: task.name,
-        category: CATEGORY_REVERSE_MAP[task.category] || task.category,
-        type: TYPE_REVERSE_MAP[task.type] || task.type,
-        timePerUnit: task.time_per_unit,
-        weeklyRule: task.weekly_rule,
-        sortOrder: task.sort_order,
-        isActive: task.is_active,
-        appliesTo: task.applies_to || [],
-        tags: typeof taskTags === 'object' ? taskTags : {},
-        scheduleRule: scheduleRule,
-        createdAt: task.created_at,
-        updatedAt: task.updated_at,
-      };
-    })
+    const formattedTasks = tasks
+      .filter((task) => {
+        const normalized = normalizeAppliesTo(task.appliesTo)
+        return normalized.includes(childId) || normalized.length === 0
+      })
+      .map((task) => {
+        const taskTags = typeof task.tags === 'object' && task.tags !== null ? task.tags as Record<string, unknown> : {}
+        const scheduleRuleFromTags = typeof taskTags.scheduleRule === 'string' ? taskTags.scheduleRule : null
+        const scheduleRule = task.scheduleRule || scheduleRuleFromTags || 'daily'
+
+        return {
+          id: task.id,
+          familyId: task.familyId,
+          name: task.name,
+          category: CATEGORY_REVERSE_MAP[task.category] || task.category,
+          type: TYPE_REVERSE_MAP[task.type] || task.type,
+          timePerUnit: task.timePerUnit,
+          weeklyRule: task.weeklyRule,
+          sortOrder: task.sortOrder,
+          isActive: task.isActive,
+          appliesTo: normalizeAppliesTo(task.appliesTo),
+          tags: taskTags,
+          scheduleRule,
+          trackingType: task.trackingType,
+          trackingUnit: task.trackingUnit,
+          targetValue: task.targetValue,
+          weeklyFrequency: task.weeklyFrequency,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        }
+      })
     res.json({ status: 'success', data: formattedTasks })
   } catch (error: any) {
     console.error('[GET TASKS] Error:', error)
@@ -216,30 +252,30 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
 tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const { name, category, type, timePerUnit, tags, appliesTo, childId } = req.body
+  const { name, category, type, timePerUnit, tags, appliesTo, childId, trackingType, trackingUnit, targetValue, weeklyFrequency } = req.body
   
   // 强制要求提供childId参数，确保数据隔离
   if (!childId) {
     throw new AppError(400, 'Missing required parameter: childId. Data isolation is mandatory.')
   }
-  
-  if (appliesTo !== undefined) {
-    if (!Array.isArray(appliesTo) || appliesTo.length === 0) {
-      throw new AppError(400, 'Task must be assigned to at least one child (appliesTo cannot be empty)')
-    }
-  }
-  
+
   const mappedCategory = category ? (CATEGORY_MAP[category] || category) : undefined
   const mappedType = type ? (TYPE_MAP[type] || type) : undefined
-  
-  const existing = await prisma.$queryRaw`SELECT id, applies_to FROM tasks WHERE id = ${id} AND family_id = ${familyId}` as any[]
-  if (!existing?.length) throw new AppError(404, 'Task not found')
-  
-  // 验证任务是否分配给了指定的孩子
-  const appliesToArray = existing[0].applies_to as number[] || []
-  if (!appliesToArray.includes(childId)) {
-    throw new AppError(403, 'Task is not assigned to the specified child')
+
+  const existing = await prisma.task.findFirst({
+    where: { id, familyId, isActive: true },
+  })
+  if (!existing) throw new AppError(404, 'Task not found')
+
+  const existingAppliesTo = normalizeAppliesTo(existing.appliesTo)
+  const nextAppliesTo = normalizeAppliesTo(appliesTo)
+  const effectiveAppliesTo = nextAppliesTo.length > 0 ? nextAppliesTo : existingAppliesTo
+
+  if (!effectiveAppliesTo.includes(Number(childId))) {
+    effectiveAppliesTo.push(Number(childId))
   }
+
+  await ensureChildrenBelongToFamily(effectiveAppliesTo, familyId)
 
   let validatedTags: any = {}
   if (tags?.subject && VALID_SUBJECTS.includes(tags.subject)) validatedTags.subject = tags.subject
@@ -256,8 +292,12 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
       ...(mappedType && { type: mappedType }),
       ...(timePerUnit !== undefined && { timePerUnit }),
       ...(Object.keys(validatedTags).length > 0 && { tags: validatedTags }),
-      ...(appliesTo !== undefined && { appliesTo }),
+      appliesTo: effectiveAppliesTo,
       ...(tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) && { scheduleRule: tags.scheduleRule }),
+      ...(trackingType !== undefined && { trackingType }),
+      ...(trackingUnit !== undefined && { trackingUnit }),
+      ...(targetValue !== undefined && { targetValue }),
+      ...(weeklyFrequency !== undefined && { weeklyFrequency }),
       updatedAt: new Date()
     }
   })
@@ -288,11 +328,13 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
 tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  
-  const task = await prisma.$queryRaw`SELECT family_id FROM tasks WHERE id = ${id}` as any[]
-  if (!task?.length) throw new AppError(404, '任务不存在')
-  if (task[0].family_id !== familyId) throw new AppError(403, '无权限')
-  
+
+  const task = await prisma.task.findFirst({
+    where: { id, familyId, isActive: true },
+    select: { id: true },
+  })
+  if (!task) throw new AppError(404, '任务不存在')
+
   await prisma.task.update({ where: { id }, data: { isActive: false } })
   res.json({ status: 'success', message: 'Task deleted' })
 })
