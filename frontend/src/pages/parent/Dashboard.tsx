@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ExportDialog } from '@/components/ExportDialog';
 import { toast } from 'sonner';
+import { startOfWeek } from 'date-fns';
 
 // Components
 import { MetricCard } from '@/components/ui/metric-card';
@@ -289,11 +290,8 @@ export default function ParentDashboard() {
   const { data: tasks = [], refetch: refetchTasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['dashboard-tasks', selectedChildId, selectedDate],
     queryFn: async () => {
-      // 计算本周开始日期（周日）
       const date = new Date(selectedDate);
-      const day = date.getDay();
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - day);
+      const weekStart = startOfWeek(date, { weekStartsOn: 1 });
       const weekStartStr = weekStart.toISOString().split('T')[0];
       
       const response = await apiClient.get(`/plans/week/${weekStartStr}?childId=${selectedChildId}`);
@@ -486,7 +484,8 @@ export default function ParentDashboard() {
 
   // 构建选中日期的待办任务
   const selectedDateObj = new Date(selectedDate);
-  const selectedDayOfWeek = selectedDateObj.getDay(); // 0=周日
+  const rawDayOfWeek = selectedDateObj.getDay(); // 0=周日
+  const selectedDayOfWeek = rawDayOfWeek === 0 ? 6 : rawDayOfWeek - 1; // 0=周一 ... 6=周日
   const todayTasks = tasks
     .filter((t: any) => {
       if (!selectedChildId) return false;
