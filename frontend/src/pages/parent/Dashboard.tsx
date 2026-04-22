@@ -237,6 +237,10 @@ function parseLocalDateString(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function getCheckinDraftKey(childId: number | null, taskId: number | string, date: string): string {
+  return `dashboard_checkin_${childId ?? 'none'}_${taskId}_${date}`;
+}
+
 const cardClassName = 'rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm';
 
 type CompletionStatus = 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
@@ -345,23 +349,37 @@ export default function ParentDashboard() {
     
     // 查找该任务的签到记录
     const checkin = todayCheckins.find((c: Checkin) => c.taskId === task.id);
+    const draftKey = getCheckinDraftKey(selectedChildId, task.id, selectedDate);
+    const draft = (() => {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw) as {
+          status?: CompletionStatus;
+          actualTime?: string;
+          notes?: string;
+        };
+      } catch {
+        return null;
+      }
+    })();
 
     if (checkin) {
       // 如果找到签到记录，填充上次的数据
-      setCompletionStatus(checkin.status);
+      setCompletionStatus((draft?.status as CompletionStatus) || checkin.status);
       setCompletionData({
-        actualTime: checkin.completedValue ? checkin.completedValue.toString() : '',
-        notes: checkin.notes || '',
+        actualTime: draft?.actualTime ?? (checkin.completedValue ? checkin.completedValue.toString() : ''),
+        notes: draft?.notes ?? (checkin.notes || ''),
         date: selectedDate,
         evidence: null,
         evidenceUrl: checkin.evidenceUrl || ''
       });
     } else {
       // 如果没有签到记录，使用默认值
-      setCompletionStatus('completed');
+      setCompletionStatus((draft?.status as CompletionStatus) || 'completed');
       setCompletionData({
-        actualTime: '',
-        notes: '',
+        actualTime: draft?.actualTime || '',
+        notes: draft?.notes || '',
         date: selectedDate,
         evidence: null,
         evidenceUrl: ''
@@ -454,6 +472,12 @@ export default function ParentDashboard() {
         }
 
         // Close dialog and refresh data
+        const draftKey = getCheckinDraftKey(selectedChildId, selectedTask.id, selectedDate);
+        localStorage.setItem(draftKey, JSON.stringify({
+          status: completionStatus,
+          actualTime: completionData.actualTime,
+          notes: completionData.notes,
+        }));
         setOpen(false);
         refetchTasks();
         refetchStats();

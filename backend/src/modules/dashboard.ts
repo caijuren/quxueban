@@ -25,6 +25,25 @@ function getAssignedDays(value: unknown): number[] {
   return []
 }
 
+function parseTaskTags(value: unknown): Record<string, any> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, any>
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, any>
+      }
+    } catch {
+      return {}
+    }
+  }
+
+  return {}
+}
+
 function formatRelativeTime(date: Date): string {
   const diffMs = Date.now() - date.getTime()
   const diffMin = Math.floor(diffMs / 60000)
@@ -80,14 +99,13 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
     })
   }
 
-  // Get books count — filter by childId if selected
-  const bookWhereClause: any = { familyId, status: 'active' }
-  if (childId) {
-    bookWhereClause.childId = childId
-  }
-  const booksRead = await prisma.book.count({
-    where: bookWhereClause
-  })
+  // 当前线上 books 表没有 child_id，先按家庭统计
+  const booksReadRows = await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS count
+    FROM books
+    WHERE family_id = ${familyId} AND status = 'active'
+  ` as any[]
+  const booksRead = booksReadRows[0]?.count || 0
 
   // Prepare reading log where clause
   const readingLogWhereClause: any = { familyId }
@@ -104,25 +122,32 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   const checkDateEnd = new Date(checkDate)
   checkDateEnd.setHours(23, 59, 59, 999)
 
-  const todayCheckins = await prisma.dailyCheckin.findMany({
-    where: {
-      ...checkinWhereClause,
-      checkDate: {
-        gte: checkDate,
-        lte: checkDateEnd
-      },
-      status: { in: ['completed', 'partial', 'advance'] }
-    },
-    include: {
-      plan: {
-        include: { task: true }
-      }
-    }
-  })
+  const todayCheckins = await prisma.$queryRawUnsafe(
+    `SELECT
+      dc.id,
+      dc.child_id,
+      dc.task_id,
+      dc.plan_id,
+      dc.status,
+      dc.value,
+      dc.check_date,
+      dc.created_at,
+      t.time_per_unit,
+      t.schedule_rule,
+      t.tags
+    FROM daily_checkins dc
+    LEFT JOIN weekly_plans wp ON wp.id = dc.plan_id
+    LEFT JOIN tasks t ON t.id = wp.task_id
+    WHERE dc.family_id = $1
+      ${childId ? 'AND dc.child_id = $2' : ''}
+      AND dc.check_date >= $${childId ? 3 : 2}
+      AND dc.check_date <= $${childId ? 4 : 3}
+      AND dc.status IN ('completed', 'partial', 'advance')`,
+    ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
+  ) as any[]
 
-  const todayStudyMinutes = todayCheckins.reduce((sum, checkin) => {
-    // 优先使用用户填写的实际用时（包括0），否则使用任务默认时间
-    const minutes = checkin.completedValue !== null && checkin.completedValue !== undefined ? checkin.completedValue : (checkin.plan?.task?.timePerUnit || 0)
+  const todayStudyMinutes = todayCheckins.reduce((sum, checkin: any) => {
+    const minutes = checkin.time_per_unit || 0
     return sum + minutes * (checkin.value || 1)
   }, 0)
 
@@ -139,24 +164,44 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
 
   // Calculate weekly completion rate (based on today's actual checkins)
   // Get all weekly plans for the child
-  const weeklyPlans = await prisma.weeklyPlan.findMany({
-    where: {
-      ...weeklyPlanWhereClause,
-      status: 'active'
-    },
-    include: {
-      task: true
-    }
-  })
+  const weeklyPlans = await prisma.$queryRawUnsafe(
+    `SELECT
+      wp.id,
+      wp.target,
+      t.schedule_rule,
+      t.tags
+    FROM weekly_plans wp
+    JOIN tasks t ON t.id = wp.task_id
+    WHERE wp.family_id = $1
+      ${childId ? 'AND wp.child_id = $2' : ''}
+      AND wp.status = 'active'`,
+    ...(childId ? [familyId, childId] : [familyId])
+  ) as any[]
 
   // Calculate today's expected tasks and actual completion
   const dayOfWeek = checkDate.getDay() // 0 = Sunday, 1 = Monday, etc.
-  const todayExpected = weeklyPlans.filter(plan => {
-    const assignedDays = getAssignedDays(plan.assignedDays)
-    // Handle Sunday (dayOfWeek === 0 corresponds to "0" in assignedDays)
-    const targetDay = dayOfWeek === 0 ? 0 : dayOfWeek
-    return assignedDays.includes(targetDay)
-  }).reduce((sum, plan) => sum + plan.target, 0)
+  const todayExpected = weeklyPlans.filter((plan: any) => {
+    const taskTags = parseTaskTags(plan.tags)
+    const scheduleRule = plan.schedule_rule || taskTags.scheduleRule || 'daily'
+
+    let allowedDays: number[]
+    switch (scheduleRule) {
+      case 'school':
+        allowedDays = [1, 2, 4, 5]
+        break
+      case 'weekend':
+        allowedDays = [0, 6]
+        break
+      case 'flexible':
+        allowedDays = [1, 2, 3, 4, 5]
+        break
+      case 'daily':
+      default:
+        allowedDays = [0, 1, 2, 3, 4, 5, 6]
+    }
+
+    return allowedDays.includes(dayOfWeek)
+  }).reduce((sum: number, plan: any) => sum + plan.target, 0)
 
   const todayActual = todayCheckins
     .filter(checkin => checkin.status === 'completed' || checkin.status === 'partial')
@@ -279,36 +324,42 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
   const checkDateEnd = new Date(checkDate)
   checkDateEnd.setHours(23, 59, 59, 999)
 
-  const todayCheckins = await prisma.dailyCheckin.findMany({
-    where: {
-      familyId,
-      ...(childId !== null ? { childId } : {}),
-      checkDate: {
-        gte: checkDate,
-        lte: checkDateEnd
-      }
-    },
-    include: {
-      plan: {
-        include: { task: true }
-      }
-    }
-  })
+  const todayCheckins = await prisma.$queryRawUnsafe(
+    `SELECT
+      dc.id,
+      dc.task_id,
+      dc.child_id,
+      dc.plan_id,
+      dc.status,
+      dc.value,
+      dc.check_date,
+      t.name AS task_name,
+      t.category AS task_category,
+      t.time_per_unit
+    FROM daily_checkins dc
+    LEFT JOIN weekly_plans wp ON wp.id = dc.plan_id
+    LEFT JOIN tasks t ON t.id = wp.task_id
+    WHERE dc.family_id = $1
+      ${childId !== null ? 'AND dc.child_id = $2' : ''}
+      AND dc.check_date >= $${childId !== null ? 3 : 2}
+      AND dc.check_date <= $${childId !== null ? 4 : 3}`,
+    ...(childId !== null ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
+  ) as any[]
 
   // Format checkins for frontend
-  const formattedCheckins = todayCheckins.map(checkin => ({
+  const formattedCheckins = todayCheckins.map((checkin: any) => ({
     id: checkin.id,
-    taskId: checkin.taskId,
-    childId: checkin.childId,
-    planId: checkin.planId,
+    taskId: checkin.task_id,
+    childId: checkin.child_id,
+    planId: checkin.plan_id,
     status: checkin.status,
     value: checkin.value,
-    completedValue: checkin.completedValue,
-    notes: checkin.notes,
-    checkDate: checkin.checkDate,
-    taskName: checkin.plan?.task?.name,
-    taskCategory: checkin.plan?.task?.category,
-    timePerUnit: checkin.plan?.task?.timePerUnit
+    completedValue: null,
+    notes: '',
+    checkDate: checkin.check_date,
+    taskName: checkin.task_name,
+    taskCategory: checkin.task_category,
+    timePerUnit: checkin.time_per_unit
   }))
 
   res.json({
