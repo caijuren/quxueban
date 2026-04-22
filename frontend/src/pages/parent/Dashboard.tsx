@@ -232,6 +232,11 @@ function getLocalDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function parseLocalDateString(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 const cardClassName = 'rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm';
 
 type CompletionStatus = 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
@@ -290,9 +295,9 @@ export default function ParentDashboard() {
   const { data: tasks = [], refetch: refetchTasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['dashboard-tasks', selectedChildId, selectedDate],
     queryFn: async () => {
-      const date = new Date(selectedDate);
+      const date = parseLocalDateString(selectedDate);
       const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-      const weekStartStr = weekStart.toISOString().split('T')[0];
+      const weekStartStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
       
       const response = await apiClient.get(`/plans/week/${weekStartStr}?childId=${selectedChildId}`);
       const plansData = response.data.data || [];
@@ -483,9 +488,8 @@ export default function ParentDashboard() {
   });
 
   // 构建选中日期的待办任务
-  const selectedDateObj = new Date(selectedDate);
-  const rawDayOfWeek = selectedDateObj.getDay(); // 0=周日
-  const selectedDayOfWeek = rawDayOfWeek === 0 ? 6 : rawDayOfWeek - 1; // 0=周一 ... 6=周日
+  const selectedDateObj = parseLocalDateString(selectedDate);
+  const selectedDayOfWeek = selectedDateObj.getDay(); // 0=周日 ... 6=周六
   const todayTasks = tasks
     .filter((t: any) => {
       if (!selectedChildId) return false;
