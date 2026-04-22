@@ -56,6 +56,10 @@ export interface Task {
   targetValue?: number;
 }
 
+type TaskUpdatePayload = Partial<Task> & {
+  childId: number | null;
+};
+
 const tagConfig: Record<string, { icon: any; color: string }> = {
   '校内巩固': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
   '校内拔高': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
@@ -161,7 +165,7 @@ export default function TasksPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: number; updates: Partial<Task> }) => {
+    mutationFn: async (data: { id: number; updates: TaskUpdatePayload }) => {
       const r = await apiClient.put('/tasks/' + data.id, data.updates);
       return r.data;
     },
@@ -259,6 +263,7 @@ export default function TasksPage() {
       '挑战': 'challenge'
     };
     createMutation.mutate({
+      childId: selectedChildId,
       name: formData.name,
       category: formData.category,
       type: formData.type,
@@ -268,13 +273,8 @@ export default function TasksPage() {
         parentRole: parentRoleMap[formData.parentRole],
         difficulty: difficultyMap[formData.difficulty],
         scheduleRule: formData.scheduleRule,
-        weeklyFrequency: formData.weeklyFrequency,
       },
       appliesTo: selectedChildId ? [selectedChildId] : [],
-      // 精细化记录字段
-      trackingType: formData.trackingType,
-      trackingUnit: formData.trackingUnit,
-      targetValue: formData.targetValue,
     });
   };
 
@@ -302,6 +302,7 @@ export default function TasksPage() {
     updateMutation.mutate({ 
       id: taskToEdit.id, 
       updates: {
+        childId: selectedChildId,
         name: formData.name,
         category: formData.category,
         type: formData.type,
@@ -314,10 +315,6 @@ export default function TasksPage() {
           difficulty: difficultyMap[formData.difficulty],
         },
         appliesTo: selectedChildId ? [selectedChildId] : [],
-        // 精细化记录字段
-        trackingType: formData.trackingType,
-        trackingUnit: formData.trackingUnit,
-        targetValue: formData.targetValue,
       }
     });
   };

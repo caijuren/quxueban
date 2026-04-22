@@ -39,7 +39,7 @@ async function uploadAvatar(file: File): Promise<string> {
 }
 
 async function createChild(data: { name: string; avatar: string; password: string }): Promise<any> {
-  const response = await apiClient.post('/auth/add-child', {
+  const response = await apiClient.post('/add-child', {
     name: data.name,
     avatar: data.avatar,
     pin: data.password

@@ -64,7 +64,7 @@ reportsRouter.get('/', authMiddleware, async (req: AuthRequest, res: Response) =
  */
 reportsRouter.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { userId } = req.user!;
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -247,7 +247,7 @@ reportsRouter.post('/generate', authMiddleware, async (req: AuthRequest, res: Re
  */
 reportsRouter.put('/:id/favorite', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { userId } = req.user!;
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { isFavorite } = req.body;
 
   const user = await prisma.user.findUnique({
@@ -286,7 +286,7 @@ reportsRouter.put('/:id/favorite', authMiddleware, async (req: AuthRequest, res:
  */
 reportsRouter.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { userId } = req.user!;
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
