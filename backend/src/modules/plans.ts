@@ -6,9 +6,7 @@ import { env } from '../config/env'
 
 function parseAssignedDays(value: unknown): number[] {
   if (Array.isArray(value)) {
-    return value
-      .map((day) => Number(day))
-      .filter((day) => Number.isInteger(day))
+    return value.map((day) => Number(day)).filter((day) => Number.isInteger(day))
   }
 
   if (typeof value === 'string') {
@@ -114,23 +112,46 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
   const remainingTime = Math.max(0, dailyTimeLimit - usedTime)
 
   // Get active weekly plans for this child
-  const weeklyPlans = await prisma.weeklyPlan.findMany({
-    where: {
-      childId: userId,
-      weekNo,
-      status: 'active',
-    },
-    include: {
-      task: true,
-    },
-  })
+  const weeklyPlans = await prisma.$queryRaw`
+    SELECT
+      wp.id,
+      wp.child_id,
+      wp.task_id,
+      wp.target,
+      wp.progress,
+      wp.week_no,
+      wp.status,
+      wp.created_at,
+      wp.updated_at,
+      t.name AS task_name,
+      t.category AS task_category,
+      t.type AS task_type,
+      t.time_per_unit,
+      t.tags AS task_tags,
+      t.weekly_rule AS task_weekly_rule,
+      t.schedule_rule AS task_schedule_rule
+    FROM weekly_plans wp
+    JOIN tasks t ON t.id = wp.task_id
+    WHERE wp.child_id = ${userId}
+      AND wp.week_no = ${weekNo}
+      AND wp.status = 'active'
+  ` as any[]
 
   // Filter tasks by day of week
   const fixedTasks: any[] = []
   const flexibleTasks: any[] = []
 
   for (const plan of weeklyPlans) {
-    const task = plan.task
+    const task = {
+      id: plan.task_id,
+      name: plan.task_name,
+      category: plan.task_category,
+      type: plan.task_type,
+      timePerUnit: plan.time_per_unit,
+      tags: parseJsonObject(plan.task_tags),
+      weeklyRule: parseJsonObject(plan.task_weekly_rule),
+      scheduleRule: plan.task_schedule_rule || 'daily',
+    }
     const weeklyRule = task.weeklyRule as {
       excludeDays?: number[]
       onlyWeekend?: boolean
@@ -141,13 +162,13 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
     let showToday = true
 
     // 首先检查任务是否分配到了今天
-    let assignedDays = plan.assignedDays as number[] || []
+    let assignedDays = parseAssignedDays((plan as any).assigned_days)
     
     // 如果没有实际分配，根据 scheduleRule 计算默认值
     if (assignedDays.length === 0) {
       const taskTags = task.tags as any || {}
       const taskWeeklyRule = task.weeklyRule as any || {}
-      const scheduleRule = taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
+      const scheduleRule = task.scheduleRule || taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
       
       switch (scheduleRule) {
         case 'daily':
@@ -634,15 +655,27 @@ plansRouter.get('/week', async (req: AuthRequest, res: Response) => {
   const weekNo = getWeekNo(today)
 
   // Get all weekly plans for this week
-  const weeklyPlans = await prisma.weeklyPlan.findMany({
-    where: {
-      childId: userId,
-      weekNo,
-    },
-    include: {
-      task: true,
-    },
-  })
+  const weeklyPlans = await prisma.$queryRaw`
+    SELECT
+      wp.id,
+      wp.child_id,
+      wp.task_id,
+      wp.target,
+      wp.progress,
+      wp.week_no,
+      wp.status,
+      wp.created_at,
+      wp.updated_at,
+      t.name AS task_name,
+      t.category AS task_category,
+      t.time_per_unit,
+      t.tags AS task_tags,
+      t.schedule_rule AS task_schedule_rule
+    FROM weekly_plans wp
+    JOIN tasks t ON t.id = wp.task_id
+    WHERE wp.child_id = ${userId}
+      AND wp.week_no = ${weekNo}
+  ` as any[]
 
   // Calculate totals
   const totalTarget = weeklyPlans.reduce((sum, p) => sum + p.target, 0)
@@ -690,19 +723,22 @@ plansRouter.get('/week', async (req: AuthRequest, res: Response) => {
       totalTarget,
       totalProgress,
       completionRate,
-      allocations: weeklyPlans.map(p => ({
-        planId: p.id,
-        taskId: p.taskId,
-        taskName: p.task.name,
-        category: p.task.category,
-        timePerUnit: p.task.timePerUnit,
-        target: p.target,
-        progress: p.progress,
-        status: p.status,
-        assignedDays: p.assignedDays as number[] || [],
-        scheduleRule: p.task.scheduleRule || 'daily',
-        subject: (p.task.tags as any)?.subject || 'other',
-      })),
+      allocations: weeklyPlans.map(p => {
+        const taskTags = parseJsonObject((p as any).task_tags)
+        return {
+          planId: p.id,
+          taskId: p.task_id,
+          taskName: p.task_name,
+          category: p.task_category,
+          timePerUnit: p.time_per_unit,
+          target: p.target,
+          progress: p.progress,
+          status: p.status,
+          assignedDays: parseAssignedDays((p as any).assigned_days),
+          scheduleRule: (p as any).task_schedule_rule || 'daily',
+          subject: taskTags?.subject || 'other',
+        }
+      }),
       dailyStats,
     },
   })

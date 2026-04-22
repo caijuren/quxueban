@@ -475,18 +475,29 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
 
         // 创建周计划，即使没有分配到任何天数也创建
         const target = daysAllocated.length
-        await tx.weeklyPlan.create({
-          data: {
-            familyId,
-            childId: child.id,
-            taskId: task.id,
+        await tx.$executeRaw`
+          INSERT INTO weekly_plans (
+            family_id,
+            child_id,
+            task_id,
             target,
-            progress: 0,
-            weekNo,
-            status: target > 0 ? 'active' : 'inactive',
-            assignedDays: daysAllocated, // 存储 JavaScript 标准索引
-          }
-        })
+            progress,
+            week_no,
+            status,
+            created_at,
+            updated_at
+          ) VALUES (
+            ${familyId},
+            ${child.id},
+            ${task.id},
+            ${target},
+            0,
+            ${weekNo},
+            ${target > 0 ? 'active' : 'inactive'},
+            NOW(),
+            NOW()
+          )
+        `
 
         allocation.push({
           taskId: task.id,
