@@ -340,6 +340,11 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
   const { userId, familyId, role } = req.user!
   const parsedTaskId = parseInt(String(taskId))
   const parsedPlanId = planId ? parseInt(String(planId)) : null
+  const parsedCompletedValue =
+    completedValue === undefined || completedValue === null || completedValue === ''
+      ? null
+      : parseInt(String(completedValue))
+  const normalizedNotes = typeof notes === 'string' ? notes.trim() : ''
 
   // For parents, use provided childId; for children, use their own userId
   const targetChildId = role === 'parent' ? childId : userId
@@ -359,9 +364,14 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, `Invalid status. Must be one of: ${validStatuses.join(', ')}`)
   }
 
-  // Use provided date or today
-  // Use local time to match frontend date handling
-  const checkDate = date ? new Date(date) : new Date()
+  // Use provided date or today, always parse as local date to avoid timezone drift
+  let checkDate: Date
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number)
+    checkDate = new Date(year, month - 1, day)
+  } else {
+    checkDate = date ? new Date(date) : new Date()
+  }
   // Set to start of day in local time
   checkDate.setHours(0, 0, 0, 0)
 
@@ -379,6 +389,8 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       taskId: true,
       status: true,
       value: true,
+      completedValue: true,
+      notes: true,
       checkDate: true,
       createdAt: true,
     },
@@ -390,7 +402,9 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       SET
         status = ${status},
         value = ${value || 1},
-        plan_id = ${parsedPlanId || existingCheckin.planId}
+        plan_id = ${parsedPlanId || existingCheckin.planId},
+        completed_value = ${parsedCompletedValue},
+        notes = ${normalizedNotes || null}
       WHERE id = ${existingCheckin.id}
     `
 
@@ -399,8 +413,8 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       status,
       value: value || 1,
       planId: parsedPlanId || existingCheckin.planId,
-      completedValue: completedValue || null,
-      notes: notes || '',
+      completedValue: parsedCompletedValue,
+      notes: normalizedNotes,
     }
 
     // Update weekly plan progress
@@ -426,6 +440,8 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         plan_id,
         status,
         value,
+        completed_value,
+        notes,
         check_date,
         created_at
       )
@@ -436,16 +452,18 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         ${parsedPlanId},
         ${status},
         ${value || 1},
+        ${parsedCompletedValue},
+        ${normalizedNotes || null},
         ${checkDate},
         NOW()
       )
-      RETURNING id, plan_id, child_id, task_id, status, value, check_date, created_at
+      RETURNING id, plan_id, child_id, task_id, status, value, completed_value, notes, check_date, created_at
     ` as any[]
 
     const checkin = {
       ...insertedRows[0],
-      completedValue: completedValue || null,
-      notes: notes || '',
+      completedValue: insertedRows[0]?.completed_value ?? parsedCompletedValue,
+      notes: insertedRows[0]?.notes ?? normalizedNotes,
     }
 
     // Update weekly plan progress

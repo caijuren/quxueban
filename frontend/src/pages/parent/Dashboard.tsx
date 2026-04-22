@@ -237,10 +237,6 @@ function parseLocalDateString(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
-function getCheckinDraftKey(childId: number | null, taskId: number | string, date: string): string {
-  return `dashboard_checkin_${childId ?? 'none'}_${taskId}_${date}`;
-}
-
 const cardClassName = 'rounded-[10px] border-[#eaedf3] shadow-none hover:shadow-sm';
 
 type CompletionStatus = 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
@@ -289,7 +285,7 @@ export default function ParentDashboard() {
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['dashboard-stats', selectedChildId, selectedDate],
     queryFn: async () => {
-      const response = await apiClient.get(`/dashboard/stats?date=${selectedDate}`);
+      const response = await apiClient.get(`/dashboard/stats?date=${selectedDate}&childId=${selectedChildId}`);
       return response.data.data as DashboardStats;
     },
     staleTime: 2 * 60 * 1000,
@@ -349,37 +345,23 @@ export default function ParentDashboard() {
     
     // 查找该任务的签到记录
     const checkin = todayCheckins.find((c: Checkin) => c.taskId === task.id);
-    const draftKey = getCheckinDraftKey(selectedChildId, task.id, selectedDate);
-    const draft = (() => {
-      const raw = localStorage.getItem(draftKey);
-      if (!raw) return null;
-      try {
-        return JSON.parse(raw) as {
-          status?: CompletionStatus;
-          actualTime?: string;
-          notes?: string;
-        };
-      } catch {
-        return null;
-      }
-    })();
 
     if (checkin) {
       // 如果找到签到记录，填充上次的数据
-      setCompletionStatus((draft?.status as CompletionStatus) || checkin.status);
+      setCompletionStatus(checkin.status);
       setCompletionData({
-        actualTime: draft?.actualTime ?? (checkin.completedValue ? checkin.completedValue.toString() : ''),
-        notes: draft?.notes ?? (checkin.notes || ''),
+        actualTime: checkin.completedValue ? checkin.completedValue.toString() : '',
+        notes: checkin.notes || '',
         date: selectedDate,
         evidence: null,
         evidenceUrl: checkin.evidenceUrl || ''
       });
     } else {
       // 如果没有签到记录，使用默认值
-      setCompletionStatus((draft?.status as CompletionStatus) || 'completed');
+      setCompletionStatus('completed');
       setCompletionData({
-        actualTime: draft?.actualTime || '',
-        notes: draft?.notes || '',
+        actualTime: '',
+        notes: '',
         date: selectedDate,
         evidence: null,
         evidenceUrl: ''
@@ -472,12 +454,6 @@ export default function ParentDashboard() {
         }
 
         // Close dialog and refresh data
-        const draftKey = getCheckinDraftKey(selectedChildId, selectedTask.id, selectedDate);
-        localStorage.setItem(draftKey, JSON.stringify({
-          status: completionStatus,
-          actualTime: completionData.actualTime,
-          notes: completionData.notes,
-        }));
         setOpen(false);
         refetchTasks();
         refetchStats();
@@ -504,7 +480,7 @@ export default function ParentDashboard() {
   const { data: todayCheckins = [], refetch: refetchTodayCheckins } = useQuery({
     queryKey: ['today-checkins', selectedChildId, selectedDate],
     queryFn: async () => {
-      const response = await apiClient.get(`/dashboard/today-checkins?date=${selectedDate}`);
+      const response = await apiClient.get(`/dashboard/today-checkins?date=${selectedDate}&childId=${selectedChildId}`);
       return response.data.data || [];
     },
     staleTime: 2 * 60 * 1000,
