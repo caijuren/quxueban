@@ -181,7 +181,7 @@ export default function AccountSettings() {
 
   // Username edit handlers
   const handleStartEditUsername = () => {
-    setEditUsername(user?.name || '');
+    setEditUsername(userInfo?.data?.name || '');
     setEditUsernamePassword('');
     setIsEditingUsername(true);
   };
@@ -205,7 +205,7 @@ export default function AccountSettings() {
       toast.error('请输入密码确认');
       return;
     }
-    if (editUsername === user?.name) {
+    if (editUsername === userInfo?.data?.name) {
       toast.error('新用户名不能与当前用户名相同');
       return;
     }
@@ -257,8 +257,8 @@ export default function AccountSettings() {
   // Calculate security score
   const calculateSecurityScore = () => {
     let score = 0;
-    if (user?.avatar) score += 20;
-    if (user?.name && user.name.length >= 2) score += 20;
+    if (userInfo?.data?.avatar) score += 20;
+    if (userInfo?.data?.name && userInfo.data.name.length >= 2) score += 20;
     // Check if password was recently changed (mock)
     score += 20;
     // Check if has activity history
