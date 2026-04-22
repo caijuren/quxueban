@@ -338,6 +338,8 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
 plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
   const { taskId, planId, status, value, completedValue, notes, childId, date } = req.body
   const { userId, familyId, role } = req.user!
+  const parsedTaskId = parseInt(String(taskId))
+  const parsedPlanId = planId ? parseInt(String(planId)) : null
 
   // For parents, use provided childId; for children, use their own userId
   const targetChildId = role === 'parent' ? childId : userId
@@ -347,7 +349,7 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, 'Missing required field: childId')
   }
 
-  if (!taskId || !status) {
+  if (!taskId || !status || Number.isNaN(parsedTaskId)) {
     throw new AppError(400, 'Missing required fields: taskId, status')
   }
 
@@ -367,30 +369,47 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
   const existingCheckin = await prisma.dailyCheckin.findFirst({
     where: {
       childId: targetChildId,
-      taskId,
+      taskId: parsedTaskId,
       checkDate: checkDate,
+    },
+    select: {
+      id: true,
+      planId: true,
+      childId: true,
+      taskId: true,
+      status: true,
+      value: true,
+      checkDate: true,
+      createdAt: true,
     },
   })
 
   if (existingCheckin) {
-    // Update existing checkin
-    const updatedCheckin = await (prisma.dailyCheckin.update as any)({
-      where: { id: existingCheckin.id },
-      data: {
-        status,
-        value: value || 1,
-        planId: planId || existingCheckin.planId,
-        completedValue: completedValue || null,
-        notes: notes || null,
-      },
-    })
+    await prisma.$executeRaw`
+      UPDATE daily_checkins
+      SET
+        status = ${status},
+        value = ${value || 1},
+        plan_id = ${parsedPlanId || existingCheckin.planId}
+      WHERE id = ${existingCheckin.id}
+    `
+
+    const updatedCheckin = {
+      ...existingCheckin,
+      status,
+      value: value || 1,
+      planId: parsedPlanId || existingCheckin.planId,
+      completedValue: completedValue || null,
+      notes: notes || '',
+    }
 
     // Update weekly plan progress
-    if (planId && (status === 'completed' || status === 'advance')) {
-      await prisma.weeklyPlan.update({
-        where: { id: planId },
-        data: { progress: { increment: 1 } },
-      })
+    if (parsedPlanId && (status === 'completed' || status === 'advance')) {
+      await prisma.$executeRaw`
+        UPDATE weekly_plans
+        SET progress = progress + 1, updated_at = NOW()
+        WHERE id = ${parsedPlanId}
+      `
     }
 
     res.json({
@@ -399,27 +418,43 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       data: updatedCheckin,
     })
   } else {
-    // Create new checkin
-    const checkin = await (prisma.dailyCheckin.create as any)({
-      data: {
-        familyId,
-        childId: targetChildId,
-        taskId,
-        planId,
+    const insertedRows = await prisma.$queryRaw`
+      INSERT INTO daily_checkins (
+        family_id,
+        child_id,
+        task_id,
+        plan_id,
         status,
-        value: value || 1,
-        checkDate: checkDate,
-        completedValue: completedValue || null,
-        notes: notes || null,
-      },
-    })
+        value,
+        check_date,
+        created_at
+      )
+      VALUES (
+        ${familyId},
+        ${targetChildId},
+        ${parsedTaskId},
+        ${parsedPlanId},
+        ${status},
+        ${value || 1},
+        ${checkDate},
+        NOW()
+      )
+      RETURNING id, plan_id, child_id, task_id, status, value, check_date, created_at
+    ` as any[]
+
+    const checkin = {
+      ...insertedRows[0],
+      completedValue: completedValue || null,
+      notes: notes || '',
+    }
 
     // Update weekly plan progress
-    if (planId && (status === 'completed' || status === 'advance')) {
-      await prisma.weeklyPlan.update({
-        where: { id: planId },
-        data: { progress: { increment: 1 } },
-      })
+    if (parsedPlanId && (status === 'completed' || status === 'advance')) {
+      await prisma.$executeRaw`
+        UPDATE weekly_plans
+        SET progress = progress + 1, updated_at = NOW()
+        WHERE id = ${parsedPlanId}
+      `
     }
 
     res.status(201).json({
