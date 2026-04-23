@@ -63,10 +63,12 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
     // 监听 storage 变化（跨标签页）和自定义 auth 事件
     window.addEventListener('storage', checkAuth);
     window.addEventListener('auth:logout', checkAuth);
+    window.addEventListener('auth:login', checkAuth);
 
     return () => {
       window.removeEventListener('storage', checkAuth);
       window.removeEventListener('auth:logout', checkAuth);
+      window.removeEventListener('auth:login', checkAuth);
     };
   }, []);
 

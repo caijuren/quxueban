@@ -62,6 +62,13 @@ settingsRouter.get('/', async (req: AuthRequest, res: Response) => {
     status: 'success',
     data: {
       familyName: family.name,
+      familyCode: family.familyCode,
+      memberCount: await prisma.user.count({
+        where: {
+          familyId,
+          status: 'active',
+        },
+      }),
       settings: family.settings || {},
     },
   })

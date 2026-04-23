@@ -91,10 +91,40 @@ function parseTaskTags(value: unknown): Record<string, unknown> {
   return {}
 }
 
+function getEffectiveScheduleRule(task: { schedule_rule?: unknown; tags?: unknown; weekly_rule?: unknown }): string {
+  const taskTags = parseTaskTags(task.tags)
+  const weeklyRule = parseTaskTags(task.weekly_rule)
+  const scheduleRuleFromColumn = typeof task.schedule_rule === 'string' ? task.schedule_rule : ''
+  const scheduleRuleFromTags = typeof taskTags.scheduleRule === 'string' ? taskTags.scheduleRule : ''
+  const scheduleRuleFromWeeklyRule = typeof weeklyRule.scheduleRule === 'string' ? weeklyRule.scheduleRule : ''
+
+  const validRules = ['daily', 'school', 'weekend', 'flexible']
+  const isValidRule = (value: string) => validRules.includes(value)
+
+  // Legacy compatibility:
+  // many old tasks kept the real rule in tags.scheduleRule while schedule_rule stayed at the default daily.
+  if (isValidRule(scheduleRuleFromTags) && (scheduleRuleFromColumn === 'daily' || !isValidRule(scheduleRuleFromColumn))) {
+    return scheduleRuleFromTags
+  }
+
+  if (isValidRule(scheduleRuleFromColumn)) {
+    return scheduleRuleFromColumn
+  }
+
+  if (isValidRule(scheduleRuleFromTags)) {
+    return scheduleRuleFromTags
+  }
+
+  if (isValidRule(scheduleRuleFromWeeklyRule)) {
+    return scheduleRuleFromWeeklyRule
+  }
+
+  return 'daily'
+}
+
 function formatTaskRecord(task: any) {
   const taskTags = parseTaskTags(task.tags)
-  const scheduleRuleFromTags = typeof taskTags.scheduleRule === 'string' ? taskTags.scheduleRule : null
-  const scheduleRule = task.schedule_rule || scheduleRuleFromTags || 'daily'
+  const scheduleRule = getEffectiveScheduleRule(task)
 
   return {
     id: task.id,
@@ -136,6 +166,7 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   }
 
   const scheduleRule = tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) ? tags.scheduleRule : 'daily'
+  if (scheduleRule) validatedTags.scheduleRule = scheduleRule
   const normalizedAppliesTo = normalizeAppliesTo(appliesTo)
   const effectiveAppliesTo = normalizedAppliesTo.length > 0
     ? normalizedAppliesTo
@@ -451,7 +482,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         // 优先使用前端传入的规则，否则沿用任务原有规则
         const customRule = taskRules && typeof taskRules === 'object' ? taskRules[task.id] : undefined
         const taskTags = parseTaskTags(task.tags)
-        const scheduleRule = customRule || task.schedule_rule || taskTags.scheduleRule || 'daily'
+        const scheduleRule = customRule || getEffectiveScheduleRule(task)
 
         // 使用 JavaScript 标准星期索引：0=周日, 1=周一, ..., 6=周六
         let allowedDays: number[]
@@ -559,9 +590,7 @@ tasksRouter.get('/:id', async (req: AuthRequest, res: Response) => {
       taskTags = {};
     }
   }
-  const scheduleRule = (typeof taskTags === 'object' && taskTags !== null && 'scheduleRule' in taskTags) 
-    ? taskTags.scheduleRule 
-    : 'daily';
+  const scheduleRule = getEffectiveScheduleRule(task[0]);
 
   res.json({
     status: 'success',

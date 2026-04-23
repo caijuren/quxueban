@@ -123,7 +123,7 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   checkDateEnd.setHours(23, 59, 59, 999)
 
   const todayCheckins = await prisma.$queryRawUnsafe(
-    `SELECT
+    `SELECT DISTINCT ON (COALESCE(wp.task_id, dc.task_id))
       dc.id,
       dc.child_id,
       dc.task_id,
@@ -143,7 +143,8 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       ${childId ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId ? 3 : 2}
       AND dc.check_date <= $${childId ? 4 : 3}
-      AND dc.status IN ('completed', 'partial', 'advance')`,
+      AND dc.status IN ('completed', 'partial', 'advance')
+    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.id DESC`,
     ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
 
@@ -326,7 +327,7 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
   checkDateEnd.setHours(23, 59, 59, 999)
 
   const todayCheckins = await prisma.$queryRawUnsafe(
-    `SELECT
+    `SELECT DISTINCT ON (COALESCE(wp.task_id, dc.task_id))
       dc.id,
       dc.task_id,
       dc.child_id,
@@ -346,7 +347,8 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
     WHERE dc.family_id = $1
       ${childId !== null ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId !== null ? 3 : 2}
-      AND dc.check_date <= $${childId !== null ? 4 : 3}`,
+      AND dc.check_date <= $${childId !== null ? 4 : 3}
+    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.id DESC`,
     ...(childId !== null ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
 

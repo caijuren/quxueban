@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Clock, CheckCircle2, ClipboardList, BookOpen, Plus, GraduationCap, Star, BookMarked, Dumbbell, X, Calendar, Send, Brain, Download, Loader2, Camera, Image, Mic, FileText, XCircle } from 'lucide-react';
@@ -344,7 +344,7 @@ export default function ParentDashboard() {
     setSelectedTask(task);
     
     // 查找该任务的签到记录
-    const checkin = todayCheckins.find((c: Checkin) => c.taskId === task.id);
+    const checkin = todayCheckins.find((c: Checkin) => Number(c.taskId) === Number(task.id));
 
     if (checkin) {
       // 如果找到签到记录，填充上次的数据
@@ -387,7 +387,12 @@ export default function ParentDashboard() {
       toast.success('已分享到钉钉');
     } catch (error) {
       console.error('分享到钉钉失败:', error);
-      toast.error('分享失败，请稍后重试');
+      const message = getErrorMessage(error);
+      if (message.includes('webhook') || message.includes('Webhook') || message.includes('钉钉')) {
+        toast.error('请先在孩子管理中配置钉钉 Webhook');
+        return;
+      }
+      toast.error(message || '分享失败，请稍后重试');
     }
   };
 
@@ -508,7 +513,7 @@ export default function ParentDashboard() {
       return true;
     })
     .map((t: any) => {
-      const checkin = todayCheckins.find((c: Checkin) => c.taskId === parseInt(t.id));
+      const checkin = todayCheckins.find((c: Checkin) => Number(c.taskId) === Number(t.id));
       return {
         id: String(t.id),
         title: t.name,

@@ -3,6 +3,8 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react-swc"
 import {defineConfig} from "vite"
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:3001"
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/',
@@ -24,12 +26,12 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: apiProxyTarget,
         changeOrigin: true,
         secure: false,
       },
       '/avatars': {
-        target: 'http://localhost:3001',
+        target: apiProxyTarget,
         changeOrigin: true,
         secure: false
       },
