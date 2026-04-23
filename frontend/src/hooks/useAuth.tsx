@@ -111,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 存储认证信息
       localStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
+      window.dispatchEvent(new Event('auth:login'));
       
       setUser(userData);
       setIsAuthenticated(true);
@@ -143,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 存储认证信息
       localStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
+      window.dispatchEvent(new Event('auth:login'));
       
       setUser(userData);
       setIsAuthenticated(true);

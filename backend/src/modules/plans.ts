@@ -42,6 +42,35 @@ function parseJsonObject(value: unknown): Record<string, any> {
   return {}
 }
 
+function getEffectiveScheduleRule(task: {
+  task_schedule_rule?: unknown
+  schedule_rule?: unknown
+  task_tags?: unknown
+  tags?: unknown
+  task_weekly_rule?: unknown
+  weekly_rule?: unknown
+}): string {
+  const taskTags = parseJsonObject(task.task_tags ?? task.tags)
+  const taskWeeklyRule = parseJsonObject(task.task_weekly_rule ?? task.weekly_rule)
+  const scheduleRuleFromColumn =
+    typeof task.task_schedule_rule === 'string'
+      ? task.task_schedule_rule
+      : (typeof task.schedule_rule === 'string' ? task.schedule_rule : '')
+  const scheduleRuleFromTags = typeof taskTags.scheduleRule === 'string' ? taskTags.scheduleRule : ''
+  const scheduleRuleFromWeeklyRule = typeof taskWeeklyRule.scheduleRule === 'string' ? taskWeeklyRule.scheduleRule : ''
+
+  const validRules = ['daily', 'school', 'weekend', 'flexible']
+  const isValidRule = (value: string) => validRules.includes(value)
+
+  if (isValidRule(scheduleRuleFromTags) && (scheduleRuleFromColumn === 'daily' || !isValidRule(scheduleRuleFromColumn))) {
+    return scheduleRuleFromTags
+  }
+  if (isValidRule(scheduleRuleFromColumn)) return scheduleRuleFromColumn
+  if (isValidRule(scheduleRuleFromTags)) return scheduleRuleFromTags
+  if (isValidRule(scheduleRuleFromWeeklyRule)) return scheduleRuleFromWeeklyRule
+  return 'daily'
+}
+
 export const plansRouter: Router = Router()
 
 // All routes require authentication
@@ -150,7 +179,7 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
       timePerUnit: plan.time_per_unit,
       tags: parseJsonObject(plan.task_tags),
       weeklyRule: parseJsonObject(plan.task_weekly_rule),
-      scheduleRule: plan.task_schedule_rule || 'daily',
+      scheduleRule: getEffectiveScheduleRule(plan),
     }
     const weeklyRule = task.weeklyRule as {
       excludeDays?: number[]
@@ -166,9 +195,11 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
     
     // 如果没有实际分配，根据 scheduleRule 计算默认值
     if (assignedDays.length === 0) {
-      const taskTags = task.tags as any || {}
-      const taskWeeklyRule = task.weeklyRule as any || {}
-      const scheduleRule = task.scheduleRule || taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
+      const scheduleRule = task.scheduleRule || getEffectiveScheduleRule({
+        schedule_rule: task.scheduleRule,
+        tags: task.tags,
+        weekly_rule: task.weeklyRule,
+      })
       
       switch (scheduleRule) {
         case 'daily':
@@ -340,6 +371,11 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
   const { userId, familyId, role } = req.user!
   const parsedTaskId = parseInt(String(taskId))
   const parsedPlanId = planId ? parseInt(String(planId)) : null
+  const parsedCompletedValue =
+    completedValue === undefined || completedValue === null || completedValue === ''
+      ? null
+      : parseInt(String(completedValue))
+  const normalizedNotes = typeof notes === 'string' ? notes.trim() : ''
 
   // For parents, use provided childId; for children, use their own userId
   const targetChildId = role === 'parent' ? childId : userId
@@ -359,19 +395,25 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, `Invalid status. Must be one of: ${validStatuses.join(', ')}`)
   }
 
-  // Use provided date or today
-  // Use local time to match frontend date handling
-  const checkDate = date ? new Date(date) : new Date()
+  // Use provided date or today, always parse as local date to avoid timezone drift
+  let checkDate: Date
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number)
+    checkDate = new Date(year, month - 1, day)
+  } else {
+    checkDate = date ? new Date(date) : new Date()
+  }
   // Set to start of day in local time
   checkDate.setHours(0, 0, 0, 0)
 
   // Check if already checked in for this task on the specified date
-  const existingCheckin = await prisma.dailyCheckin.findFirst({
+  const existingCheckins = await prisma.dailyCheckin.findMany({
     where: {
       childId: targetChildId,
       taskId: parsedTaskId,
       checkDate: checkDate,
     },
+    orderBy: { id: 'desc' },
     select: {
       id: true,
       planId: true,
@@ -379,10 +421,13 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       taskId: true,
       status: true,
       value: true,
+      completedValue: true,
+      notes: true,
       checkDate: true,
       createdAt: true,
     },
   })
+  const existingCheckin = existingCheckins[0]
 
   if (existingCheckin) {
     await prisma.$executeRaw`
@@ -390,8 +435,12 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       SET
         status = ${status},
         value = ${value || 1},
-        plan_id = ${parsedPlanId || existingCheckin.planId}
-      WHERE id = ${existingCheckin.id}
+        plan_id = ${parsedPlanId || existingCheckin.planId},
+        completed_value = ${parsedCompletedValue},
+        notes = ${normalizedNotes || null}
+      WHERE child_id = ${targetChildId}
+        AND task_id = ${parsedTaskId}
+        AND check_date = ${checkDate}
     `
 
     const updatedCheckin = {
@@ -399,8 +448,8 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       status,
       value: value || 1,
       planId: parsedPlanId || existingCheckin.planId,
-      completedValue: completedValue || null,
-      notes: notes || '',
+      completedValue: parsedCompletedValue,
+      notes: normalizedNotes,
     }
 
     // Update weekly plan progress
@@ -426,6 +475,8 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         plan_id,
         status,
         value,
+        completed_value,
+        notes,
         check_date,
         created_at
       )
@@ -436,16 +487,18 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         ${parsedPlanId},
         ${status},
         ${value || 1},
+        ${parsedCompletedValue},
+        ${normalizedNotes || null},
         ${checkDate},
         NOW()
       )
-      RETURNING id, plan_id, child_id, task_id, status, value, check_date, created_at
+      RETURNING id, plan_id, child_id, task_id, status, value, completed_value, notes, check_date, created_at
     ` as any[]
 
     const checkin = {
       ...insertedRows[0],
-      completedValue: completedValue || null,
-      notes: notes || '',
+      completedValue: insertedRows[0]?.completed_value ?? parsedCompletedValue,
+      notes: insertedRows[0]?.notes ?? normalizedNotes,
     }
 
     // Update weekly plan progress
@@ -625,8 +678,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
 
         // 获取任务的 scheduleRule
         const taskTags = parseJsonObject((p as any).task_tags)
-        const taskWeeklyRule = parseJsonObject((p as any).task_weekly_rule)
-        const scheduleRule = (p as any).task_schedule_rule || taskTags.scheduleRule || taskWeeklyRule.scheduleRule || 'daily'
+        const scheduleRule = getEffectiveScheduleRule(p)
 
         // 优先使用实际分配的天数
         if (storedAssignedDays && storedAssignedDays.length > 0) {
@@ -655,7 +707,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           assignedDays: assignedDays,
           subject:subject,
           difficulty: taskTags?.difficulty || 'basic',
-          scheduleRule: scheduleRule,
+          scheduleRule,
           target: p.target,
           progress: p.progress,
         }
@@ -770,7 +822,7 @@ plansRouter.get('/week', async (req: AuthRequest, res: Response) => {
           progress: p.progress,
           status: p.status,
           assignedDays: parseAssignedDays((p as any).assigned_days),
-          scheduleRule: (p as any).task_schedule_rule || 'daily',
+          scheduleRule: getEffectiveScheduleRule(p),
           subject: taskTags?.subject || 'other',
         }
       }),

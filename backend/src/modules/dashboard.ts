@@ -123,13 +123,14 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   checkDateEnd.setHours(23, 59, 59, 999)
 
   const todayCheckins = await prisma.$queryRawUnsafe(
-    `SELECT
+    `SELECT DISTINCT ON (COALESCE(wp.task_id, dc.task_id))
       dc.id,
       dc.child_id,
       dc.task_id,
       dc.plan_id,
       dc.status,
       dc.value,
+      dc.completed_value,
       dc.check_date,
       dc.created_at,
       t.time_per_unit,
@@ -142,13 +143,14 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       ${childId ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId ? 3 : 2}
       AND dc.check_date <= $${childId ? 4 : 3}
-      AND dc.status IN ('completed', 'partial', 'advance')`,
+      AND dc.status IN ('completed', 'partial', 'advance')
+    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.id DESC`,
     ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
 
   const todayStudyMinutes = todayCheckins.reduce((sum, checkin: any) => {
-    const minutes = checkin.time_per_unit || 0
-    return sum + minutes * (checkin.value || 1)
+    const fallbackMinutes = (checkin.time_per_unit || 0) * (checkin.value || 1)
+    return sum + (checkin.completed_value || fallbackMinutes)
   }, 0)
 
   // Calculate reading count for specified date or today
@@ -325,37 +327,41 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
   checkDateEnd.setHours(23, 59, 59, 999)
 
   const todayCheckins = await prisma.$queryRawUnsafe(
-    `SELECT
+    `SELECT DISTINCT ON (COALESCE(wp.task_id, dc.task_id))
       dc.id,
       dc.task_id,
       dc.child_id,
       dc.plan_id,
       dc.status,
       dc.value,
+      dc.completed_value,
+      dc.notes,
       dc.check_date,
+      t.id AS resolved_task_id,
       t.name AS task_name,
       t.category AS task_category,
       t.time_per_unit
     FROM daily_checkins dc
     LEFT JOIN weekly_plans wp ON wp.id = dc.plan_id
-    LEFT JOIN tasks t ON t.id = wp.task_id
+    LEFT JOIN tasks t ON t.id = COALESCE(wp.task_id, dc.task_id)
     WHERE dc.family_id = $1
       ${childId !== null ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId !== null ? 3 : 2}
-      AND dc.check_date <= $${childId !== null ? 4 : 3}`,
+      AND dc.check_date <= $${childId !== null ? 4 : 3}
+    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.id DESC`,
     ...(childId !== null ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
 
   // Format checkins for frontend
   const formattedCheckins = todayCheckins.map((checkin: any) => ({
     id: checkin.id,
-    taskId: checkin.task_id,
+    taskId: checkin.resolved_task_id || checkin.task_id,
     childId: checkin.child_id,
     planId: checkin.plan_id,
     status: checkin.status,
     value: checkin.value,
-    completedValue: null,
-    notes: '',
+    completedValue: checkin.completed_value,
+    notes: checkin.notes || '',
     checkDate: checkin.check_date,
     taskName: checkin.task_name,
     taskCategory: checkin.task_category,
