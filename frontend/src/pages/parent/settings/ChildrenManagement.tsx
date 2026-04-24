@@ -117,7 +117,7 @@ async function getChildDingTalkConfig(childId: number): Promise<any> {
   return response.data;
 }
 
-async function createChild(data: { name: string; avatar: string; pin: string }): Promise<any> {
+async function createChild(data: { name: string; avatar: string }): Promise<any> {
   const response = await apiClient.post('/add-child', data);
   return response.data;
 }
@@ -151,8 +151,6 @@ export default function ChildrenManagement() {
   // Form states
   const [childName, setChildName] = useState('');
   const [childAvatar, setChildAvatar] = useState('🐶');
-  const [childPin, setChildPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
   const [dingtalkWebhookUrl, setDingtalkWebhookUrl] = useState('');
   const [dingtalkSecret, setDingtalkSecret] = useState('');
 
@@ -240,8 +238,6 @@ export default function ChildrenManagement() {
   const resetForm = () => {
     setChildName('');
     setChildAvatar('🐶');
-    setChildPin('');
-    setConfirmPin('');
   };
 
   const handleOpenDetail = (child: Child) => {
@@ -272,18 +268,9 @@ export default function ChildrenManagement() {
       toast.error('请输入孩子姓名');
       return;
     }
-    if (childPin.length < 4) {
-      toast.error('密码至少4位');
-      return;
-    }
-    if (childPin !== confirmPin) {
-      toast.error('两次密码不一致');
-      return;
-    }
     createMutation.mutate({
       name: childName.trim(),
       avatar: childAvatar,
-      pin: childPin,
     });
   };
 
@@ -578,10 +565,10 @@ export default function ChildrenManagement() {
                   </Button>
                 </div>
                 <div className="rounded-2xl border border-border/70 bg-white p-4 shadow-sm">
-                  <h4 className="font-medium text-slate-900">重置登录 PIN</h4>
-                  <p className="mt-1 text-sm text-muted-foreground">后续可在这里快速重置孩子登录密码。</p>
+                  <h4 className="font-medium text-slate-900">登录说明</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">当前已移除孩子端独立登录，这里不再需要设置 PIN 或密码。</p>
                   <Button variant="outline" className="mt-4 rounded-xl" disabled>
-                    即将支持
+                    暂不需要
                   </Button>
                 </div>
                 <div className="rounded-2xl border border-red-200 bg-red-50/70 p-4 shadow-sm">
@@ -603,7 +590,7 @@ export default function ChildrenManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>添加孩子</DialogTitle>
-            <DialogDescription>为孩子创建一个学习账户</DialogDescription>
+            <DialogDescription>为孩子创建一个学习档案</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -627,24 +614,6 @@ export default function ChildrenManagement() {
                   className="flex-1"
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>登录密码</Label>
-              <Input
-                type="password"
-                value={childPin}
-                onChange={(e) => setChildPin(e.target.value)}
-                placeholder="至少4位数字"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>确认密码</Label>
-              <Input
-                type="password"
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value)}
-                placeholder="再次输入密码"
-              />
             </div>
           </div>
           <div className="flex justify-end gap-3">

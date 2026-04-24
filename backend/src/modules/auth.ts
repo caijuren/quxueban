@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
+import { randomUUID } from 'crypto'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, generateToken, requireRole } from '../middleware/auth'
@@ -160,21 +161,16 @@ authRouter.post('/login', async (req, res: Response) => {
 
 /**
  * POST /add-child - Parent adds a new child
- * Body: { name, avatar, pin }
+ * Body: { name, avatar }
  * Auth required, parent only
  */
 authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   try {
-    const { name, avatar, pin, age, grade, gender, birthday, interests, personality } = req.body
+    const { name, avatar, age, grade, gender, birthday, interests, personality } = req.body
     const { familyId, userId } = req.user!
 
-    if (!name || !pin) {
-      throw new AppError(400, 'Missing required fields: name, pin')
-    }
-
-    // Validate PIN format (4-digit number)
-    if (!/^\d{4}$/.test(pin)) {
-      throw new AppError(400, 'PIN must be a 4-digit number')
+    if (!name) {
+      throw new AppError(400, 'Missing required field: name')
     }
 
     // Check if child with same name already exists in family
@@ -191,8 +187,8 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
       throw new AppError(409, '该名字的孩子已存在')
     }
 
-    // Hash PIN
-    const passwordHash = await bcrypt.hash(pin, 12)
+    // Child-side login has been removed, so keep an internal password hash only.
+    const passwordHash = await bcrypt.hash(randomUUID(), 12)
 
     // Create child user
     const child = await prisma.user.create({
@@ -464,7 +460,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       throw new AppError(400, '无效的孩子ID')
     }
     
-    const { name, avatar, pin, age, grade, gender, birthday, interests, personality } = req.body
+    const { name, avatar, age, grade, gender, birthday, interests, personality } = req.body
     const { familyId, userId } = req.user!
 
 
@@ -506,14 +502,6 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
 
     if (avatar !== undefined) {
       updateData.avatar = avatar
-    }
-
-    if (pin !== undefined && pin !== '') {
-      // Validate PIN format (4-digit number)
-      if (!/^\d{4}$/.test(pin)) {
-        throw new AppError(400, 'PIN必须是4位数字')
-      }
-      updateData.passwordHash = await bcrypt.hash(pin, 12)
     }
 
     // Note: age, grade, gender, birthday, interests, personality

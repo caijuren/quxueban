@@ -38,11 +38,10 @@ async function uploadAvatar(file: File): Promise<string> {
   return response.data.data.url;
 }
 
-async function createChild(data: { name: string; avatar: string; password: string }): Promise<any> {
+async function createChild(data: { name: string; avatar: string }): Promise<any> {
   const response = await apiClient.post('/add-child', {
     name: data.name,
     avatar: data.avatar,
-    pin: data.password
   });
   return response.data;
 }
@@ -68,8 +67,6 @@ export default function ChildManagement() {
   const [currentChildId, setCurrentChildId] = useState<number | null>(null);
   const [childName, setChildName] = useState('');
   const [childAvatar, setChildAvatar] = useState('🐶');
-  const [childPassword, setChildPassword] = useState('');
-  const [confirmChildPassword, setConfirmChildPassword] = useState('');
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [isUpdatingChild, setIsUpdatingChild] = useState(false);
   const [isDeletingChild, setIsDeletingChild] = useState(false);
@@ -95,8 +92,6 @@ export default function ChildManagement() {
       setAddChildOpen(false);
       setChildName('');
       setChildAvatar('🐶');
-      setChildPassword('');
-      setConfirmChildPassword('');
       setIsCreatingChild(false);
       // Refetch children list
       childrenQuery.refetch();
@@ -163,8 +158,6 @@ export default function ChildManagement() {
   const handleOpenAddChild = () => {
     setChildName('');
     setChildAvatar('🐶');
-    setChildPassword('');
-    setConfirmChildPassword('');
     setAddChildOpen(true);
   };
 
@@ -211,20 +204,11 @@ export default function ChildManagement() {
       toast.error('请输入孩子姓名');
       return;
     }
-    if (!childPassword || childPassword.length < 4) {
-      toast.error('密码长度至少4位');
-      return;
-    }
-    if (childPassword !== confirmChildPassword) {
-      toast.error('两次输入的密码不一致');
-      return;
-    }
     
     setIsCreatingChild(true);
     createChildMutation.mutate({ 
       name: childName.trim(), 
-      avatar: childAvatar, 
-      password: childPassword 
+      avatar: childAvatar,
     });
   };
 
@@ -377,7 +361,7 @@ export default function ChildManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>添加孩子</AlertDialogTitle>
             <AlertDialogDescription>
-              为您的孩子创建一个账户，设置姓名、头像和密码
+              为您的孩子创建一个学习档案，设置姓名和头像
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-4">
@@ -431,28 +415,6 @@ export default function ChildManagement() {
                   className="h-10 rounded-lg text-sm bg-muted/50 border-0"
                 />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="child-password" className="text-xs text-muted-foreground">密码</Label>
-              <Input
-                id="child-password"
-                type="password"
-                value={childPassword}
-                onChange={(e) => setChildPassword(e.target.value)}
-                placeholder="请设置4位以上密码"
-                className="h-10 rounded-lg text-sm bg-muted/50 border-0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="confirm-child-password" className="text-xs text-muted-foreground">确认密码</Label>
-              <Input
-                id="confirm-child-password"
-                type="password"
-                value={confirmChildPassword}
-                onChange={(e) => setConfirmChildPassword(e.target.value)}
-                placeholder="请再次输入密码"
-                className="h-10 rounded-lg text-sm bg-muted/50 border-0"
-              />
             </div>
           </div>
           <AlertDialogFooter className="gap-2">
