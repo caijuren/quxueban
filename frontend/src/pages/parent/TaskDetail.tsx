@@ -179,6 +179,8 @@ export default function TaskDetail() {
     onSuccess: () => {
       toast.success('初始数据设置成功');
       queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsEditingInitial(false);
     },
     onError: (error) => toast.error(getErrorMessage(error))
@@ -225,6 +227,8 @@ export default function TaskDetail() {
         targetValue: updatedTask.targetValue || 0,
       });
       queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsEditingTask(false);
     },
     onError: (error) => {
