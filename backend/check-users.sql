@@ -1,1 +1,0 @@
-SELECT id, name, role, status FROM public.users;

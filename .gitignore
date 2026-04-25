@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+package-lock.json
 
 # Build outputs
 dist/
@@ -27,15 +28,33 @@ pnpm-debug.log*
 Thumbs.db
 
 # Temporary files
+tmp/
 *.tmp
 *.temp
 .cache/
 .pm2/
+.trae/
+docker-data/
 
-# Database backups (large files)
-backups/*.sql
-backups/*.tar.gz
+# Local operational notes
+COMMERCIAL_ANALYSIS.md
+DATABASE_REALITY_REPORT.md
+DEPLOY_COMMANDS.md
+deploy_commands.sh
+fix_prisma.sh
+ssh_connect.sh
+【孩子基本情况】.md
+scripts/clean_parent_reading_excel.py
+
+# Database backups and local databases
+backups/
+backend/backups/
+backend/prisma/dev.db
+*.sqlite
+*.sqlite3
+*.db
 
 # Uploads
 uploads/
+backend/uploads/
 .local/

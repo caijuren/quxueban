@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Build output
 dist/
@@ -23,3 +24,20 @@ Thumbs.db
 coverage/
 
 # Prisma
+prisma/dev.db
+
+# Runtime data
+backups/
+uploads/
+
+# One-off local operation scripts
+check-*.ts
+reset-*.ts
+restore-*.ts
+test-*.ts
+migration.sql
+test-data.sql
+check-users.sql
+scripts/*.js
+scripts/*.sql
+scripts/import_cleaned_parent_reading.ts
