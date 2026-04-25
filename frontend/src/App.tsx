@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route } from 'react-router-dom';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AnimatedRoutes } from "@/components/AnimatedRoutes";
@@ -17,7 +17,6 @@ import ParentTasks from "./pages/parent/Tasks";
 import ParentTaskDetail from "./pages/parent/TaskDetail";
 import ParentTaskTemplates from "./pages/parent/TaskTemplates";
 import ParentPlans from "./pages/parent/Plans";
-import ChildrenPage from "./pages/parent/Children";
 import ParentLibrary from "./pages/parent/Library";
 import BookDetail from "./pages/parent/BookDetail";
 import BookInsights from "./pages/parent/BookInsights";
@@ -78,7 +77,7 @@ function App() {
                   <Route path="library/:id/insights" data-genie-title="AI Reading Insights" data-genie-key="BookInsights" element={<PageTransition transition="slide-up"><BookInsights /></PageTransition>} />
                   <Route path="reading" data-genie-title="Reading" data-genie-key="ParentReading" element={<PageTransition transition="slide-up"><ParentReading /></PageTransition>} />
                   <Route path="achievements" data-genie-title="Achievements" data-genie-key="ParentAchievements" element={<PageTransition transition="slide-up"><ParentAchievements /></PageTransition>} />
-                  <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<PageTransition transition="slide-up"><ChildrenPage /></PageTransition>} />
+                  <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<Navigate to="/parent/settings/children" replace />} />
                   <Route path="statistics" data-genie-title="Statistics" data-genie-key="ParentStatistics" element={<PageTransition transition="slide-up"><ParentStatistics /></PageTransition>} />
                   <Route path="reports" data-genie-title="Reports" data-genie-key="ReportsPage" element={<PageTransition transition="slide-up"><ReportsPage /></PageTransition>} />
                   <Route path="settings/*" data-genie-title="Settings" data-genie-key="ParentSettings" element={<PageTransition transition="slide-up"><SettingsPage /></PageTransition>} />

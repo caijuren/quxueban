@@ -8,6 +8,8 @@ import {
   Plus,
   Minus,
 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,17 +44,6 @@ interface ActiveReading {
     coverUrl: string;
     totalPages: number;
   };
-  child: {
-    id: number;
-    name: string;
-    avatar: string;
-  };
-}
-
-interface Child {
-  id: number;
-  name: string;
-  avatar: string;
 }
 
 interface ReadingStats {
@@ -65,11 +56,6 @@ interface ReadingStats {
 async function fetchActiveReadings(childId?: number): Promise<ActiveReading[]> {
   const params = childId ? `?childId=${childId}` : '';
   const { data } = await apiClient.get(`/reading${params}`);
-  return data.data || [];
-}
-
-async function fetchChildren(): Promise<Child[]> {
-  const { data } = await apiClient.get('/auth/children');
   return data.data || [];
 }
 
@@ -95,12 +81,7 @@ export default function ReadingPage() {
   const [readingToStop, setReadingToStop] = useState<ActiveReading | null>(null);
 
   const queryClient = useQueryClient();
-  const { selectedChildId } = useSelectedChild();
-
-  const { data: children = [] } = useQuery({
-    queryKey: ['children'],
-    queryFn: fetchChildren,
-  });
+  const { selectedChildId, selectedChild } = useSelectedChild();
 
   const { data: readings = [], isLoading } = useQuery({
     queryKey: ['reading', selectedChildId],
@@ -194,31 +175,35 @@ export default function ReadingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Control Bar */}
-      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Empty space for alignment */}
-          <div className="flex-1"></div>
-          
-          {/* Action Buttons */}
-          <div className="flex gap-2">
+      <Card className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-sky-50/70 via-white to-indigo-50/40 shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <Badge variant="secondary" className="rounded-full px-3 py-1">阅读中心</Badge>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                {selectedChild?.name || '当前孩子'} 的在读图书与阅读进度
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                这里集中查看当前在读、最近阅读次数和本月阅读节奏。更新进度后，图书馆和统计页会同步变化。
+              </p>
+            </div>
             <Button
               onClick={() => (window.location.href = '/parent/library')}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+              className="rounded-xl shadow-sm"
             >
-              <BookOpen className="size-4 mr-1.5" />
-              <span className="text-sm">去图书馆</span>
+              <BookOpen className="mr-2 h-4 w-4" />
+              去图书馆选书
             </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+          className="bg-white rounded-2xl p-5 shadow-sm border border-border/70"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -237,7 +222,7 @@ export default function ReadingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+          className="bg-white rounded-2xl p-5 shadow-sm border border-border/70"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -256,7 +241,7 @@ export default function ReadingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+          className="bg-white rounded-2xl p-5 shadow-sm border border-border/70"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -276,12 +261,12 @@ export default function ReadingPage() {
 
       {/* Reading List */}
       {readings.length === 0 ? (
-        <div className="text-center py-16 bg-white/50 rounded-3xl border border-dashed border-gray-200">
+        <div className="text-center py-16 bg-white/60 rounded-3xl border border-dashed border-gray-200">
           <div className="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <BookOpen className="w-10 h-10 text-gray-400" />
           </div>
           <h3 className="font-semibold text-gray-900 text-lg">暂无在读图书</h3>
-          <p className="text-gray-500 mt-1">从图书馆选择图书开始阅读</p>
+          <p className="text-gray-500 mt-1">先去图书馆挑一本书，再回来持续记录阅读进度。</p>
           <Button
             onClick={() => (window.location.href = '/parent/library')}
             className="mt-4 rounded-xl bg-primary text-primary-foreground"
@@ -302,7 +287,7 @@ export default function ReadingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300"
+                className="bg-white rounded-2xl p-5 shadow-sm border border-border/70 hover:shadow-md transition-all duration-300"
               >
                 <div className="flex gap-4">
                   {/* Cover */}
@@ -322,15 +307,12 @@ export default function ReadingPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-lg">{reading.child.avatar}</span>
-                      <span className="text-sm text-gray-500">
-                        {reading.child.name}
-                      </span>
-                    </div>
                     <h4 className="font-semibold text-gray-900 truncate">
                       {reading.book.name}
                     </h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      开始于 {new Date(reading.startedAt).toLocaleDateString()}
+                    </p>
 
                     {/* Progress */}
                     <div className="mt-3">
@@ -357,12 +339,9 @@ export default function ReadingPage() {
                     </div>
 
                     {/* Stats */}
-                    <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                    <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
                       <span>已读 {reading.readCount} 次</span>
-                      <span>
-                        开始于{' '}
-                        {new Date(reading.startedAt).toLocaleDateString()}
-                      </span>
+                      <span>{reading.readPages}/{reading.book.totalPages || '?'} 页</span>
                     </div>
 
                     {/* Actions */}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -25,14 +25,13 @@ import {
   PieChart as PieChartIcon,
   Calendar,
   AlertTriangle,
-  Sparkles,
   Download,
   ChevronDown,
-  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient } from '@/lib/api-client';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 // ============================================
 // 统一视觉规范 - Design Token
@@ -225,116 +224,25 @@ function KPICard({ title, value, subtitle, icon, color, bgColor, trend, delay = 
 // ============================================
 // 智能解读模块
 // ============================================
-interface InsightEngineProps {
-  stats: StatisticsData | undefined;
-  trends: TrendsData | undefined;
-}
-
-function InsightEngine({ stats, trends }: InsightEngineProps) {
-  const insights = useMemo(() => {
-    if (!stats) return [];
-    
-    const result: Array<{ type: 'success' | 'warning' | 'info'; text: string }> = [];
-    const { summary, bySubject, byFormat } = stats;
-    
-    // 完成率分析
-    if (summary.completionRate < 50) {
-      result.push({
-        type: 'warning',
-        text: `本周完成率仅 ${summary.completionRate}%，建议检查任务难度是否匹配，并适当增加专注时段。`
-      });
-    } else if (summary.completionRate >= 80) {
-      result.push({
-        type: 'success',
-        text: `本周完成率高达 ${summary.completionRate}%，学习状态良好，继续保持！`
-      });
-    }
-    
-    // 学科投入分析
-    const topSubject = bySubject?.[0];
-    if (topSubject) {
-      result.push({
-        type: 'info',
-        text: `${topSubject.name}投入时间最多（占${topSubject.percentage.toFixed(0)}%），建议合理分配各学科时间。`
-      });
-    }
-    
-    // 执行形式分析
-    const independentTasks = byFormat?.find(f => f.name.includes('独立'));
-    if (independentTasks && independentTasks.percentage < 30) {
-      result.push({
-        type: 'warning',
-        text: `'独立完成'任务占比仅 ${independentTasks.percentage.toFixed(0)}%，建议逐步培养自主学习能力。`
-      });
-    }
-    
-    // 时间投入分析
-    const totalHours = Math.round(summary.totalTime / 60);
-    if (totalHours > 20) {
-      result.push({
-        type: 'info',
-        text: `本周预计学习时长 ${totalHours} 小时，注意劳逸结合。`
-      });
-    }
-    
-    return result.slice(0, 3); // 最多显示3条
-  }, [stats, trends]);
-  
-  if (!insights.length) return null;
-  
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-    >
-      <Card className="border-0 shadow-lg rounded-2xl overflow-hidden bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 mb-2">本周学习报告</h3>
-              <div className="space-y-2">
-                {insights.map((insight, index) => (
-                  <div key={index} className="flex items-start gap-2 text-sm">
-                    {insight.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />}
-                    {insight.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />}
-                    {insight.type === 'info' && <Activity className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />}
-                    <span className="text-gray-700">{insight.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
 // ============================================
 // 主组件
 // ============================================
 export default function StatisticsPage() {
-  const [selectedChild, setSelectedChild] = useState<number | undefined>();
   const [timeFilter, setTimeFilter] = useState<typeof TIME_FILTERS[number]['value']>('week');
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const { selectedChildId } = useSelectedChild();
   
   const currentFilter = TIME_FILTERS.find(f => f.value === timeFilter);
   
   const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['statistics', selectedChild, currentFilter?.days],
-    queryFn: () => fetchStatistics(selectedChild, currentFilter?.days),
+    queryKey: ['statistics', selectedChildId, currentFilter?.days],
+    queryFn: () => fetchStatistics(selectedChildId || undefined, currentFilter?.days),
   });
   
   const { data: trends, isLoading: isLoadingTrends } = useQuery({
-    queryKey: ['trends', selectedChild],
-    queryFn: () => fetchTrends(selectedChild),
+    queryKey: ['trends', selectedChildId],
+    queryFn: () => fetchTrends(selectedChildId || undefined),
   });
-  
-  // 异常数据检测已集成到 InsightEngine 组件中
   
   if (isLoadingStats || isLoadingTrends) {
     return (
@@ -358,7 +266,7 @@ export default function StatisticsPage() {
   return (
     <div className="space-y-6 pb-8">
       {/* Page Control Bar */}
-      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
+      <div className="bg-muted/40 border border-border/70 rounded-2xl p-4 mb-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           {/* Empty space for alignment */}
           <div className="flex-1"></div>
@@ -381,39 +289,6 @@ export default function StatisticsPage() {
                 </button>
               ))}
             </div>
-            
-            {/* 孩子选择 */}
-            {stats?.children && stats.children.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">选择孩子:</span>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setSelectedChild(undefined)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      !selectedChild
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'bg-muted text-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    全部
-                  </button>
-                  {stats.children.map(child => (
-                    <button
-                      key={child.id}
-                      onClick={() => setSelectedChild(child.id)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
-                        selectedChild === child.id
-                          ? 'bg-primary text-white shadow-sm'
-                          : 'bg-muted text-foreground hover:bg-muted/80'
-                      }`}
-                    >
-                      <span>{child.avatar}</span>
-                      <span>{child.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             
             {/* 导出按钮 */}
             <div className="relative">
@@ -447,10 +322,6 @@ export default function StatisticsPage() {
           </div>
         </div>
       </div>
-      
-      {/* ==================== 智能解读模块 ==================== */}
-      <InsightEngine stats={stats} trends={trends} />
-      
       {/* ==================== 顶部 KPI 看板 ==================== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard

@@ -756,15 +756,19 @@ export default function LibraryPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-2xl" />
-          ))}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.35fr_1fr]">
+          <Skeleton className="h-64 rounded-2xl" />
+          <Skeleton className="h-64 rounded-2xl" />
         </div>
+        <Skeleton className="h-20 rounded-2xl" />
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-64 rounded-2xl" />
+            <Skeleton key={i} className="aspect-[3/4] rounded-2xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={`stats-${i}`} className="h-24 rounded-2xl" />
           ))}
         </div>
       </div>
@@ -816,17 +820,17 @@ export default function LibraryPage() {
   return (
     <div className="space-y-6">
       {/* Reading Overview */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <Card className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-amber-50 via-white to-orange-50/60 shadow-sm">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_0.9fr]">
+        <Card className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-amber-50/70 via-white to-orange-50/40 shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-amber-700">当前孩子图书馆</p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-                  围绕 {selectedChild?.name || '当前孩子'} 组织书目、进度与记录
+              <div className="max-w-2xl">
+                <Badge variant="secondary" className="rounded-full px-3 py-1">图书馆</Badge>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                  {selectedChild?.name || '当前孩子'} 的图书、进度与阅读记录
                 </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  这里是 {selectedChild?.name || '当前孩子'} 的阅读工作台。图书、进度、目标和阅读辅助信息都在同一个孩子视角下查看。
+                <p className="mt-2 text-sm text-muted-foreground leading-6">
+                  查看在读、已读和阅读积累，进入详情记录每次阅读。
                 </p>
               </div>
               <Button onClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')} className="rounded-xl shadow-sm">
@@ -837,19 +841,19 @@ export default function LibraryPage() {
 
             <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
               <div className="rounded-2xl border border-emerald-100 bg-white/80 p-4">
-                <p className="text-xs text-muted-foreground">在读书籍</p>
+                <p className="text-[11px] text-muted-foreground">在读书籍</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{currentReadingBooks.length}</p>
               </div>
               <div className="rounded-2xl border border-blue-100 bg-white/80 p-4">
-                <p className="text-xs text-muted-foreground">已读书籍</p>
+                <p className="text-[11px] text-muted-foreground">已读书籍</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{finishedBooksList.length}</p>
               </div>
               <div className="rounded-2xl border border-violet-100 bg-white/80 p-4">
-                <p className="text-xs text-muted-foreground">阅读总页数</p>
+                <p className="text-[11px] text-muted-foreground">阅读总页数</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{totalReadPages}</p>
               </div>
               <div className="rounded-2xl border border-orange-100 bg-white/80 p-4">
-                <p className="text-xs text-muted-foreground">本周阅读</p>
+                <p className="text-[11px] text-muted-foreground">本周阅读</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{weeklyReadEstimate}</p>
               </div>
             </div>
@@ -861,7 +865,7 @@ export default function LibraryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-foreground">当前在读</p>
-                <p className="mt-1 text-sm text-muted-foreground">优先推进最近正在读的书。</p>
+                <p className="mt-1 text-sm text-muted-foreground">优先继续最近正在读的那本书。</p>
               </div>
               <Badge variant="secondary" className="rounded-full px-3 py-1">
                 {currentReadingBooks.length} 本
@@ -915,33 +919,6 @@ export default function LibraryPage() {
         </Card>
       </div>
 
-      {/* Reading Status Tabs */}
-      <Card className="rounded-2xl border border-border/70 shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { key: 'all', label: `全部 (${books.length})` },
-              { key: 'reading', label: `在读 (${currentReadingBooks.length})` },
-              { key: 'finished', label: `已读 (${finishedBooksList.length})` },
-              { key: 'unread', label: `未开始 (${unreadBooks.length})` },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setSelectedReadStatus(item.key as typeof selectedReadStatus)}
-                className={cn(
-                  'rounded-full px-4 py-2 text-sm font-medium transition-all',
-                  selectedReadStatus === item.key
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Filter Component */}
       <BookFilter
         searchInput={searchInput}
@@ -950,8 +927,6 @@ export default function LibraryPage() {
         onTypeChange={setSelectedType}
         selectedReadStatus={selectedReadStatus}
         onReadStatusChange={setSelectedReadStatus}
-        selectedAgeRange={selectedAgeRange}
-        onAgeRangeChange={setSelectedAgeRange}
         sortBy={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}
@@ -997,7 +972,7 @@ export default function LibraryPage() {
 
       {/* Import Result & History */}
       {(importResult || importHistory.length > 0) && (
-        <Card className="border border-border rounded-xl overflow-hidden">
+        <Card className="border border-border/70 rounded-2xl overflow-hidden shadow-sm">
           <CardContent className="p-5">
             {importResult && (
               <div className="mb-4 pb-4 border-b border-border">
@@ -1066,7 +1041,7 @@ export default function LibraryPage() {
 
       {/* Recommended Books */}
       {recommendedBooks.length > 0 && (
-        <Card className="border border-amber-200 bg-gradient-to-r from-amber-50/50 to-transparent rounded-xl overflow-hidden">
+        <Card className="border border-amber-200/70 bg-gradient-to-r from-amber-50/40 to-transparent rounded-2xl overflow-hidden shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
@@ -1103,7 +1078,7 @@ export default function LibraryPage() {
       )}
 
       {/* Reading Goal */}
-      <Card className="border border-border rounded-xl overflow-hidden">
+      <Card className="border border-border/70 rounded-2xl overflow-hidden shadow-sm">
         <CardContent className="p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -1342,7 +1317,6 @@ export default function LibraryPage() {
             setSearchInput('');
             setSelectedType('all');
             setSelectedReadStatus('all');
-            setSelectedAgeRange('all');
           }}
         />
       ) : viewMode === 'grid' ? (

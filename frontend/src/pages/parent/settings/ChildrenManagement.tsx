@@ -332,19 +332,30 @@ export default function ChildrenManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1">
-            当前共 {children.length} 个孩子
-          </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1">
-            点击卡片可查看详情
-          </Badge>
+      <div className="rounded-2xl border border-border/70 bg-gradient-to-br from-slate-50/70 via-white to-indigo-50/40 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              孩子管理
+            </Badge>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+              维护孩子档案、学习概览与钉钉配置
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              在这里统一管理孩子信息、查看最近学习情况，并配置每个孩子独立的钉钉推送。
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-border/70 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">当前孩子数</p>
+              <p className="mt-1 text-2xl font-semibold text-foreground">{children.length}</p>
+            </div>
+            <Button onClick={handleOpenAdd} className="rounded-xl px-4 shadow-sm">
+              <Plus className="w-4 h-4 mr-2" />
+              添加孩子
+            </Button>
+          </div>
         </div>
-        <Button onClick={handleOpenAdd} size="sm" className="rounded-xl px-4 shadow-sm">
-          <Plus className="w-4 h-4 mr-2" />
-          添加孩子
-        </Button>
       </div>
 
       {/* Children List */}
@@ -587,12 +598,12 @@ export default function ChildrenManagement() {
 
       {/* Add Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="rounded-3xl border border-border/70 p-0 overflow-hidden">
+          <DialogHeader className="border-b border-border/70 bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-6 py-5 text-left">
             <DialogTitle>添加孩子</DialogTitle>
-            <DialogDescription>为孩子创建一个学习档案</DialogDescription>
+            <DialogDescription>创建一个新的学习档案，后续即可关联任务、图书和学习报告。</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
               <Label>姓名</Label>
               <Input
@@ -616,7 +627,7 @@ export default function ChildrenManagement() {
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 border-t border-border/70 bg-slate-50/80 px-6 py-4">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               取消
             </Button>
@@ -629,11 +640,12 @@ export default function ChildrenManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="rounded-3xl border border-border/70 p-0 overflow-hidden">
+          <DialogHeader className="border-b border-border/70 bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-6 py-5 text-left">
             <DialogTitle>编辑孩子信息</DialogTitle>
+            <DialogDescription>调整姓名和头像，这些信息会同步到导航、首页和各个学习模块。</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
               <Label>姓名</Label>
               <Input
@@ -657,7 +669,7 @@ export default function ChildrenManagement() {
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 border-t border-border/70 bg-slate-50/80 px-6 py-4">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               取消
             </Button>

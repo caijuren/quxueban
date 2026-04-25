@@ -37,18 +37,6 @@
       "short_name": "首页",
       "url": "/",
       "icons": [{ "src": "/genie.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "任务",
-      "short_name": "任务",
-      "url": "/child/tasks",
-      "icons": [{ "src": "/genie.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "图书馆",
-      "short_name": "图书馆",
-      "url": "/child/library",
-      "icons": [{ "src": "/genie.svg", "sizes": "192x192" }]
     }
   ]
 }

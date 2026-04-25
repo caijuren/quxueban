@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 // ============================================
 // 类型定义
@@ -76,12 +77,6 @@ interface ReportContent {
     subjectDistribution: Record<string, number>;
     dailyTrend: Array<{ day: string; rate: number }>;
   };
-}
-
-interface Child {
-  id: number;
-  name: string;
-  avatar: string;
 }
 
 // ============================================
@@ -175,11 +170,6 @@ async function deleteReport(id: number): Promise<void> {
 
 async function toggleFavorite(id: number, isFavorite: boolean): Promise<void> {
   await apiClient.put(`/reports/${id}/favorite`, { isFavorite });
-}
-
-async function fetchChildren(): Promise<Child[]> {
-  const { data } = await apiClient.get('/children');
-  return data.data;
 }
 
 // ============================================
@@ -326,14 +316,14 @@ function ReportDetail({
       <ScrollArea className="flex-1 p-6">
         <div className="space-y-6 max-w-3xl">
           {/* AI 分析摘要 */}
-          <Card className="border-0 shadow-md bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      <Card className="border border-border/70 shadow-sm bg-gradient-to-br from-indigo-50/70 via-white to-violet-50/60">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shrink-0">
                   <Sparkles className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-lg mb-2">AI 分析摘要</h4>
+                  <h4 className="font-semibold text-lg mb-2">本期摘要</h4>
                   <p className="text-gray-700 leading-relaxed">{report.content.summary}</p>
                 </div>
               </div>
@@ -342,7 +332,7 @@ function ReportDetail({
 
           {/* 关键指标 */}
           <div className="grid grid-cols-3 gap-4">
-            <Card className="border-0 shadow-sm">
+            <Card className="border border-border/70 shadow-sm">
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-gray-500 mb-1">完成率</p>
                 <p className="text-3xl font-bold text-emerald-500">
@@ -350,7 +340,7 @@ function ReportDetail({
                 </p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm">
+            <Card className="border border-border/70 shadow-sm">
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-gray-500 mb-1">完成任务</p>
                 <p className="text-3xl font-bold text-blue-500">
@@ -358,7 +348,7 @@ function ReportDetail({
                 </p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm">
+            <Card className="border border-border/70 shadow-sm">
               <CardContent className="p-4 text-center">
                 <p className="text-sm text-gray-500 mb-1">学习时长</p>
                 <p className="text-3xl font-bold text-purple-500">
@@ -370,7 +360,7 @@ function ReportDetail({
 
           {/* 亮点 */}
           {report.content.highlights.length > 0 && (
-            <Card className="border-0 shadow-sm">
+            <Card className="border border-border/70 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Star className="w-5 h-5 text-yellow-500" />
@@ -392,7 +382,7 @@ function ReportDetail({
 
           {/* 改进建议 */}
           {report.content.suggestions.length > 0 && (
-            <Card className="border-0 shadow-sm">
+            <Card className="border border-border/70 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-blue-500" />
@@ -414,7 +404,7 @@ function ReportDetail({
 
           {/* 预测 */}
           {report.content.predictions && (
-            <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+            <Card className="border border-border/70 shadow-sm bg-gradient-to-r from-blue-50/80 to-indigo-50/60">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-indigo-500" />
@@ -438,6 +428,8 @@ function ReportDetail({
 function GenerateReportForm({
   onGenerate,
   isGenerating,
+  selectedChildId,
+  selectedChildName,
 }: {
   onGenerate: (params: {
     type: ReportType;
@@ -446,23 +438,19 @@ function GenerateReportForm({
     endDate: string;
   }) => void;
   isGenerating: boolean;
+  selectedChildId?: number | null;
+  selectedChildName?: string;
 }) {
   const [selectedType, setSelectedType] = useState<ReportType>('weekly');
-  const [selectedChild, setSelectedChild] = useState<number | undefined>();
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
   });
 
-  const { data: children } = useQuery({
-    queryKey: ['children'],
-    queryFn: fetchChildren,
-  });
-
   const handleGenerate = () => {
     onGenerate({
       type: selectedType,
-      childId: selectedChild,
+      childId: selectedChildId || undefined,
       startDate: dateRange.start,
       endDate: dateRange.end,
     });
@@ -497,94 +485,66 @@ function GenerateReportForm({
     <div className="space-y-6">
       {/* 报告类型选择 */}
       <div>
-        <h4 className="text-sm font-medium text-gray-700 mb-3">选择报告类型</h4>
-        <div className="grid grid-cols-2 gap-3">
+        <h4 className="mb-3 text-sm font-medium text-slate-700">选择报告类型</h4>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
           {REPORT_TYPES.map((type) => (
             <button
               key={type.id}
               onClick={() => setSelectedType(type.id)}
               className={cn(
-                'flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left',
+                'flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all',
                 selectedType === type.id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-border/70 bg-white hover:border-slate-300 hover:bg-slate-50/70'
               )}
             >
               <div
                 className={cn(
-                  'w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0',
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
                   type.color
                 )}
               >
                 {type.icon}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{type.name}</span>
+                  <span className="font-medium text-slate-900">{type.name}</span>
                   {type.autoGenerate && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-[10px]">
                       自动
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{type.description}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-slate-500">{type.description}</p>
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* 孩子选择 */}
-      {children && children.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-3">选择孩子</h4>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedChild(undefined)}
-              className={cn(
-                'px-4 py-2 rounded-full text-sm font-medium transition-all',
-                !selectedChild
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              )}
-            >
-              全部
-            </button>
-            {children.map((child) => (
-              <button
-                key={child.id}
-                onClick={() => setSelectedChild(child.id)}
-                className={cn(
-                  'px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2',
-                  selectedChild === child.id
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                )}
-              >
-                <span>{child.avatar}</span>
-                <span>{child.name}</span>
-              </button>
-            ))}
-          </div>
+      <div>
+        <h4 className="mb-3 text-sm font-medium text-slate-700">当前孩子</h4>
+        <div className="rounded-2xl border border-border/70 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-700">
+          {selectedChildName || '当前孩子'}
         </div>
-      )}
+      </div>
 
       {/* 时间范围 */}
       <div>
-        <h4 className="text-sm font-medium text-gray-700 mb-3">时间范围</h4>
+        <h4 className="mb-3 text-sm font-medium text-slate-700">时间范围</h4>
         <div className="flex gap-3">
           <input
             type="date"
             value={dateRange.start}
             onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="flex-1 px-3 py-2 border rounded-lg text-sm"
+            className="flex-1 rounded-xl border border-border/80 px-3 py-2 text-sm shadow-sm"
           />
-          <span className="text-gray-400 self-center">至</span>
+          <span className="self-center text-slate-400">至</span>
           <input
             type="date"
             value={dateRange.end}
             onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="flex-1 px-3 py-2 border rounded-lg text-sm"
+            className="flex-1 rounded-xl border border-border/80 px-3 py-2 text-sm shadow-sm"
           />
         </div>
       </div>
@@ -593,7 +553,7 @@ function GenerateReportForm({
       <Button
         onClick={handleGenerate}
         disabled={isGenerating}
-        className="w-full"
+        className="w-full rounded-xl shadow-sm"
         size="lg"
       >
         {isGenerating ? (
@@ -619,12 +579,13 @@ export default function ReportsPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | ReportType>('all');
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const { selectedChildId, selectedChild } = useSelectedChild();
 
   const queryClient = useQueryClient();
 
   const { data: reports, isLoading } = useQuery({
-    queryKey: ['reports', selectedTab],
-    queryFn: () => fetchReports(selectedTab === 'all' ? undefined : selectedTab),
+    queryKey: ['reports', selectedTab, selectedChildId],
+    queryFn: () => fetchReports(selectedTab === 'all' ? undefined : selectedTab, selectedChildId || undefined),
   });
 
   const generateMutation = useMutation({
@@ -676,27 +637,43 @@ export default function ReportsPage() {
   );
 
   return (
-    <div className="h-full flex">
-      {/* Left Panel */}
-      <div className="w-96 border-r bg-gray-50/50 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b bg-white">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <FileText className="w-6 h-6 text-primary" />
-            报告中心
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">AI 驱动的学习分析报告</p>
-        </div>
+    <div className="space-y-6">
+      <Card className="overflow-hidden border border-border/70 bg-gradient-to-br from-indigo-50/70 via-white to-violet-50/60 shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl">
+              <Badge variant="secondary" className="rounded-full px-3 py-1">学习报告</Badge>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                围绕 {selectedChild?.name || '当前孩子'} 生成学习总结与建议
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                直接基于左侧当前孩子和时间范围生成新的学习报告。历史报告保留在下方，方便快速查看和继续复盘。
+              </p>
+            </div>
+            <div className="w-full xl:max-w-md">
+              <GenerateReportForm
+                onGenerate={handleGenerate}
+                isGenerating={isGenerating}
+                selectedChildId={selectedChildId}
+                selectedChildName={selectedChild?.name}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Generate Form */}
-        <div className="p-4 border-b bg-white">
-          <GenerateReportForm onGenerate={handleGenerate} isGenerating={isGenerating} />
-        </div>
-
-        {/* Report List */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <Card className="border border-border/70 shadow-sm">
+          <CardContent className="p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">最近生成的报告</h2>
+                <p className="mt-1 text-sm text-muted-foreground">查看最近一次分析结果，继续复盘。</p>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden flex flex-col">
           {/* Filter Tabs */}
-          <div className="px-4 pt-4">
+          <div className="pt-1">
             <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as typeof selectedTab)}>
               <TabsList className="w-full">
                 <TabsTrigger value="all" className="flex-1">
@@ -713,7 +690,7 @@ export default function ReportsPage() {
           </div>
 
           {/* List */}
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 pt-4">
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -749,10 +726,11 @@ export default function ReportsPage() {
             )}
           </ScrollArea>
         </div>
-      </div>
+          </CardContent>
+        </Card>
 
-      {/* Right Panel - Report Detail */}
-      <div className="flex-1 bg-white">
+        <Card className="min-h-[560px] border border-border/70 shadow-sm">
+          <CardContent className="p-0 h-full">
         <AnimatePresence mode="wait">
           {selectedReport ? (
             <ReportDetail
@@ -776,7 +754,7 @@ export default function ReportsPage() {
               className="h-full flex items-center justify-center"
             >
               <div className="text-center">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-10 h-10 text-gray-400" />
                 </div>
                 <h3 className="text-lg font-medium text-gray-900">选择报告查看详情</h3>
@@ -785,6 +763,8 @@ export default function ReportsPage() {
             </motion.div>
           )}
         </AnimatePresence>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

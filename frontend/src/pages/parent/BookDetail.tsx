@@ -287,15 +287,18 @@ export default function BookDetailPage() {
         <Button variant="ghost" onClick={() => navigate('/parent/library')} className="rounded-xl">
           <ArrowLeft className="size-5" />
         </Button>
-        <h1 className="text-2xl font-bold text-gray-900">书籍详情</h1>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">阅读工作台</p>
+          <h1 className="text-2xl font-bold text-gray-900">书籍详情</h1>
+        </div>
       </div>
 
       {/* Book Info Card */}
       <Card className="border border-border/70 shadow-sm rounded-3xl overflow-hidden">
         <CardContent className="p-6">
-          <div className="flex gap-6">
+          <div className="flex flex-col gap-6 lg:flex-row">
             {/* Cover */}
-            <div className="size-32 rounded-2xl bg-primary/80 flex items-center justify-center text-6xl shrink-0 shadow-lg">
+            <div className="size-28 lg:size-32 rounded-2xl bg-primary/80 flex items-center justify-center text-5xl lg:text-6xl shrink-0 shadow-lg">
               {book.coverUrl ? (
                 <img src={book.coverUrl} alt={book.name} className="size-full rounded-2xl object-cover" />
               ) : (
@@ -306,22 +309,22 @@ export default function BookDetailPage() {
             {/* Info */}
             <div className="flex-1">
               <h2 className="text-2xl font-bold text-gray-900">{book.name}</h2>
-              <div className="mt-2 space-y-1 text-gray-600">
+              <div className="mt-3 flex flex-wrap gap-2 text-sm text-gray-600">
                 {book.author && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5">
                     <User className="size-4" />
                     <span>{book.author}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5">
                   <Tag className="size-4" />
                   <span>{typeLabels[book.type] || book.type}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5">
                   <FileText className="size-4" />
                   <span>{book.totalPages} 页</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5">
                   <Clock className="size-4" />
                   <span>已读 {book.totalReadMinutes} 分钟</span>
                 </div>
@@ -355,7 +358,7 @@ export default function BookDetailPage() {
                 </div>
               </div>
               
-              {/* Quick Actions */}
+              {/* Quick Summary */}
               <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div className="rounded-2xl border border-border bg-slate-50/80 p-4">
                   <p className="text-xs text-muted-foreground">当前状态</p>
@@ -374,7 +377,7 @@ export default function BookDetailPage() {
               </div>
 
               {/* P1-9: 评分和收藏 */}
-              <div className="mt-5 flex items-center gap-4 flex-wrap">
+              <div className="mt-5 space-y-4 border-t border-border/70 pt-5">
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant={readingStatus === '想读' ? 'default' : 'outline'}
@@ -420,66 +423,70 @@ export default function BookDetailPage() {
                   </Button>
                 </div>
 
-                {/* 评分 */}
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => handleRateBook(star)}
-                      className="p-1 hover:scale-110 transition-transform"
-                    >
-                      <Star
-                        className={cn(
-                          "size-5 transition-colors",
-                          star <= bookRating
-                            ? "fill-amber-400 text-amber-400"
-                            : "text-gray-300 hover:text-amber-300"
-                        )}
-                      />
-                    </button>
-                  ))}
-                  {bookRating > 0 && (
-                    <span className="ml-2 text-sm text-muted-foreground">
-                      {bookRating} 星
-                    </span>
-                  )}
+                <div className="flex flex-wrap items-center gap-4">
+                  {/* 评分 */}
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => handleRateBook(star)}
+                        className="p-1 hover:scale-110 transition-transform"
+                      >
+                        <Star
+                          className={cn(
+                            "size-5 transition-colors",
+                            star <= bookRating
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-gray-300 hover:text-amber-300"
+                          )}
+                        />
+                      </button>
+                    ))}
+                    {bookRating > 0 && (
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        {bookRating} 星
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 收藏按钮 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleToggleFavorite}
+                    className={cn(
+                      "gap-1 rounded-lg",
+                      isFavorite && "text-red-500 hover:text-red-600"
+                    )}
+                  >
+                    <Heart
+                      className={cn(
+                        "size-4",
+                        isFavorite && "fill-current"
+                      )}
+                    />
+                    {isFavorite ? '已收藏' : '收藏'}
+                  </Button>
                 </div>
                 
-                {/* 收藏按钮 */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleToggleFavorite}
-                  className={cn(
-                    "gap-1 rounded-lg",
-                    isFavorite && "text-red-500 hover:text-red-600"
+                <div className="flex flex-wrap gap-2">
+                  {isFinished && selectedChildId && (
+                    <Button 
+                      onClick={() => startNewReadingMutation.mutate(selectedChildId)}
+                      className="gap-2 rounded-xl bg-primary text-white"
+                    >
+                      <Play className="size-4" />
+                      开始新一轮阅读
+                    </Button>
                   )}
-                >
-                  <Heart
-                    className={cn(
-                      "size-4",
-                      isFavorite && "fill-current"
-                    )}
-                  />
-                  {isFavorite ? '已收藏' : '收藏'}
-                </Button>
-                
-                {isFinished && selectedChildId && (
                   <Button 
-                    onClick={() => startNewReadingMutation.mutate(selectedChildId)}
-                    className="gap-2 rounded-xl bg-primary text-white"
+                    onClick={() => navigate(`/parent/library/${id}/insights`)}
+                    className="gap-2 rounded-xl bg-primary text-primary-foreground"
                   >
-                    <Play className="size-4" />
-                    开始新一轮阅读
+                    <Brain className="size-4" />
+                    AI阅读洞察
                   </Button>
-                )}
-                <Button 
-                  onClick={() => navigate(`/parent/library/${id}/insights`)}
-                  className="gap-2 rounded-xl bg-primary text-primary-foreground"
-                >
-                  <Brain className="size-4" />
-                  AI阅读洞察
-                </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -487,7 +494,7 @@ export default function BookDetailPage() {
       </Card>
 
       {/* Notes & Insights */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4">
         {/* 阅读记录主区 */}
         <Card className="border border-border/70 shadow-sm rounded-3xl overflow-hidden">
           <CardContent className="p-6">
@@ -589,7 +596,7 @@ export default function BookDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <MessageSquare className="size-5 text-blue-500" />
-                  <h3 className="font-semibold text-gray-900">我的评论</h3>
+                  <h3 className="font-semibold text-gray-900">阅读感受</h3>
                 </div>
                 <Button
                   variant="ghost"
@@ -601,7 +608,7 @@ export default function BookDetailPage() {
                   className="rounded-lg"
                 >
                   <Edit3 className="size-4 mr-1" />
-                  {bookReview ? '编辑' : '写评论'}
+                  {bookReview ? '编辑' : '写感受'}
                 </Button>
               </div>
               {bookReview ? (
@@ -612,7 +619,7 @@ export default function BookDetailPage() {
               ) : (
                 <div className="text-center py-8 text-gray-400">
                   <MessageSquare className="size-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">暂无评论，写下你的读后感吧</p>
+                  <p className="text-sm">暂无感受，写下你的读后想法吧</p>
                 </div>
               )}
             </CardContent>
@@ -623,7 +630,7 @@ export default function BookDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <FileText className="size-5 text-green-500" />
-                  <h3 className="font-semibold text-gray-900">阅读笔记</h3>
+                  <h3 className="font-semibold text-gray-900">笔记与摘抄</h3>
                 </div>
                 <Button
                   variant="ghost"

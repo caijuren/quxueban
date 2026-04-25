@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ReadStatus, ViewMode } from '@/types/library';
-import { bookTypes, readStatusOptions, sortOptions, ageRanges } from '@/types/library';
+import { bookTypes, readStatusOptions, sortOptions } from '@/types/library';
 
 interface BookFilterProps {
   searchInput: string;
@@ -19,8 +19,6 @@ interface BookFilterProps {
   onTypeChange: (value: string) => void;
   selectedReadStatus: ReadStatus;
   onReadStatusChange: (value: ReadStatus) => void;
-  selectedAgeRange: string;
-  onAgeRangeChange: (value: string) => void;
   sortBy: string;
   onSortChange: (value: string) => void;
   viewMode: ViewMode;
@@ -41,8 +39,6 @@ export function BookFilter({
   onTypeChange,
   selectedReadStatus,
   onReadStatusChange,
-  selectedAgeRange,
-  onAgeRangeChange,
   sortBy,
   onSortChange,
   viewMode,
@@ -56,11 +52,11 @@ export function BookFilter({
   resultCount,
 }: BookFilterProps) {
   const hasActiveFilters =
-    selectedType !== 'all' || selectedReadStatus !== 'all' || selectedAgeRange !== 'all' || sortBy !== '' || !!searchInput;
+    selectedType !== 'all' || selectedReadStatus !== 'all' || sortBy !== '' || !!searchInput;
 
   const clearAllFilters = () => {
     onReadStatusChange('all');
-    onAgeRangeChange('all');
+    onTypeChange('all');
     onSortChange('');
     onSearchChange('');
   };
@@ -74,10 +70,6 @@ export function BookFilter({
     ? '全部状态'
     : readStatusOptions.find(s => s.value === selectedReadStatus)?.label || '全部状态';
   
-  const selectedAgeLabel = selectedAgeRange === 'all'
-    ? '全部年龄'
-    : ageRanges.find(a => a.value === selectedAgeRange)?.label || '全部年龄';
-  
   const selectedSortLabel = sortBy === ''
     ? '默认排序'
     : sortOptions.find(s => s.value === sortBy)?.label || '默认排序';
@@ -85,11 +77,11 @@ export function BookFilter({
   return (
     <div className="space-y-3">
       {/* Filter Bar - All in one row */}
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
         <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-semibold text-foreground">书目筛选</p>
-            <p className="text-xs text-muted-foreground">按分类、状态和年龄快速定位当前孩子的书。</p>
+            <p className="text-xs text-muted-foreground">按状态、类型和关键词快速定位当前孩子的书。</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>当前结果</span>
@@ -117,7 +109,25 @@ export function BookFilter({
             )}
           </div>
 
-          <div className="w-px h-6 bg-border hidden sm:block" />
+          <div className="hidden h-6 w-px bg-border sm:block" />
+
+          {/* Read Status Pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {readStatusOptions.map((status) => (
+              <button
+                key={status.value}
+                onClick={() => onReadStatusChange(status.value as ReadStatus)}
+                className={cn(
+                  'rounded-full px-3 py-2 text-sm font-medium transition-all',
+                  selectedReadStatus === status.value
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                )}
+              >
+                {status.label}
+              </button>
+            ))}
+          </div>
 
           {/* Book Type Dropdown */}
           <DropdownMenu>
@@ -161,74 +171,6 @@ export function BookFilter({
                     selectedType === type.value ? "font-medium text-gray-900" : "text-gray-700"
                   )}>{type.label}</span>
                   {selectedType === type.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Read Status Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
-              "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
-              "bg-white border border-gray-200 shadow-sm",
-              selectedReadStatus !== 'all' && "border-primary/50 bg-primary/5"
-            )}>
-              <span className="text-sm font-medium text-gray-700">{selectedStatusLabel}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
-              <div className="px-2.5 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-100">
-                选择阅读状态
-              </div>
-              {readStatusOptions.map((status) => (
-                <DropdownMenuItem
-                  key={status.value}
-                  onClick={() => onReadStatusChange(status.value as ReadStatus)}
-                  className={cn(
-                    "flex items-center justify-between px-2.5 py-2 cursor-pointer",
-                    selectedReadStatus === status.value && "bg-primary/5"
-                  )}
-                >
-                  <span className={cn(
-                    "text-sm",
-                    selectedReadStatus === status.value ? "font-medium text-gray-900" : "text-gray-700"
-                  )}>{status.label}</span>
-                  {selectedReadStatus === status.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Age Range Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
-              "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
-              "bg-white border border-gray-200 shadow-sm",
-              selectedAgeRange !== 'all' && "border-primary/50 bg-primary/5"
-            )}>
-              <span className="text-sm font-medium text-gray-700">{selectedAgeLabel}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
-              <div className="px-2.5 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-100">
-                选择适读年龄
-              </div>
-              {ageRanges.map((age) => (
-                <DropdownMenuItem
-                  key={age.value}
-                  onClick={() => onAgeRangeChange(age.value)}
-                  className={cn(
-                    "flex items-center justify-between px-2.5 py-2 cursor-pointer",
-                    selectedAgeRange === age.value && "bg-primary/5"
-                  )}
-                >
-                  <span className={cn(
-                    "text-sm",
-                    selectedAgeRange === age.value ? "font-medium text-gray-900" : "text-gray-700"
-                  )}>{age.label}</span>
-                  {selectedAgeRange === age.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -363,14 +305,6 @@ export function BookFilter({
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
                 {readStatusOptions.find(s => s.value === selectedReadStatus)?.label}
                 <button onClick={() => onReadStatusChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {selectedAgeRange !== 'all' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                {ageRanges.find(a => a.value === selectedAgeRange)?.label}
-                <button onClick={() => onAgeRangeChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
                   <X className="w-3 h-3" />
                 </button>
               </span>

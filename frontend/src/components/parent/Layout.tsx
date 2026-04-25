@@ -37,20 +37,37 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
-const navItems = [
-  { path: '/parent', label: '概览', icon: LayoutDashboard },
-  { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
-  { path: '/parent/plans', label: '学习计划', icon: CalendarDays },
-  { path: '/parent/library', label: '图书馆', icon: Library },
-  { path: '/parent/reading', label: '阅读', icon: BookOpen },
-  { path: '/parent/achievements', label: '成就', icon: Trophy },
-  { path: '/parent/statistics', label: '数据统计', icon: BarChart3 },
-  { path: '/parent/reports', label: 'AI 报告', icon: FileText },
-  { path: '/parent/settings/account', label: '设置', icon: Settings },
+const navGroups = [
+  {
+    id: 'workflow',
+    label: '学习主流程',
+    items: [
+      { path: '/parent', label: '首页', icon: LayoutDashboard },
+      { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
+      { path: '/parent/plans', label: '学习计划', icon: CalendarDays },
+      { path: '/parent/library', label: '图书馆', icon: Library },
+      { path: '/parent/reading', label: '阅读', icon: BookOpen },
+    ],
+  },
+  {
+    id: 'insight',
+    items: [
+      { path: '/parent/achievements', label: '成就', icon: Trophy },
+      { path: '/parent/statistics', label: '学习统计', icon: BarChart3 },
+      { path: '/parent/reports', label: '学习报告', icon: FileText },
+    ],
+  },
+  {
+    id: 'system',
+    label: '设置与系统',
+    items: [
+      { path: '/parent/settings/account', label: '设置', icon: Settings },
+    ],
+  },
 ];
 
 const pageTitleMap: Record<string, string> = {
-  '/parent': '概览',
+  '/parent': '首页',
   '/parent/tasks': '任务管理',
   '/parent/task-templates': '任务模板',
   '/parent/plans': '学习计划',
@@ -58,8 +75,8 @@ const pageTitleMap: Record<string, string> = {
   '/parent/reading': '阅读管理',
   '/parent/achievements': '成就系统',
   '/parent/children': '孩子管理',
-  '/parent/statistics': '数据统计',
-  '/parent/reports': 'AI 报告中心',
+  '/parent/statistics': '学习统计',
+  '/parent/reports': '学习报告',
   '/parent/settings/account': '设置',
 };
 
@@ -70,6 +87,18 @@ function getPageTitle(pathname: string): string {
     if (pathname.startsWith(path + '/')) return title;
   }
   return '趣学伴';
+}
+
+function getActiveGroupLabel(pathname: string): string {
+  const activeGroup = navGroups.find((group) =>
+    group.items.some((item) =>
+      item.path === '/parent'
+        ? pathname === '/parent'
+        : pathname === item.path || pathname.startsWith(`${item.path}/`)
+    )
+  );
+
+  return activeGroup?.label || '学习主流程';
 }
 
 const sidebarVariants = {
@@ -184,30 +213,30 @@ export default function ParentLayout() {
       {/* ==================== Desktop Sidebar ==================== */}
       <aside className="hidden lg:flex lg:flex-col w-[176px] bg-white border-r border-border flex-shrink-0">
         {/* Brand */}
-        <div className="border-b border-border px-2.5 py-2 flex-shrink-0">
-          <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-2 py-2 shadow-sm">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-bold text-[11px] shadow-sm">
-              趣
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold tracking-tight text-slate-900">趣学伴</p>
-              <p className="mt-0.5 text-[9px] text-muted-foreground">家庭学习伙伴</p>
+        <div className="border-b border-border px-2.5 py-2.5 flex-shrink-0">
+          <div className="rounded-xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-2 py-2 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-bold text-[11px] shadow-sm">
+                趣
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold tracking-tight text-slate-900">趣学伴</p>
+                <p className="mt-0.5 text-[9px] text-muted-foreground">家庭学习伙伴</p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Child Selector */}
         {childrenList.length > 0 && (
-          <div className="px-2.5 pt-2 pb-1.5 flex-shrink-0">
-            <p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-semibold px-1.5 mb-1.5">
-              当前孩子
-            </p>
+          <div className="px-2.5 pt-2.5 pb-2 flex-shrink-0">
+            <div className="mx-1.5 mb-2 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-slate-50/90 px-2 py-2 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-white">
-                  <Avatar className="size-6 ring-1 ring-white/80">
+                <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-gradient-to-r from-slate-50 to-white px-2.5 py-2 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-white">
+                  <Avatar className="size-7 ring-1 ring-white/80 shadow-sm">
                     <AvatarImage src={selectedChild?.avatar} />
-                    <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[9px] font-semibold">
+                    <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[10px] font-semibold">
                       {selectedChild?.name?.charAt(0) || 'C'}
                     </AvatarFallback>
                   </Avatar>
@@ -216,7 +245,9 @@ export default function ParentLayout() {
                       {selectedChild?.name || '选择孩子'}
                     </p>
                   </div>
-                  <ChevronDown className="size-3.5 text-slate-500" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                    <ChevronDown className="size-3.5" />
+                  </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-[150px] p-1">
@@ -252,32 +283,44 @@ export default function ParentLayout() {
 
         {/* Navigation */}
         <ScrollArea className="flex-1 px-2.5 py-1.5">
-          <nav className="space-y-0.5">
-            {navItems.map((item) => {
-              const isActive = isMenuActive(item.path);
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    'group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all',
-                    isActive
-                      ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
-                      : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
-                  )}
-                >
-                  {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
-                  <div className={cn(
-                    'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-colors',
-                    isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
-                  )}>
-                    <Icon className="size-[14px] flex-shrink-0" />
-                  </div>
-                  <span>{item.label}</span>
-                </NavLink>
-              );
-            })}
+          <nav className="space-y-3">
+            {navGroups.map((group, groupIndex) => (
+              <div key={group.id} className="space-y-1">
+                {groupIndex > 0 ? <div className="mx-1.5 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" /> : null}
+                {group.label ? (
+                  <p className="px-1.5 pt-1 text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-semibold">
+                    {group.label}
+                  </p>
+                ) : null}
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive = isMenuActive(item.path);
+                    const Icon = item.icon;
+                    return (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        className={cn(
+                          'group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all',
+                          isActive
+                            ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
+                            : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
+                        )}
+                      >
+                        {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
+                        <div className={cn(
+                          'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-colors',
+                          isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
+                        )}>
+                          <Icon className="size-[14px] flex-shrink-0" />
+                        </div>
+                        <span>{item.label}</span>
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </ScrollArea>
 
@@ -285,7 +328,7 @@ export default function ParentLayout() {
         <div className="border-t border-border p-2.5 flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-white px-2 py-2 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-slate-50">
+              <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-gradient-to-r from-white to-slate-50 px-2 py-2 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-slate-50">
                 <div className="relative flex-shrink-0">
                   <Avatar className="size-9 ring-1 ring-slate-200">
                     <AvatarImage src={user?.avatar} />
@@ -334,7 +377,9 @@ export default function ParentLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop Header */}
         <header className="hidden lg:flex items-center justify-between h-[52px] px-6 bg-white border-b border-border flex-shrink-0">
-          <h1 className="text-base font-semibold text-foreground">{pageTitle}</h1>
+          <div>
+            <h1 className="text-base font-semibold text-foreground">{pageTitle}</h1>
+          </div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -431,7 +476,9 @@ export default function ParentLayout() {
           >
             <Menu className="size-5" />
           </Button>
-          <h1 className="font-semibold text-foreground text-sm">{pageTitle}</h1>
+          <div className="min-w-0 text-center">
+            <h1 className="font-semibold text-foreground text-sm truncate">{pageTitle}</h1>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-muted-foreground relative">
@@ -547,32 +594,32 @@ export default function ParentLayout() {
             >
               {/* Mobile Sidebar Brand */}
               <div className="border-b border-border px-3 py-3 flex-shrink-0">
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-3 py-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-bold text-sm shadow-sm">
-                      趣
+                <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-3 py-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-bold text-sm shadow-sm">
+                        趣
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold tracking-tight text-slate-900">趣学伴</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">家庭学习伙伴</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[15px] font-semibold tracking-tight text-slate-900">趣学伴</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">家庭学习伙伴</p>
-                    </div>
+                    <Button variant="ghost" size="icon" onClick={closeSidebar} className="rounded-xl text-muted-foreground hover:bg-white/80">
+                      <X className="size-4" />
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={closeSidebar} className="rounded-xl text-muted-foreground hover:bg-white/80">
-                    <X className="size-4" />
-                  </Button>
                 </div>
               </div>
 
               {/* Mobile Child Selector */}
               {childrenList.length > 0 && (
                 <div className="px-3 pt-3 pb-2 flex-shrink-0">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold px-2 mb-2">
-                    当前孩子
-                  </p>
+                  <div className="mx-2 mb-2 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-slate-50/90 px-3 py-2.5 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-white">
-                        <Avatar className="size-7 ring-1 ring-white/80">
+                      <button className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-gradient-to-r from-slate-50 to-white px-3 py-2.5 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-white">
+                        <Avatar className="size-7 ring-1 ring-white/80 shadow-sm">
                           <AvatarImage src={selectedChild?.avatar} />
                           <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[11px] font-semibold">
                             {selectedChild?.name?.charAt(0) || 'C'}
@@ -582,9 +629,10 @@ export default function ParentLayout() {
                           <p className="truncate text-sm font-medium text-slate-900">
                             {selectedChild?.name || '选择孩子'}
                           </p>
-                          <p className="text-[11px] text-muted-foreground">点击切换</p>
                         </div>
-                        <ChevronDown className="size-4 text-slate-500" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                          <ChevronDown className="size-4" />
+                        </div>
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-[248px] p-1.5">
@@ -622,33 +670,45 @@ export default function ParentLayout() {
 
               {/* Mobile Navigation */}
               <ScrollArea className="flex-1 px-3 py-2">
-                <nav className="space-y-1">
-                  {navItems.map((item) => {
-                    const isActive = isMenuActive(item.path);
-                    const Icon = item.icon;
-                    return (
-                      <NavLink
-                        key={item.path}
-                        to={item.path}
-                        onClick={closeSidebar}
-                        className={cn(
-                          'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
-                          isActive
-                            ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
-                            : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
-                        )}
-                      >
-                        {isActive ? <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
-                        <div className={cn(
-                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
-                          isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
-                        )}>
-                          <Icon className="size-4 flex-shrink-0" />
-                        </div>
-                        <span>{item.label}</span>
-                      </NavLink>
-                    );
-                  })}
+                <nav className="space-y-4">
+                  {navGroups.map((group, groupIndex) => (
+                    <div key={group.id} className="space-y-1.5">
+                      {groupIndex > 0 ? <div className="mx-2 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" /> : null}
+                      {group.label ? (
+                        <p className="px-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
+                          {group.label}
+                        </p>
+                      ) : null}
+                      <div className="space-y-0.5">
+                        {group.items.map((item) => {
+                          const isActive = isMenuActive(item.path);
+                          const Icon = item.icon;
+                          return (
+                            <NavLink
+                              key={item.path}
+                              to={item.path}
+                              onClick={closeSidebar}
+                              className={cn(
+                                'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
+                                isActive
+                                  ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
+                                  : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
+                              )}
+                            >
+                              {isActive ? <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
+                              <div className={cn(
+                                'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
+                                isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
+                              )}>
+                                <Icon className="size-4 flex-shrink-0" />
+                              </div>
+                              <span>{item.label}</span>
+                            </NavLink>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </nav>
               </ScrollArea>
 

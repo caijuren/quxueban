@@ -38,7 +38,6 @@ export interface Child {
   id: number;
   name: string;
   avatar: string;
-  pin: string;
 }
 
 export interface Family {

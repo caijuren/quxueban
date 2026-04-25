@@ -103,13 +103,6 @@ export function BookCard({
           <BookOpen className="w-10 h-10 text-muted-foreground/50" />
         </div>
       )}
-      {book.characterTag && (
-        <div className="absolute top-2 right-2">
-          <Badge className="text-xs bg-primary text-white px-2 py-0.5 rounded shadow-sm">
-            {book.characterTag}
-          </Badge>
-        </div>
-      )}
       {progress > 0 && progress < 100 && (
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
           <div
@@ -148,7 +141,7 @@ export function BookCard({
           </div>
         )}
 
-        <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300">
+        <Card className="border border-border/70 shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-300">
           <div className="flex">
             <div
               className="w-24 h-32 relative cursor-pointer flex-shrink-0"
@@ -165,22 +158,20 @@ export function BookCard({
                       {formatBookName(book.name)}
                     </h4>
                     <p className="text-sm text-muted-foreground mt-1 truncate">
-                      {book.author || '未知作者'}{book.publisher ? ` / ${book.publisher}` : ''}
+                      {book.author || '未知作者'}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {book.totalPages > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          {book.totalPages}页
-                        </Badge>
-                      )}
-                      {book.suitableAge && (
-                        <Badge variant="secondary" className="text-xs">
-                          {book.suitableAge}
-                        </Badge>
-                      )}
+                      <Badge variant="secondary" className="text-xs">
+                        {bookTypes.find(t => t.value === book.type)?.label || '其他'}
+                      </Badge>
                       <Badge className={cn("text-xs", statusColor, statusBg)}>
                         {readStatus}
                       </Badge>
+                      {book.totalPages > 0 && (
+                        <span className="text-xs text-muted-foreground self-center">
+                          {book.totalPages} 页
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="w-full md:w-48 flex-shrink-0">
@@ -274,7 +265,7 @@ export function BookCard({
         </div>
       )}
 
-      <Card className="border border-border shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 h-full flex flex-col">
+      <Card className="border border-border/70 shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 h-full flex flex-col">
         <div className="flex flex-col h-full">
           <div
             className="aspect-[3/4] relative cursor-pointer"
@@ -283,7 +274,7 @@ export function BookCard({
             {renderCover()}
           </div>
 
-          <div className="flex-1 flex flex-col p-3.5">
+          <div className="flex-1 flex flex-col p-3">
             <div className="flex-1">
               <h4 className="font-semibold text-foreground text-sm line-clamp-2 min-h-[2.5rem]">
                 {formatBookName(book.name)}
@@ -299,16 +290,9 @@ export function BookCard({
                   {readStatus}
                 </Badge>
               </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                <div className="rounded-lg bg-slate-50 px-2 py-1.5">
-                  <p className="text-muted-foreground">已读页数</p>
-                  <p className="mt-1 font-semibold text-foreground">{readPages}/{totalPages || '--'}</p>
-                </div>
-                <div className="rounded-lg bg-slate-50 px-2 py-1.5">
-                  <p className="text-muted-foreground">最近阅读</p>
-                  <p className="mt-1 font-semibold text-foreground">{lastReadLabel}</p>
-                </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>{readPages}/{totalPages || '--'} 页</span>
+                <span>{lastReadLabel}</span>
               </div>
             </div>
 
@@ -317,7 +301,7 @@ export function BookCard({
                 <span className="text-muted-foreground">进度</span>
                 <span className="font-medium">{progress}%</span>
               </div>
-              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-3">
+              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-2.5">
                 <div
                   className="h-full bg-primary rounded-full transition-all duration-500"
                   style={{ width: `${progress}%` }}
@@ -344,7 +328,7 @@ export function BookCard({
                     }}
                     className="text-xs w-full rounded-lg"
                   >
-                    {book.activeReadings?.length > 0 ? '继续' : '开始'}
+                    {book.activeReadings?.length > 0 ? '继续阅读' : '开始阅读'}
                   </Button>
                 )}
                 {!batchMode && (

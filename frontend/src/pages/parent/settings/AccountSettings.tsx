@@ -273,9 +273,9 @@ export default function AccountSettings() {
   const user = userInfo?.data;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Security Score Card */}
-      <Card>
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Shield className="w-5 h-5 text-primary" />
@@ -325,8 +325,12 @@ export default function AccountSettings() {
       </Card>
 
       {/* Avatar Section */}
-      <section className="space-y-4">
-        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">头像</h4>
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
+        <CardContent className="p-6">
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-slate-900">头像</h3>
+          <p className="mt-1 text-sm text-muted-foreground">头像会同步显示在侧边栏、首页和其他身份位置。</p>
+        </div>
         <div className="flex items-center gap-6">
           <div className="relative group cursor-pointer" onClick={() => avatar && setIsAvatarPreviewOpen(true)}>
             <Avatar className="w-20 h-20 transition-transform group-hover:scale-105">
@@ -370,13 +374,16 @@ export default function AccountSettings() {
             <p className="text-xs text-muted-foreground">支持 JPG、PNG、WebP，建议 1MB 以内</p>
           </div>
         </div>
-      </section>
-
-      <Separator />
+        </CardContent>
+      </Card>
 
       {/* Profile Section */}
-      <section className="space-y-4">
-        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">基本信息</h4>
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
+        <CardContent className="p-6">
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-slate-900">基本信息</h3>
+          <p className="mt-1 text-sm text-muted-foreground">管理用户名和后续可扩展的邮箱、手机号信息。</p>
+        </div>
         <div className="grid gap-4 max-w-md">
           {/* Username with inline edit */}
           <div className="space-y-2">
@@ -471,13 +478,16 @@ export default function AccountSettings() {
             <p className="text-xs text-muted-foreground">手机号绑定功能即将上线</p>
           </div>
         </div>
-      </section>
-
-      <Separator />
+        </CardContent>
+      </Card>
 
       {/* Password Section with Wizard */}
-      <section className="space-y-4">
-        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">修改密码</h4>
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
+        <CardContent className="p-6">
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-slate-900">修改密码</h3>
+          <p className="mt-1 text-sm text-muted-foreground">通过分步验证的方式修改密码，降低误操作风险。</p>
+        </div>
         <div className="max-w-md">
           {/* Step Indicator */}
           <div className="flex items-center gap-2 mb-6">
@@ -628,16 +638,17 @@ export default function AccountSettings() {
             </div>
           )}
         </div>
-      </section>
-
-      <Separator />
+        </CardContent>
+      </Card>
 
       {/* Activity History */}
-      <section className="space-y-4">
-        <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+      <Card className="rounded-2xl border border-border/70 shadow-sm">
+        <CardContent className="p-6">
+        <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
           <History className="w-4 h-4" />
           操作历史
         </h4>
+        <p className="mt-1 mb-4 text-sm text-muted-foreground">帮助你快速确认最近的账户修改动作。</p>
         <div className="space-y-2">
           {mockActivityHistory.map((activity) => (
             <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
@@ -655,7 +666,8 @@ export default function AccountSettings() {
             </div>
           ))}
         </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Avatar Preview Dialog */}
       <Dialog open={isAvatarPreviewOpen} onOpenChange={setIsAvatarPreviewOpen}>

@@ -3,70 +3,44 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth, AuthProvider } from '../hooks/useAuth';
 import { apiClient } from '@/lib/api-client';
 
-// Mock localStorage
+const storage = new Map<string, string>();
+
 const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
+  getItem: vi.fn((key: string) => storage.get(key) ?? null),
+  setItem: vi.fn((key: string, value: string) => {
+    storage.set(key, value);
+  }),
+  removeItem: vi.fn((key: string) => {
+    storage.delete(key);
+  }),
+  clear: vi.fn(() => {
+    storage.clear();
+  }),
 };
+
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-// Mock apiClient
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
-    get: vi.fn(),
     post: vi.fn(),
   },
+  getErrorMessage: (error: unknown) => error instanceof Error ? error.message : '请求失败',
 }));
 
-// Mock react-router-dom
+const navigateMock = vi.fn();
+
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
-  useLocation: () => ({ state: { from: { pathname: '/' } } }),
+  useNavigate: () => navigateMock,
+  useLocation: () => ({ state: null }),
 }));
 
 describe('身份认证逻辑', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    storage.clear();
   });
 
-  it('家长登录后应保持家长身份', async () => {
-    // 模拟后端返回家长数据
-    const mockUser = {
-      id: 1,
-      name: 'andycoy',
-      role: 'parent' as const,
-      familyId: 1,
-      familyName: 'andycoy的家庭',
-      familyCode: 'F12345',
-      avatar: '👤',
-    };
-
-    (apiClient.get as any).mockResolvedValueOnce({
-      data: { data: mockUser }
-    });
-
-    // 模拟 localStorage.getItem
-    localStorageMock.getItem.mockImplementation((key) => {
-      if (key === 'auth_token') return 'valid-token';
-      if (key === 'auth_state') return null;
-      return null;
-    });
-
-    const { result } = renderHook(() => useAuth(), {
-      wrapper: AuthProvider
-    });
-
-    // 等待初始化完成
-    await waitFor(() => expect(result.current.isInitializing).toBe(false));
-
-    expect(result.current.user).toEqual(mockUser);
-    expect(result.current.user?.role).toBe('parent');
-  });
-
-  it('刷新页面后不应跳转到孩子端', async () => {
-    // 模拟从localStorage恢复家长用户
+  it('刷新页面后应从 auth_user 恢复家长身份', async () => {
     const storedUser = {
       id: 1,
       name: 'andycoy',
@@ -77,65 +51,80 @@ describe('身份认证逻辑', () => {
       avatar: '👤',
     };
 
-    const storedAuthState = {
-      user: storedUser,
-      token: 'valid-token',
-      isAuthenticated: true,
-    };
-
-    // 模拟 localStorage.getItem
-    localStorageMock.getItem.mockImplementation((key) => {
-      if (key === 'auth_token') return 'valid-token';
-      if (key === 'auth_state') return JSON.stringify(storedAuthState);
-      return null;
-    });
-
-    // 模拟网络错误，让它从localStorage恢复
-    (apiClient.get as any).mockRejectedValueOnce({ code: 'ECONNABORTED' });
+    storage.set('auth_token', 'valid-token');
+    storage.set('auth_user', JSON.stringify(storedUser));
 
     const { result } = renderHook(() => useAuth(), {
-      wrapper: AuthProvider
+      wrapper: AuthProvider,
     });
 
-    // 等待初始化完成
     await waitFor(() => expect(result.current.isInitializing).toBe(false));
 
-    // 应该从localStorage正确恢复用户
     expect(result.current.user).toEqual(storedUser);
     expect(result.current.user?.role).toBe('parent');
+    expect(result.current.isAuthenticated).toBe(true);
   });
 
-  it('孩子登录后应保持孩子身份', async () => {
-    // 模拟后端返回孩子数据
-    const mockChild = {
+  it('孩子身份缓存会被清理，不再进入家长端认证态', async () => {
+    const storedChild = {
       id: 2,
       name: 'Child1',
-      role: 'child' as const,
+      role: 'child',
       familyId: 1,
       familyName: 'andycoy的家庭',
       familyCode: 'F12345',
       avatar: '🐛',
     };
 
-    (apiClient.get as any).mockResolvedValueOnce({
-      data: { data: mockChild }
+    storage.set('auth_token', 'child-token');
+    storage.set('auth_user', JSON.stringify(storedChild));
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: AuthProvider,
     });
 
-    // 模拟 localStorage.getItem
-    localStorageMock.getItem.mockImplementation((key) => {
-      if (key === 'auth_token') return 'child-token';
-      if (key === 'auth_state') return null;
-      return null;
+    await waitFor(() => expect(result.current.isInitializing).toBe(false));
+
+    expect(result.current.user).toBeNull();
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(storage.has('auth_token')).toBe(false);
+    expect(storage.has('auth_user')).toBe(false);
+  });
+
+  it('家长登录后应写入 auth_token 和 auth_user', async () => {
+    const mockUser = {
+      id: 1,
+      name: 'andycoy',
+      role: 'parent' as const,
+      familyId: 1,
+      familyName: 'andycoy的家庭',
+      familyCode: 'F12345',
+      avatar: '👤',
+    };
+
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        data: {
+          token: 'valid-token',
+          user: mockUser,
+        },
+      },
     });
 
     const { result } = renderHook(() => useAuth(), {
-      wrapper: AuthProvider
+      wrapper: AuthProvider,
     });
 
-    // 等待初始化完成
     await waitFor(() => expect(result.current.isInitializing).toBe(false));
 
-    expect(result.current.user).toEqual(mockChild);
-    expect(result.current.user?.role).toBe('child');
+    await act(async () => {
+      await result.current.login('andycoy', '123456');
+    });
+
+    expect(storage.get('auth_token')).toBe('valid-token');
+    expect(JSON.parse(storage.get('auth_user') || '{}')).toEqual(mockUser);
+    expect(result.current.user).toEqual(mockUser);
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(navigateMock).toHaveBeenCalledWith('/parent', { replace: true });
   });
 });
