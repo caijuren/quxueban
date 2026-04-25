@@ -927,6 +927,8 @@ export default function LibraryPage() {
         onTypeChange={setSelectedType}
         selectedReadStatus={selectedReadStatus}
         onReadStatusChange={setSelectedReadStatus}
+        selectedAgeRange={selectedAgeRange}
+        onAgeRangeChange={setSelectedAgeRange}
         sortBy={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}
@@ -1317,6 +1319,7 @@ export default function LibraryPage() {
             setSearchInput('');
             setSelectedType('all');
             setSelectedReadStatus('all');
+            setSelectedAgeRange('all');
           }}
         />
       ) : viewMode === 'grid' ? (

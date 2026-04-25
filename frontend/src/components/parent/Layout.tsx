@@ -36,6 +36,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const navGroups = [
   {
@@ -119,7 +120,7 @@ export default function ParentLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { children: childrenList, selectedChild, selectChild } = useSelectedChild();
+  const { children: childrenList, selectedChild, selectChild, isLoading: isChildLoading } = useSelectedChild();
 
   // 检查菜单项是否激活
   const isMenuActive = (path: string) => {
@@ -566,7 +567,22 @@ export default function ParentLayout() {
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="p-6">
-            <Outlet />
+            {isChildLoading && childrenList.length === 0 ? (
+              <div className="space-y-6">
+                <Skeleton className="h-16 rounded-2xl" />
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  <Skeleton className="h-56 rounded-2xl" />
+                  <Skeleton className="h-56 rounded-2xl" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-28 rounded-2xl" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>

@@ -89,9 +89,10 @@ export default function BookInsightsPage() {
   if (isLoadingBook || isLoadingInsights) {
     return (
       <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
-        <Skeleton className="h-40 w-full rounded-3xl" />
+        <Skeleton className="h-10 w-56 rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-3xl" />
+        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-44 w-full rounded-2xl" />
       </div>
     );
   }

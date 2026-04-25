@@ -229,15 +229,16 @@ export default function AchievementsPage() {
 
       {/* Achievement List */}
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="border-0 shadow-lg rounded-3xl">
+            <Card key={i} className="border-0 shadow-sm rounded-3xl">
               <CardContent className="p-5">
                 <div className="flex gap-4">
                   <Skeleton className="size-16 rounded-2xl" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-5 w-24" />
                     <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-28" />
                   </div>
                 </div>
               </CardContent>

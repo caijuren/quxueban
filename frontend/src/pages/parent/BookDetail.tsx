@@ -249,8 +249,12 @@ export default function BookDetailPage() {
   if (isLoading) {
     return (
       <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
+        <Skeleton className="h-10 w-56 rounded-xl" />
+        <Skeleton className="h-72 w-full rounded-3xl" />
+        <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
+          <Skeleton className="h-80 rounded-3xl" />
+          <Skeleton className="h-80 rounded-3xl" />
+        </div>
       </div>
     );
   }

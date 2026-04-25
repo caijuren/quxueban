@@ -36,20 +36,14 @@ function getParentAuth() {
 
 export function SelectedChildProvider({ children }: { children: React.ReactNode }) {
   const [childrenList, setChildrenList] = useState<Child[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
-
-  // 初始化时从 localStorage 恢复选中的孩子
-  useEffect(() => {
+  const [selectedChildId, setSelectedChildId] = useState<number | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsedId = parseInt(stored, 10);
-      if (!isNaN(parsedId)) {
-        setSelectedChildId(parsedId);
-      }
-    }
-  }, []);
+    if (!stored) return null;
+    const parsedId = parseInt(stored, 10);
+    return Number.isNaN(parsedId) ? null : parsedId;
+  });
+  const [isLoading, setIsLoading] = useState(() => !!getParentAuth());
+  const [authReady, setAuthReady] = useState(() => !!getParentAuth());
 
   // 监听认证状态变化
   useEffect(() => {
