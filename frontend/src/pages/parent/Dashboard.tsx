@@ -4,12 +4,19 @@ import { useState, useEffect, useRef } from 'react';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
-import { Clock, CheckCircle2, ClipboardList, BookOpen, Plus, GraduationCap, Star, BookMarked, Dumbbell, X, Calendar, Send, Brain, Download, Loader2, Camera, Image, Mic, FileText, XCircle } from 'lucide-react';
+import { Clock, CheckCircle2, ClipboardList, BookOpen, Plus, GraduationCap, Star, BookMarked, Dumbbell, X, Calendar, Send, Brain, Download, Loader2, Camera, Image, Mic, FileText, XCircle, MoreHorizontal, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ExportDialog } from '@/components/ExportDialog';
 import { toast } from 'sonner';
 import { startOfWeek } from 'date-fns';
@@ -61,101 +68,45 @@ function TaskCard({
   actualTime?: number;
   status?: 'pending' | 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
 }) {
-  const getStatusBadge = () => {
+  const getStatusMeta = () => {
     switch (status) {
       case 'completed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
-            <CheckCircle2 className="w-3 h-3" />
-            已完成
-          </span>
-        );
+        return { label: '已完成', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
       case 'partial':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
-            <CheckCircle2 className="w-3 h-3" />
-            部分完成
-          </span>
-        );
+        return { label: '部分完成', className: 'bg-amber-50 text-amber-700 border-amber-100' };
       case 'postponed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">
-            <Clock className="w-3 h-3" />
-            推迟
-          </span>
-        );
+        return { label: '推迟', className: 'bg-orange-50 text-orange-700 border-orange-100' };
       case 'not_completed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-rose-100 text-rose-700">
-            <X className="w-3 h-3" />
-            未完成
-          </span>
-        );
+        return { label: '未完成', className: 'bg-rose-50 text-rose-700 border-rose-100' };
       case 'not_involved':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700">
-            <Clock className="w-3 h-3" />
-            今日不涉及
-          </span>
-        );
+        return { label: '今日不涉及', className: 'bg-slate-50 text-slate-600 border-slate-100' };
       default:
-        return null;
+        return { label: '待处理', className: 'bg-blue-50 text-blue-700 border-blue-100' };
     }
   };
 
   const isCompleted = status === 'completed' || status === 'partial';
+  const statusMeta = getStatusMeta();
 
   return (
-    <div
+    <button
       onClick={onClick}
-      className={`bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow group cursor-pointer ${
-        isCompleted ? 'border-emerald-200 bg-emerald-50/30' : 'border-border'
-      }`}
+      className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
     >
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          {/* 左侧图标 */}
-          <div className={`flex-shrink-0 ${isCompleted ? 'opacity-70' : ''}`}>
-            {getTaskIcon(task.category)}
-          </div>
-          
-          {/* 任务内容 */}
-          <div className="flex-1">
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className={`font-medium text-sm ${isCompleted ? 'text-emerald-900 line-through decoration-emerald-400' : 'text-foreground'}`}>
-                {task.name}
-              </h3>
-              {getStatusBadge()}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {task.category && (
-                <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
-                  isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-foreground'
-                }`}>
-                  {task.category}
-                </span>
-              )}
-              {task.scheduleRule && (
-                <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
-                  isCompleted ? 'bg-emerald-100/50 text-emerald-600' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {task.scheduleRule === 'daily' ? '每日' : 
-                   task.scheduleRule === 'school' ? '在校日' : 
-                   task.scheduleRule === 'weekend' ? '周末' : '智能'}
-                </span>
-              )}
-              <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
-                isCompleted 
-                  ? 'bg-emerald-100 text-emerald-700' 
-                  : 'bg-green-100 text-green-800'
-              }`}>
-                {actualTime !== undefined ? `${actualTime}分钟` : `${task.timePerUnit}分钟`}
-              </span>
-            </div>
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`truncate text-sm font-medium ${isCompleted ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
+            {task.name}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {actualTime !== undefined ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}
+          </p>
         </div>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${statusMeta.className}`}>
+          {statusMeta.label}
+        </span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -539,305 +490,259 @@ export default function ParentDashboard() {
   const completedCount = completedTasks.length + partialTasks.length;
   // 总任务数（用于计算完成率）= 已完成 + 部分完成 + 未完成 + 推迟 + 待处理（不包括今日不涉及）
   const totalTasksForRate = completedTasks.length + partialTasks.length + notCompletedTasks.length + postponedTasks.length + pendingTasks.length;
+  const completionRate = totalTasksForRate > 0 ? Math.round((completedCount / totalTasksForRate) * 100) : 0;
+  const remainingTasks = pendingTasks.length + partialTasks.length;
+  const remainingMinutes = pendingTasks.reduce((sum, task) => sum + (task.task.timePerUnit || 0), 0);
+  const needsAttentionTasks = [...partialTasks, ...notCompletedTasks, ...postponedTasks];
+  const nextActions = pendingTasks.slice(0, 2);
   const greeting = getGreeting();
   const displayName = selectedChild?.name || user?.name || '家长';
 
   return (
-    <div className="space-y-6" ref={pageRef}>
-      {/* 问候栏 */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              {greeting}，{displayName}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">{getFormattedDate()}</p>
+    <div className="space-y-5" ref={pageRef}>
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-lg font-semibold text-slate-700">
+              {selectedChild?.avatar || displayName.charAt(0)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-slate-500">{getFormattedDate()}</p>
+              <h1 className="mt-1 truncate text-xl font-semibold text-slate-950">
+                {greeting}，{displayName}
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                {remainingTasks > 0
+                  ? `今天还有 ${remainingTasks} 项待处理，预计 ${remainingMinutes} 分钟`
+                  : totalTasksForRate > 0
+                    ? '今天的核心任务已经处理完'
+                    : '今天还没有安排学习任务'}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               id="date-select"
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-[190px] rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="h-9 w-[170px] rounded-lg border-slate-200"
             />
             {selectedDate !== getLocalDateString(new Date()) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedDate(getLocalDateString(new Date()))}
-                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-              >
+              <Button variant="outline" size="sm" onClick={() => setSelectedDate(getLocalDateString(new Date()))} className="rounded-lg">
                 返回今天
               </Button>
             )}
+            <Button
+              size="sm"
+              onClick={() => nextActions[0] ? handleTaskClick(nextActions[0].task) : navigate('/parent/plans')}
+              className="rounded-lg bg-slate-900 text-white hover:bg-slate-800"
+            >
+              {nextActions[0] ? '继续任务' : '安排计划'}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="outline" className="h-9 w-9 rounded-lg">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={handleAIAnalysis}>
+                  <Brain className="mr-2 h-4 w-4" />
+                  {aiAnalysisLoading ? '分析中...' : 'AI分析'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleShareToDingTalk}>
+                  <Send className="mr-2 h-4 w-4" />
+                  分享到钉钉
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setExportDialogOpen(true)}>
+                  <Download className="mr-2 h-4 w-4" />
+                  导出
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <Button size="sm" onClick={handleAIAnalysis} className="bg-purple-600 text-white hover:bg-purple-700">
-            <Brain className="size-4 mr-1" />
-            {aiAnalysisLoading ? '分析中...' : 'AI分析'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleShareToDingTalk} className="border-gray-200 hover:bg-gray-50">
-            <Send className="size-4 mr-1" />
-            分享到钉钉
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setExportDialogOpen(true)} className="border-gray-200 hover:bg-gray-50">
-            <Download className="size-4 mr-1" />
-            导出
-          </Button>
         </div>
-      </div>
+      </section>
 
-      {/* 1. 核心指标行 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title="当日任务"
-          value={statsLoading ? '...' : `${completedCount}/${totalTasksForRate}`}
-          subtext="已完成/总任务"
-          icon={ClipboardList}
-          color="purple"
-          className={cardClassName}
-        />
-        <MetricCard
-          title="今日学习时长"
-          value={statsLoading ? '...' : formatStudyTime(stats?.todayStudyMinutes || 0)}
-          subtext={selectedChild ? `${selectedChild.name}的今日数据` : '全部孩子'}
-          icon={Clock}
-          color="blue"
-          className={cardClassName}
-        />
-        <MetricCard
-          title="当日完成率"
-          value={statsLoading ? '...' : `${totalTasksForRate > 0 ? Math.round((completedCount / totalTasksForRate) * 100) : 0}%`}
-          subtext="今日任务完成情况"
-          icon={CheckCircle2}
-          color="green"
-          className={cardClassName}
-        />
-        <MetricCard
-          title="当日阅读情况"
-          value={statsLoading ? '...' : `${stats?.todayReadingCount || 0}本`}
-          subtext="今日阅读书籍"
-          icon={BookOpen}
-          color="orange"
-          className={cardClassName}
-        />
-      </div>
-
-      {/* 2. 任务模块（按状态分类展示） */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">当日任务</h2>
-          {tasksLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              加载中...
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <main className="space-y-5">
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-600">今日完成进度</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">{statsLoading ? '...' : `${completionRate}%`}</p>
+              </div>
+              <div className="text-right text-sm text-slate-500">
+                <p>{completedCount}/{totalTasksForRate} 项</p>
+                <p className="mt-1">{formatStudyTime(stats?.todayStudyMinutes || 0)}</p>
+              </div>
             </div>
-          )}
-        </div>
+            <Progress value={completionRate} className="mt-4 h-2" />
+          </section>
 
-        {/* 加载状态 */}
-        {tasksLoading && todayTasks.length === 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-lg shadow-sm border border-border p-4 animate-pulse">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-200" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4" />
-                    <div className="h-3 bg-gray-200 rounded w-1/2" />
-                  </div>
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950">下一步关键行动</h2>
+                <p className="mt-1 text-sm text-slate-500">优先处理还未完成的今日任务。</p>
+              </div>
+              {tasksLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            </div>
+
+            {nextActions.length > 0 ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {nextActions.map((task) => (
+                  <button
+                    key={task.id}
+                    onClick={() => handleTaskClick(task.task)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:border-slate-300 hover:bg-white"
+                  >
+                    <p className="text-sm font-semibold text-slate-950">{task.title}</p>
+                    <p className="mt-2 text-sm text-slate-500">预计 {task.task.timePerUnit} 分钟</p>
+                    <span className="mt-4 inline-flex items-center text-sm font-medium text-slate-900">
+                      继续
+                      <ArrowRight className="ml-1 h-4 w-4" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-medium text-slate-800">
+                  {totalTasksForRate > 0 ? '当前没有待处理任务' : '今天还没有安排学习任务'}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/parent/tasks')} className="rounded-lg">
+                    去任务管理
+                  </Button>
+                  <Button size="sm" onClick={() => navigate('/parent/plans')} className="rounded-lg bg-slate-900 text-white hover:bg-slate-800">
+                    去学习计划
+                  </Button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            )}
+          </section>
 
-        {/* 待完成任务 */}
-        {!tasksLoading && pendingTasks.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-blue-600" />
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-950">今日任务</h2>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/parent/tasks')} className="rounded-lg text-slate-600">
+                全部任务
+              </Button>
+            </div>
+
+            {tasksLoading && todayTasks.length === 0 ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100" />
+                ))}
               </div>
-              <h3 className="text-sm font-medium text-blue-700">
-                待完成 ({pendingTasks.length})
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {pendingTasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task.task}
-                  status={task.status as 'pending'}
-                  onClick={() => handleTaskClick(task.task)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 已完成任务 */}
-        {!tasksLoading && completedTasks.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            ) : totalTasksForRate === 0 ? (
+              <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-slate-800">没有今日任务</p>
+                <p className="mt-1 text-sm text-slate-500">可以从学习计划生成今日安排，或在任务管理中添加任务。</p>
               </div>
-              <h3 className="text-sm font-medium text-emerald-700">
-                已完成 ({completedTasks.length})
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {completedTasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task.task}
-                  status="completed"
-                  actualTime={task.actualTime}
-                  onClick={() => handleTaskClick(task.task)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+            ) : (
+              <div className="mt-4 space-y-5">
+                {pendingTasks.length > 0 && (
+                  <div>
+                    <p className="mb-3 text-sm font-medium text-slate-700">待处理 ({pendingTasks.length})</p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {pendingTasks.map(task => (
+                        <TaskCard key={task.id} task={task.task} status="pending" onClick={() => handleTaskClick(task.task)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-        {/* 部分完成任务 */}
-        {!tasksLoading && partialTasks.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                <CheckCircle2 className="w-4 h-4 text-amber-600" />
+                {needsAttentionTasks.length > 0 && (
+                  <div>
+                    <p className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      需要处理 ({needsAttentionTasks.length})
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {needsAttentionTasks.map(task => (
+                        <TaskCard
+                          key={task.id}
+                          task={task.task}
+                          status={task.status as any}
+                          actualTime={task.actualTime}
+                          onClick={() => handleTaskClick(task.task)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {completedTasks.length > 0 && (
+                  <div>
+                    <p className="mb-3 text-sm font-medium text-slate-700">已完成 ({completedTasks.length})</p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {completedTasks.map(task => (
+                        <TaskCard key={task.id} task={task.task} status="completed" actualTime={task.actualTime} onClick={() => handleTaskClick(task.task)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <h3 className="text-sm font-medium text-amber-700">
-                部分完成 ({partialTasks.length})
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {partialTasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task.task}
-                  status="partial"
-                  actualTime={task.actualTime}
-                  onClick={() => handleTaskClick(task.task)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+            )}
+          </section>
+        </main>
 
-        {/* 未完成任务 */}
-        {!tasksLoading && notCompletedTasks.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center">
-                <X className="w-4 h-4 text-rose-600" />
+        <aside className="space-y-5">
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <h2 className="text-base font-semibold text-slate-950">今日摘要</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">待完成</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">{remainingTasks}</p>
               </div>
-              <h3 className="text-sm font-medium text-rose-700">
-                未完成 ({notCompletedTasks.length})
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {notCompletedTasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task.task}
-                  status="not_completed"
-                  actualTime={0}
-                  onClick={() => handleTaskClick(task.task)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 推迟任务 */}
-        {!tasksLoading && postponedTasks.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-orange-600" />
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">剩余预计</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">{remainingMinutes}m</p>
               </div>
-              <h3 className="text-sm font-medium text-orange-700">
-                推迟 ({postponedTasks.length})
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {postponedTasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task.task}
-                  status="postponed"
-                  actualTime={task.actualTime}
-                  onClick={() => handleTaskClick(task.task)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 今日不涉及任务 */}
-        {!tasksLoading && notInvolvedTasks.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-slate-600" />
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">学习时长</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">{stats?.todayStudyMinutes || 0}m</p>
               </div>
-              <h3 className="text-sm font-medium text-slate-700">
-                今日不涉及 ({notInvolvedTasks.length})
-              </h3>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">阅读</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">{stats?.todayReadingCount || 0}本</p>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {notInvolvedTasks.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task.task}
-                  status="not_involved"
-                  actualTime={0}
-                  onClick={() => handleTaskClick(task.task)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+          </section>
 
-        {/* 无任务提示 - 优化版 */}
-        {!tasksLoading && totalTasksForRate === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-gradient-to-b from-slate-50/70 to-slate-100/50 py-16 text-center">
-            <div className="w-20 h-20 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4">
-              <ClipboardList className="w-10 h-10 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">
-              {selectedDate === getLocalDateString(new Date()) 
-                ? '今天还没有安排学习任务' 
-                : '该日期没有安排学习任务'}
-            </h3>
-            <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
-              {selectedDate === getLocalDateString(new Date()) 
-                ? '为孩子制定学习计划，让学习更有条理。您可以从任务管理开始，或前往学习计划生成今日安排。'
-                : '您可以切换到其他日期查看任务，或为该日期添加新的学习计划。'}
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <h2 className="text-base font-semibold text-slate-950">AI 简报</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {needsAttentionTasks.length > 0
+                ? `今天有 ${needsAttentionTasks.length} 项需要处理，建议先确认原因，再安排补做或调整。`
+                : remainingTasks > 0
+                  ? `今天还有 ${remainingTasks} 项待处理，建议先完成预计时间较短的任务。`
+                  : '今日任务状态平稳，可以继续保持节奏。'}
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/parent/tasks')}
-                className="rounded-xl border-slate-300 hover:bg-slate-50"
-              >
-                <Plus className="mr-2 size-4" />
-                去任务管理
+            <Button variant="outline" size="sm" onClick={handleAIAnalysis} className="mt-4 rounded-lg">
+              查看分析
+            </Button>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <h2 className="text-base font-semibold text-slate-950">工具</h2>
+            <div className="mt-4 grid gap-2">
+              <Button variant="outline" onClick={handleShareToDingTalk} className="justify-start rounded-lg">
+                <Send className="mr-2 h-4 w-4" />
+                分享到钉钉
               </Button>
-              <Button 
-                onClick={() => navigate('/parent/plans')}
-                className="rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white"
-              >
-                <Calendar className="mr-2 size-4" />
-                去学习计划
+              <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="justify-start rounded-lg">
+                <Download className="mr-2 h-4 w-4" />
+                导出首页
               </Button>
             </div>
-          </div>
-        )}
+          </section>
+        </aside>
       </div>
 
       {/* 任务完成弹窗 */}
