@@ -66,6 +66,17 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
+  const selectChild = useCallback((childId: number | null) => {
+    setSelectedChildId(childId);
+    if (childId) {
+      localStorage.setItem(STORAGE_KEY, childId.toString());
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+    // 触发全局事件，通知页面刷新
+    window.dispatchEvent(new CustomEvent('child:changed', { detail: { childId } }));
+  }, []);
+
   // 获取孩子列表
   const refreshChildren = useCallback(async () => {
     const auth = getParentAuth();
@@ -96,18 +107,7 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  const selectChild = useCallback((childId: number | null) => {
-    setSelectedChildId(childId);
-    if (childId) {
-      localStorage.setItem(STORAGE_KEY, childId.toString());
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-    // 触发全局事件，通知页面刷新
-    window.dispatchEvent(new CustomEvent('child:changed', { detail: { childId } }));
-  }, []);
+  }, [selectChild]);
 
   const selectedChild = childrenList.find(c => c.id === selectedChildId) || null;
 

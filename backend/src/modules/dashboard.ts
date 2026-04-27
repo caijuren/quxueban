@@ -6,6 +6,38 @@ function getSingleQueryValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+function parseLocalDateRange(startValue: unknown, endValue: unknown) {
+  const parse = (value: unknown): Date | null => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return null
+    }
+
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null
+    }
+
+    return date
+  }
+
+  const startDate = parse(startValue)
+  const endDate = parse(endValue)
+
+  if (!startDate || !endDate || startDate > endDate) {
+    return null
+  }
+
+  startDate.setHours(0, 0, 0, 0)
+  endDate.setHours(23, 59, 59, 999)
+
+  return { startDate, endDate }
+}
+
 function getAssignedDays(value: unknown): number[] {
   if (Array.isArray(value)) {
     return value.filter((day): day is number => typeof day === 'number')
@@ -42,6 +74,96 @@ function parseTaskTags(value: unknown): Record<string, any> {
   }
 
   return {}
+}
+
+function getWeekNo(date: Date): string {
+  const year = date.getFullYear()
+  const firstDay = new Date(year, 0, 1)
+  const dayOfWeek = firstDay.getDay()
+  const firstMonday = new Date(firstDay)
+  firstMonday.setDate(firstDay.getDate() + (dayOfWeek === 0 ? 1 : 8 - dayOfWeek))
+
+  if (date < firstMonday) {
+    return `${year - 1}-52`
+  }
+
+  const diffTime = date.getTime() - firstMonday.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  const weekNo = Math.floor(diffDays / 7) + 1
+
+  return `${year}-${String(weekNo).padStart(2, '0')}`
+}
+
+function getWeekNosInRange(startDate: Date, endDate: Date): string[] {
+  const weekNos = new Set<string>()
+  const cursor = new Date(startDate)
+  cursor.setHours(0, 0, 0, 0)
+
+  while (cursor <= endDate) {
+    weekNos.add(getWeekNo(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return Array.from(weekNos)
+}
+
+function getAllowedDays(scheduleRule: string, assignedDays: unknown): number[] {
+  const storedDays = getAssignedDays(assignedDays)
+  if (storedDays.length > 0) {
+    return storedDays
+  }
+
+  switch (scheduleRule) {
+    case 'school':
+      return [1, 2, 4, 5]
+    case 'weekend':
+      return [0, 6]
+    case 'flexible':
+      return [1, 2, 3, 4, 5]
+    case 'daily':
+    default:
+      return [0, 1, 2, 3, 4, 5, 6]
+  }
+}
+
+function countAssignedDaysInRange(startDate: Date, endDate: Date, allowedDays: number[]): number {
+  const cursor = new Date(startDate)
+  cursor.setHours(0, 0, 0, 0)
+  let count = 0
+
+  while (cursor <= endDate) {
+    if (allowedDays.includes(cursor.getDay())) {
+      count += 1
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return count
+}
+
+function getTaskBucket(task: { category?: unknown; name?: unknown; tags?: unknown }): 'chinese' | 'math' | 'english' | 'reading' | 'other' {
+  const tags = parseTaskTags(task.tags)
+  const subject = typeof tags.subject === 'string' ? tags.subject : ''
+  const category = typeof task.category === 'string' ? task.category : ''
+  const name = typeof task.name === 'string' ? task.name : ''
+
+  if (subject === 'chinese' || category === 'chinese') return 'chinese'
+  if (subject === 'math' || category === 'math') return 'math'
+  if (subject === 'english' || category === 'english') return 'english'
+
+  if (category.includes('阅读') || name.includes('阅读') || name.toLowerCase().includes('read')) {
+    return 'reading'
+  }
+
+  return 'other'
+}
+
+const taskBucketLabels: Record<string, string> = {
+  chinese: '语文',
+  math: '数学',
+  english: '英语',
+  reading: '阅读',
+  other: '其他',
 }
 
 function formatRelativeTime(date: Date): string {
@@ -113,17 +235,20 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
     readingLogWhereClause.childId = childId
   }
 
-  // Calculate study minutes for specified date or today
+  // Calculate study minutes for specified date/range or today
   const date = getSingleQueryValue(req.query.date)
-  // Use local time to match frontend date handling
-  const checkDate = date ? new Date(date) : new Date()
-  // Set to start of day in local time
-  checkDate.setHours(0, 0, 0, 0)
-  const checkDateEnd = new Date(checkDate)
-  checkDateEnd.setHours(23, 59, 59, 999)
+  const requestedRange = parseLocalDateRange(req.query.startDate, req.query.endDate)
+  const checkDate = requestedRange?.startDate || (date ? new Date(date) : new Date())
+  if (!requestedRange) {
+    checkDate.setHours(0, 0, 0, 0)
+  }
+  const checkDateEnd = requestedRange?.endDate || new Date(checkDate)
+  if (!requestedRange) {
+    checkDateEnd.setHours(23, 59, 59, 999)
+  }
 
-  const todayCheckins = await prisma.$queryRawUnsafe(
-    `SELECT DISTINCT ON (COALESCE(wp.task_id, dc.task_id))
+  const rangeAllCheckins = await prisma.$queryRawUnsafe(
+    `SELECT
       dc.id,
       dc.child_id,
       dc.task_id,
@@ -134,6 +259,8 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       dc.check_date,
       dc.created_at,
       t.time_per_unit,
+      t.name,
+      t.category,
       t.schedule_rule,
       t.tags
     FROM daily_checkins dc
@@ -142,83 +269,197 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
     WHERE dc.family_id = $1
       ${childId ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId ? 3 : 2}
-      AND dc.check_date <= $${childId ? 4 : 3}
-      AND dc.status IN ('completed', 'partial', 'advance')
-    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.id DESC`,
+      AND dc.check_date <= $${childId ? 4 : 3}`,
     ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
+  const rangeCheckins = rangeAllCheckins.filter((checkin: any) => ['completed', 'partial', 'advance'].includes(checkin.status))
 
-  const todayStudyMinutes = todayCheckins.reduce((sum, checkin: any) => {
+  const todayStudyMinutes = rangeCheckins.reduce((sum, checkin: any) => {
     const fallbackMinutes = (checkin.time_per_unit || 0) * (checkin.value || 1)
     return sum + (checkin.completed_value || fallbackMinutes)
   }, 0)
+  const rangeCompletedTasks = rangeCheckins.length
+  const taskStatusCounts = {
+    completed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'completed' || checkin.status === 'advance').length,
+    partial: rangeAllCheckins.filter((checkin: any) => checkin.status === 'partial').length,
+    notCompleted: rangeAllCheckins.filter((checkin: any) => checkin.status === 'not_completed').length,
+    postponed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'postponed').length,
+    notInvolved: rangeAllCheckins.filter((checkin: any) => checkin.status === 'not_involved').length,
+  }
+  const taskTypeMinutes = {
+    chinese: 0,
+    math: 0,
+    english: 0,
+    reading: 0,
+    other: 0,
+  }
 
-  // Calculate reading count for specified date or today
+  rangeCheckins.forEach((checkin: any) => {
+    const bucket = getTaskBucket({
+      category: checkin.category,
+      name: checkin.name,
+      tags: checkin.tags,
+    })
+    const fallbackMinutes = (checkin.time_per_unit || 0) * (checkin.value || 1)
+    taskTypeMinutes[bucket] += checkin.completed_value || fallbackMinutes
+  })
+
+  // Calculate reading count for specified date/range or today
   const todayReadingCount = await prisma.readingLog.count({
     where: {
       ...readingLogWhereClause,
-      createdAt: {
+      readDate: {
         gte: checkDate,
         lte: checkDateEnd
       }
     }
   })
 
-  // Calculate weekly completion rate (based on today's actual checkins)
-  // Get all weekly plans for the child
-  const weeklyPlans = await prisma.$queryRawUnsafe(
-    `SELECT
-      wp.id,
-      wp.target,
-      t.schedule_rule,
-      t.tags
-    FROM weekly_plans wp
-    JOIN tasks t ON t.id = wp.task_id
-    WHERE wp.family_id = $1
-      ${childId ? 'AND wp.child_id = $2' : ''}
-      AND wp.status = 'active'`,
-    ...(childId ? [familyId, childId] : [familyId])
-  ) as any[]
+  const weekNos = getWeekNosInRange(checkDate, checkDateEnd)
+  const rangePlans = await prisma.weeklyPlan.findMany({
+    where: {
+      familyId,
+      status: 'active',
+      weekNo: { in: weekNos },
+      ...(childId ? { childId } : {}),
+    },
+    include: {
+      task: {
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          timePerUnit: true,
+          scheduleRule: true,
+          tags: true,
+        },
+      },
+    },
+  })
 
-  // Calculate today's expected tasks and actual completion
-  const dayOfWeek = checkDate.getDay() // 0 = Sunday, 1 = Monday, etc.
-  const todayExpected = weeklyPlans.filter((plan: any) => {
-    const taskTags = parseTaskTags(plan.tags)
-    const scheduleRule = plan.schedule_rule || taskTags.scheduleRule || 'daily'
+  const rangePlannedTasks = rangePlans.reduce((sum, plan) => {
+    const taskTags = parseTaskTags(plan.task.tags)
+    const scheduleRule = plan.task.scheduleRule || taskTags.scheduleRule || 'daily'
+    const allowedDays = getAllowedDays(scheduleRule, plan.assignedDays)
+    return sum + countAssignedDaysInRange(checkDate, checkDateEnd, allowedDays)
+  }, 0)
 
-    let allowedDays: number[]
-    switch (scheduleRule) {
-      case 'school':
-        allowedDays = [1, 2, 4, 5]
-        break
-      case 'weekend':
-        allowedDays = [0, 6]
-        break
-      case 'flexible':
-        allowedDays = [1, 2, 3, 4, 5]
-        break
-      case 'daily':
-      default:
-        allowedDays = [0, 1, 2, 3, 4, 5, 6]
+  const rangeCompletionRate = rangePlannedTasks > 0
+    ? Math.round((rangeCompletedTasks / rangePlannedTasks) * 100)
+    : 0
+  const recordedStatusCount = Object.values(taskStatusCounts).reduce((sum, value) => sum + value, 0)
+  taskStatusCounts.notCompleted += Math.max(rangePlannedTasks - recordedStatusCount, 0)
+  const completionTrend = Array.from({ length: Math.min(14, Math.ceil((checkDateEnd.getTime() - checkDate.getTime()) / 86400000) + 1) }).map((_, index) => {
+    const day = new Date(checkDate)
+    day.setDate(checkDate.getDate() + index)
+    day.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(day)
+    dayEnd.setHours(23, 59, 59, 999)
+    const dayCompleted = rangeCheckins.filter((checkin: any) => {
+      const checkinDate = new Date(checkin.check_date)
+      return checkinDate >= day && checkinDate <= dayEnd
+    }).length
+    const dayPlanned = rangePlans.reduce((sum, plan) => {
+      const taskTags = parseTaskTags(plan.task.tags)
+      const scheduleRule = plan.task.scheduleRule || taskTags.scheduleRule || 'daily'
+      const allowedDays = getAllowedDays(scheduleRule, plan.assignedDays)
+      return allowedDays.includes(day.getDay()) ? sum + 1 : sum
+    }, 0)
+
+    return {
+      date: day.toLocaleDateString('en-CA').slice(5),
+      planned: dayPlanned,
+      completed: dayCompleted,
+      rate: dayPlanned > 0 ? Math.round((dayCompleted / dayPlanned) * 100) : 0,
     }
+  })
+  const taskTypeDistribution = Object.entries(taskTypeMinutes).map(([key, minutes]) => ({
+    key,
+    label: taskBucketLabels[key] || '其他',
+    minutes,
+  }))
+  const checkinsByPlanId = new Map<number, any[]>()
+  rangeAllCheckins.forEach((checkin: any) => {
+    if (!checkin.plan_id) return
+    const current = checkinsByPlanId.get(checkin.plan_id) || []
+    current.push(checkin)
+    checkinsByPlanId.set(checkin.plan_id, current)
+  })
+  const focusTasks = rangePlans
+    .map((plan) => {
+      const taskTags = parseTaskTags(plan.task.tags)
+      const scheduleRule = plan.task.scheduleRule || taskTags.scheduleRule || 'daily'
+      const allowedDays = getAllowedDays(scheduleRule, plan.assignedDays)
+      const planned = countAssignedDaysInRange(checkDate, checkDateEnd, allowedDays)
+      const checkins = checkinsByPlanId.get(plan.id) || []
+      const completed = checkins.filter((checkin: any) => ['completed', 'partial', 'advance'].includes(checkin.status)).length
+      const postponed = checkins.filter((checkin: any) => checkin.status === 'postponed').length
+      const notCompleted = Math.max(planned - completed - postponed, 0) + checkins.filter((checkin: any) => checkin.status === 'not_completed').length
 
-    return allowedDays.includes(dayOfWeek)
-  }).reduce((sum: number, plan: any) => sum + plan.target, 0)
-
-  const todayActual = todayCheckins
-    .filter(checkin => checkin.status === 'completed' || checkin.status === 'partial')
-    .reduce((sum, checkin) => sum + (checkin.value || 1), 0)
-
-  const weeklyCompletionRate = todayExpected > 0 ? Math.round((todayActual / todayExpected) * 100) : 0
+      return {
+        planId: plan.id,
+        taskId: plan.taskId,
+        name: plan.task.name,
+        category: taskBucketLabels[getTaskBucket({ category: plan.task.category, name: plan.task.name, tags: plan.task.tags })],
+        planned,
+        completed,
+        postponed,
+        notCompleted,
+        riskScore: notCompleted * 2 + postponed,
+      }
+    })
+    .filter((task) => task.riskScore > 0)
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 5)
+  const readingLogs = await prisma.readingLog.findMany({
+    where: {
+      ...readingLogWhereClause,
+      readDate: {
+        gte: checkDate,
+        lte: checkDateEnd,
+      },
+    },
+    orderBy: { readDate: 'desc' },
+    take: 5,
+    include: {
+      book: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  })
+  const readingPerformance = {
+    records: todayReadingCount,
+    minutes: readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0),
+    pages: readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0),
+    recentBooks: readingLogs.map((log) => ({
+      id: log.book?.id || log.bookId,
+      name: log.book?.name || '未命名图书',
+      pages: log.pages || 0,
+      minutes: log.minutes || 0,
+      readDate: log.readDate.toLocaleDateString('en-CA'),
+    })),
+  }
 
   res.json({
     status: 'success',
     data: {
       totalTasks,
-      weeklyCompletionRate,
+      plannedTasks: rangePlannedTasks,
+      completedTasks: rangeCompletedTasks,
+      weeklyCompletionRate: rangeCompletionRate,
+      taskStatusCounts,
+      completionTrend,
+      taskTypeDistribution,
+      focusTasks,
+      readingPerformance,
       todayStudyMinutes,
       booksRead,
       todayReadingCount,
+      rangeStartDate: checkDate.toLocaleDateString('en-CA'),
+      rangeEndDate: checkDateEnd.toLocaleDateString('en-CA'),
       // Include child context for frontend reference
       childId,
       childFilterActive: !!childId

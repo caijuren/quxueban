@@ -421,7 +421,7 @@ settingsRouter.get('/export', async (req: AuthRequest, res: Response) => {
     }
 
     // Set headers for file download
-    const filename = `quxueban_backup_${family.name}_${new Date().toISOString().split('T')[0]}.json`
+    const filename = `quxueban_backup_${family.familyCode}_${new Date().toISOString().split('T')[0]}.json`
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
 

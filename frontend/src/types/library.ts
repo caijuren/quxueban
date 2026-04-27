@@ -6,10 +6,10 @@ export interface Book {
   publisher: string;
   type: string;
   characterTag: string;
+  description?: string;
   coverUrl: string;
   totalPages: number;
   wordCount?: number;
-  suitableAge?: string;
   readCount: number;
   lastReadDate?: string | null;
   activeReadings: Array<{
@@ -53,16 +53,6 @@ export interface LibraryStats {
   remainingMinutes: number;
 }
 
-export interface BorrowRecord {
-  id: string;
-  bookId: number;
-  borrowerName: string;
-  borrowDate: string;
-  dueDate: string;
-  returnDate?: string;
-  status: 'borrowed' | 'returned' | 'overdue';
-}
-
 export interface BookList {
   id: string;
   name: string;
@@ -71,8 +61,7 @@ export interface BookList {
 }
 
 export type BookType = 'children' | 'tradition' | 'science' | 'character' | 'other';
-export type ReadStatus = 'all' | 'want_to_read' | 'finished' | 'reading' | 'paused';
-export type ViewMode = 'grid' | 'list';
+export type ReadStatus = 'all' | 'finished' | 'reading';
 export type AddMode = 'manual' | 'isbn' | 'search';
 
 export interface BookTypeOption {
@@ -118,8 +107,6 @@ export const sortOptions = [
 
 export const readStatusOptions = [
   { value: 'all', label: '全部' },
-  { value: 'want_to_read', label: '想读' },
   { value: 'reading', label: '在读中' },
   { value: 'finished', label: '已读完' },
-  { value: 'paused', label: '搁置' },
 ];

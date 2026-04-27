@@ -1,53 +1,45 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  FileText,
-  Calendar,
-  BarChart3,
-  Clock,
-  BookOpen,
-  Users,
-  Sparkles,
-  ChevronRight,
-  Download,
-  Trash2,
-  RefreshCw,
-  Filter,
-  ChevronDown,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  PieChart,
   Activity,
+  BarChart3,
+  BookOpen,
+  Calendar,
+  CheckCircle2,
+  Clock3,
+  Download,
+  Eye,
+  FileText,
+  GraduationCap,
+  Loader2,
   MoreHorizontal,
-  Share2,
+  RefreshCw,
+  Sparkles,
   Star,
+  Trash2,
+  UserRound,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
-// ============================================
-// 类型定义
-// ============================================
 type ReportType = 'weekly' | 'monthly' | 'semester' | 'subject' | 'time' | 'behavior' | 'custom';
 
 interface ReportTypeConfig {
   id: ReportType;
   name: string;
+  shortName: string;
   description: string;
-  icon: React.ReactNode;
-  color: string;
+  icon: LucideIcon;
+  tone: string;
+  badge: string;
   autoGenerate?: boolean;
 }
 
@@ -79,78 +71,88 @@ interface ReportContent {
   };
 }
 
-// ============================================
-// 报告类型配置
-// ============================================
+type DateRange = {
+  start: string;
+  end: string;
+};
+
 const REPORT_TYPES: ReportTypeConfig[] = [
   {
     id: 'weekly',
     name: '周报',
+    shortName: '周报',
     description: '每周学习情况总结与分析',
-    icon: <Calendar className="w-5 h-5" />,
-    color: 'bg-blue-500',
+    icon: Calendar,
+    tone: 'bg-blue-50 text-blue-600',
+    badge: 'bg-blue-50 text-blue-700',
     autoGenerate: true,
   },
   {
     id: 'monthly',
     name: '月报',
-    description: '月度学习成果与趋势分析',
-    icon: <Calendar className="w-5 h-5" />,
-    color: 'bg-purple-500',
+    shortName: '月报',
+    description: '月度学习成果趋势分析',
+    icon: Calendar,
+    tone: 'bg-violet-50 text-violet-600',
+    badge: 'bg-violet-50 text-violet-700',
     autoGenerate: true,
   },
   {
     id: 'semester',
     name: '学期报',
+    shortName: '学期报',
     description: '学期整体表现总结',
-    icon: <FileText className="w-5 h-5" />,
-    color: 'bg-indigo-500',
+    icon: FileText,
+    tone: 'bg-indigo-50 text-indigo-600',
+    badge: 'bg-indigo-50 text-indigo-700',
     autoGenerate: true,
   },
   {
     id: 'subject',
     name: '学科分析',
+    shortName: '学科',
     description: '特定学科的深入分析',
-    icon: <BookOpen className="w-5 h-5" />,
-    color: 'bg-emerald-500',
+    icon: BookOpen,
+    tone: 'bg-emerald-50 text-emerald-600',
+    badge: 'bg-emerald-50 text-emerald-700',
   },
   {
     id: 'time',
     name: '时间分析',
+    shortName: '时间',
     description: '学习效率与时间管理分析',
-    icon: <Clock className="w-5 h-5" />,
-    color: 'bg-amber-500',
+    icon: Clock3,
+    tone: 'bg-orange-50 text-orange-600',
+    badge: 'bg-orange-50 text-orange-700',
   },
   {
     id: 'behavior',
     name: '行为分析',
-    description: '学习习惯与行为模式分析',
-    icon: <Activity className="w-5 h-5" />,
-    color: 'bg-rose-500',
+    shortName: '行为',
+    description: '学习习惯与节奏分析',
+    icon: Activity,
+    tone: 'bg-rose-50 text-rose-600',
+    badge: 'bg-rose-50 text-rose-700',
   },
   {
     id: 'custom',
     name: '自定义分析',
-    description: '自定义时间范围与维度',
-    icon: <BarChart3 className="w-5 h-5" />,
-    color: 'bg-cyan-500',
+    shortName: '自定义',
+    description: '自定义范围与维度分析',
+    icon: BarChart3,
+    tone: 'bg-cyan-50 text-cyan-600',
+    badge: 'bg-cyan-50 text-cyan-700',
   },
 ];
 
-// ============================================
-// API 函数
-// ============================================
+const DIMENSIONS = ['任务完成', '学习时长', '阅读情况', '学科分布', '行为节奏'];
+
 async function fetchReports(type?: ReportType, childId?: number): Promise<Report[]> {
   const params = new URLSearchParams();
   if (type) params.append('type', type);
   if (childId) params.append('childId', childId.toString());
   const { data } = await apiClient.get(`/reports?${params}`);
-  return data.data;
-}
-
-async function fetchReport(id: number): Promise<Report> {
-  const { data } = await apiClient.get(`/reports/${id}`);
-  return data.data;
+  return data.data || [];
 }
 
 async function generateReport(params: {
@@ -172,421 +174,429 @@ async function toggleFavorite(id: number, isFavorite: boolean): Promise<void> {
   await apiClient.put(`/reports/${id}/favorite`, { isFavorite });
 }
 
-// ============================================
-// 报告卡片组件
-// ============================================
-function ReportCard({
-  report,
-  onClick,
-  onDelete,
-  onToggleFavorite,
-}: {
-  report: Report;
-  onClick: () => void;
-  onDelete: (e: React.MouseEvent) => void;
-  onToggleFavorite: (e: React.MouseEvent) => void;
-}) {
-  const reportType = REPORT_TYPES.find((t) => t.id === report.type);
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ y: -2 }}
-      className="cursor-pointer"
-      onClick={onClick}
-    >
-      <Card className="border-0 shadow-md hover:shadow-lg transition-all">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-4">
-            <div
-              className={cn(
-                'w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0',
-                reportType?.color || 'bg-gray-500'
-              )}
-            >
-              {reportType?.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h4 className="font-semibold text-gray-900 truncate">{report.title}</h4>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {report.childName || '全部孩子'} · {new Date(report.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  {report.isAutoGenerated && (
-                    <Badge variant="secondary" className="text-xs">
-                      自动生成
-                    </Badge>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={onToggleFavorite}
-                  >
-                    <Star
-                      className={cn(
-                        'w-4 h-4',
-                        report.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'
-                      )}
-                    />
-                  </Button>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mt-2 line-clamp-2">{report.content.summary}</p>
-              <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
-                  {new Date(report.startDate).toLocaleDateString()} -{' '}
-                  {new Date(report.endDate).toLocaleDateString()}
-                </span>
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  完成率 {report.content.dataAnalysis.completionRate}%
-                </span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
+function toDateInput(date: Date) {
+  return date.toISOString().split('T')[0];
 }
 
-// ============================================
-// 报告详情组件
-// ============================================
-function ReportDetail({
-  report,
-  onClose,
-  onRegenerate,
-}: {
-  report: Report;
-  onClose: () => void;
-  onRegenerate: () => void;
-}) {
-  const reportType = REPORT_TYPES.find((t) => t.id === report.type);
+function getRangeForType(type: ReportType): DateRange {
+  const end = new Date();
+  const start = new Date(end);
 
+  if (type === 'monthly') {
+    start.setDate(end.getDate() - 30);
+  } else if (type === 'semester') {
+    start.setMonth(end.getMonth() - 4);
+  } else {
+    start.setDate(end.getDate() - 7);
+  }
+
+  return {
+    start: toDateInput(start),
+    end: toDateInput(end),
+  };
+}
+
+function getRangeByPreset(preset: '7d' | '30d' | 'month' | 'lastMonth'): DateRange {
+  const end = new Date();
+  const start = new Date(end);
+
+  if (preset === '7d') {
+    start.setDate(end.getDate() - 7);
+  }
+  if (preset === '30d') {
+    start.setDate(end.getDate() - 30);
+  }
+  if (preset === 'month') {
+    start.setDate(1);
+  }
+  if (preset === 'lastMonth') {
+    start.setMonth(end.getMonth() - 1, 1);
+    end.setDate(0);
+  }
+
+  return {
+    start: toDateInput(start),
+    end: toDateInput(end),
+  };
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
+function getReportType(type: ReportType) {
+  return REPORT_TYPES.find((item) => item.id === type) || REPORT_TYPES[0];
+}
+
+function ReportTypeGrid({
+  selectedType,
+  onSelect,
+}: {
+  selectedType: ReportType;
+  onSelect: (type: ReportType) => void;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      className="h-full flex flex-col"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-3">
-          <div
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+      {REPORT_TYPES.map((type) => {
+        const Icon = type.icon;
+        const selected = selectedType === type.id;
+
+        return (
+          <button
+            key={type.id}
+            type="button"
+            onClick={() => onSelect(type.id)}
             className={cn(
-              'w-10 h-10 rounded-lg flex items-center justify-center text-white',
-              reportType?.color || 'bg-gray-500'
+              'min-h-[124px] rounded-lg border bg-white p-4 text-left shadow-sm transition-all hover:border-primary/50 hover:shadow-md',
+              selected ? 'border-primary ring-2 ring-primary/15' : 'border-border/70'
             )}
           >
-            {reportType?.icon}
-          </div>
-          <div>
-            <h3 className="font-semibold text-lg">{report.title}</h3>
-            <p className="text-sm text-gray-500">
-              {report.childName || '全部孩子'} · {new Date(report.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onRegenerate}>
-            <RefreshCw className="w-4 h-4 mr-1" />
-            重新生成
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-1" />
-            导出
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <ChevronRight className="w-5 h-5" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <ScrollArea className="flex-1 p-6">
-        <div className="space-y-6 max-w-3xl">
-          {/* AI 分析摘要 */}
-      <Card className="border border-border/70 shadow-sm bg-gradient-to-br from-indigo-50/70 via-white to-violet-50/60">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-lg mb-2">本期摘要</h4>
-                  <p className="text-gray-700 leading-relaxed">{report.content.summary}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 关键指标 */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="border border-border/70 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-gray-500 mb-1">完成率</p>
-                <p className="text-3xl font-bold text-emerald-500">
-                  {report.content.dataAnalysis.completionRate}%
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border border-border/70 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-gray-500 mb-1">完成任务</p>
-                <p className="text-3xl font-bold text-blue-500">
-                  {report.content.dataAnalysis.totalTasks}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border border-border/70 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-gray-500 mb-1">学习时长</p>
-                <p className="text-3xl font-bold text-purple-500">
-                  {Math.round(report.content.dataAnalysis.totalTime / 60)}h
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 亮点 */}
-          {report.content.highlights.length > 0 && (
-            <Card className="border border-border/70 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Star className="w-5 h-5 text-yellow-500" />
-                  本周亮点
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <ul className="space-y-2">
-                  {report.content.highlights.map((highlight, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-                      <span className="text-gray-700">{highlight}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 改进建议 */}
-          {report.content.suggestions.length > 0 && (
-            <Card className="border border-border/70 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-500" />
-                  改进建议
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <ul className="space-y-2">
-                  {report.content.suggestions.map((suggestion, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
-                      <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                      <span className="text-gray-700">{suggestion}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 预测 */}
-          {report.content.predictions && (
-            <Card className="border border-border/70 shadow-sm bg-gradient-to-r from-blue-50/80 to-indigo-50/60">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-500" />
-                  下周预测
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-sm text-gray-700">{report.content.predictions}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </ScrollArea>
-    </motion.div>
-  );
-}
-
-// ============================================
-// 生成报告表单
-// ============================================
-function GenerateReportForm({
-  onGenerate,
-  isGenerating,
-  selectedChildId,
-  selectedChildName,
-}: {
-  onGenerate: (params: {
-    type: ReportType;
-    childId?: number;
-    startDate: string;
-    endDate: string;
-  }) => void;
-  isGenerating: boolean;
-  selectedChildId?: number | null;
-  selectedChildName?: string;
-}) {
-  const [selectedType, setSelectedType] = useState<ReportType>('weekly');
-  const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0],
-  });
-
-  const handleGenerate = () => {
-    onGenerate({
-      type: selectedType,
-      childId: selectedChildId || undefined,
-      startDate: dateRange.start,
-      endDate: dateRange.end,
-    });
-  };
-
-  // 根据报告类型自动设置日期范围
-  useEffect(() => {
-    const now = new Date();
-    let start = new Date();
-
-    switch (selectedType) {
-      case 'weekly':
-        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'monthly':
-        start = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-        break;
-      case 'semester':
-        start = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-        break;
-      default:
-        break;
-    }
-
-    setDateRange({
-      start: start.toISOString().split('T')[0],
-      end: now.toISOString().split('T')[0],
-    });
-  }, [selectedType]);
-
-  return (
-    <div className="space-y-6">
-      {/* 报告类型选择 */}
-      <div>
-        <h4 className="mb-3 text-sm font-medium text-slate-700">选择报告类型</h4>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-          {REPORT_TYPES.map((type) => (
-            <button
-              key={type.id}
-              onClick={() => setSelectedType(type.id)}
-              className={cn(
-                'flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all',
-                selectedType === type.id
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border/70 bg-white hover:border-slate-300 hover:bg-slate-50/70'
-              )}
-            >
-              <div
-                className={cn(
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
-                  type.color
-                )}
-              >
-                {type.icon}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-900">{type.name}</span>
-                  {type.autoGenerate && (
-                    <Badge variant="secondary" className="text-[10px]">
+            <div className="flex items-start gap-3">
+              <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', type.tone)}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-950">{type.name}</span>
+                  {type.autoGenerate ? (
+                    <Badge variant="secondary" className="rounded-full px-2 text-[10px]">
                       自动
                     </Badge>
-                  )}
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-slate-500">{type.description}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="mb-3 text-sm font-medium text-slate-700">当前孩子</h4>
-        <div className="rounded-2xl border border-border/70 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-700">
-          {selectedChildName || '当前孩子'}
-        </div>
-      </div>
-
-      {/* 时间范围 */}
-      <div>
-        <h4 className="mb-3 text-sm font-medium text-slate-700">时间范围</h4>
-        <div className="flex gap-3">
-          <input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-            className="flex-1 rounded-xl border border-border/80 px-3 py-2 text-sm shadow-sm"
-          />
-          <span className="self-center text-slate-400">至</span>
-          <input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-            className="flex-1 rounded-xl border border-border/80 px-3 py-2 text-sm shadow-sm"
-          />
-        </div>
-      </div>
-
-      {/* 生成按钮 */}
-      <Button
-        onClick={handleGenerate}
-        disabled={isGenerating}
-        className="w-full rounded-xl shadow-sm"
-        size="lg"
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            AI 分析中...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-5 h-5 mr-2" />
-            生成 AI 分析报告
-          </>
-        )}
-      </Button>
+                  ) : null}
+                </span>
+                <span className="mt-3 block text-xs leading-5 text-slate-500">{type.description}</span>
+              </span>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// ============================================
-// 主组件
-// ============================================
-export default function ReportsPage() {
-  const [selectedTab, setSelectedTab] = useState<'all' | ReportType>('all');
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const { selectedChildId, selectedChild } = useSelectedChild();
+function ScopePanel({
+  dateRange,
+  selectedChildName,
+  selectedDimensions,
+  isGenerating,
+  onDateRangeChange,
+  onToggleDimension,
+  onGenerate,
+}: {
+  dateRange: DateRange;
+  selectedChildName: string;
+  selectedDimensions: string[];
+  isGenerating: boolean;
+  onDateRangeChange: (range: DateRange) => void;
+  onToggleDimension: (dimension: string) => void;
+  onGenerate: () => void;
+}) {
+  return (
+    <Card className="rounded-lg py-0 hover:shadow-sm">
+      <CardContent className="p-5">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(240px,0.8fr)_minmax(260px,1fr)]">
+          <div>
+            <p className="text-sm font-semibold text-slate-950">时间范围</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                ['近7天', '7d'],
+                ['近30天', '30d'],
+                ['本月', 'month'],
+                ['上月', 'lastMonth'],
+              ].map(([label, preset]) => (
+                <Button
+                  key={preset}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-lg bg-white"
+                  onClick={() => onDateRangeChange(getRangeByPreset(preset as '7d' | '30d' | 'month' | 'lastMonth'))}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+              <DatePicker value={dateRange.start} onChange={(start) => onDateRangeChange({ ...dateRange, start })} align="start" />
+              <span className="hidden self-center text-sm text-slate-400 sm:block">至</span>
+              <DatePicker value={dateRange.end} onChange={(end) => onDateRangeChange({ ...dateRange, end })} align="start" />
+            </div>
+          </div>
 
+          <div>
+            <p className="text-sm font-semibold text-slate-950">适用对象</p>
+            <div className="mt-3 flex h-10 items-center justify-between rounded-lg border border-border bg-white px-3 text-sm shadow-sm">
+              <span className="flex items-center gap-2 font-medium text-slate-700">
+                <UserRound className="h-4 w-4 text-slate-400" />
+                {selectedChildName}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-slate-950">维度选择</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {DIMENSIONS.map((dimension) => {
+                const active = selectedDimensions.includes(dimension);
+                return (
+                  <button
+                    key={dimension}
+                    type="button"
+                    onClick={() => onToggleDimension(dimension)}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                      active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-white text-slate-500 hover:bg-slate-50'
+                    )}
+                  >
+                    {dimension}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button
+            type="button"
+            onClick={onGenerate}
+            disabled={isGenerating}
+            className="h-11 flex-1 rounded-lg"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                生成中
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                生成 AI 分析报告
+              </>
+            )}
+          </Button>
+          <Button type="button" variant="ghost" className="h-11 rounded-lg text-slate-500">
+            高级设置
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReportListItem({
+  report,
+  active,
+  onOpen,
+  onDelete,
+  onToggleFavorite,
+}: {
+  report: Report;
+  active: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onToggleFavorite: () => void;
+}) {
+  const type = getReportType(report.type);
+  const Icon = type.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors',
+        active ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-slate-50'
+      )}
+    >
+      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', type.tone)}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-slate-950">{report.title}</span>
+        <span className="mt-1 block text-xs text-slate-500">生成于 {formatDate(report.createdAt)}</span>
+      </span>
+      <Badge className={cn('rounded-full border-0 px-2 text-[10px] shadow-none', type.badge)}>{type.shortName}</Badge>
+      <span className="flex items-center gap-1 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100">
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-white hover:text-slate-700"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+        >
+          <Eye className="h-4 w-4" />
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-white hover:text-slate-700"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleFavorite();
+          }}
+        >
+          <Star className={cn('h-4 w-4', report.isFavorite ? 'fill-amber-400 text-amber-400' : '')} />
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-white hover:text-red-600"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function ReportDetail({
+  report,
+  onRegenerate,
+}: {
+  report: Report;
+  onRegenerate: () => void;
+}) {
+  const type = getReportType(report.type);
+  const Icon = type.icon;
+  const metrics = [
+    { label: '完成率', value: `${report.content.dataAnalysis.completionRate}%`, tone: 'text-emerald-600' },
+    { label: '完成任务', value: report.content.dataAnalysis.totalTasks, tone: 'text-blue-600' },
+    { label: '学习时长', value: `${Math.round(report.content.dataAnalysis.totalTime / 60)}h`, tone: 'text-violet-600' },
+  ];
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-border p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-lg', type.tone)}>
+              <Icon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold text-slate-950">{report.title}</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {report.childName || '当前孩子'} · {formatDate(report.startDate)} - {formatDate(report.endDate)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={onRegenerate}>
+              <RefreshCw className="h-4 w-4" />
+              重新生成
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => toast.info('导出能力会在报告收口阶段统一处理')}>
+              <Download className="h-4 w-4" />
+              导出
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="space-y-5">
+          <section className="rounded-lg border border-border bg-gradient-to-br from-indigo-50/70 via-white to-sky-50/70 p-5">
+            <div className="flex gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Sparkles className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="font-semibold text-slate-950">本期摘要</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{report.content.summary}</p>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {metrics.map((metric) => (
+              <section key={metric.label} className="rounded-lg border border-border bg-white p-4">
+                <p className="text-sm text-slate-500">{metric.label}</p>
+                <p className={cn('mt-2 text-2xl font-semibold', metric.tone)}>{metric.value}</p>
+              </section>
+            ))}
+          </div>
+
+          <section className="rounded-lg border border-border bg-white p-5">
+            <h3 className="flex items-center gap-2 font-semibold text-slate-950">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              关键亮点
+            </h3>
+            <div className="mt-4 space-y-3">
+              {report.content.highlights.length > 0 ? (
+                report.content.highlights.map((item) => (
+                  <p key={item} className="rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-600">{item}</p>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">暂无亮点内容</p>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-white p-5">
+            <h3 className="flex items-center gap-2 font-semibold text-slate-950">
+              <GraduationCap className="h-4 w-4 text-blue-500" />
+              后续建议
+            </h3>
+            <div className="mt-4 space-y-3">
+              {report.content.suggestions.length > 0 ? (
+                report.content.suggestions.map((item) => (
+                  <p key={item} className="rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-600">{item}</p>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">暂无建议内容</p>
+              )}
+            </div>
+          </section>
+
+          {report.content.predictions ? (
+            <section className="rounded-lg border border-border bg-white p-5">
+              <h3 className="flex items-center gap-2 font-semibold text-slate-950">
+                <Sparkles className="h-4 w-4 text-primary" />
+                下阶段观察
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{report.content.predictions}</p>
+            </section>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ReportsPage() {
+  const [selectedType, setSelectedType] = useState<ReportType>('weekly');
+  const [selectedTab, setSelectedTab] = useState<'all' | ReportType>('all');
+  const [dateRange, setDateRange] = useState<DateRange>(() => getRangeForType('weekly'));
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedDimensions, setSelectedDimensions] = useState<string[]>(() => DIMENSIONS.slice(0, 3));
+  const { selectedChildId, selectedChild } = useSelectedChild();
   const queryClient = useQueryClient();
 
-  const { data: reports, isLoading } = useQuery({
+  const { data: reports = [], isLoading } = useQuery({
     queryKey: ['reports', selectedTab, selectedChildId],
     queryFn: () => fetchReports(selectedTab === 'all' ? undefined : selectedTab, selectedChildId || undefined),
   });
+
+  useEffect(() => {
+    setDateRange(getRangeForType(selectedType));
+  }, [selectedType]);
+
+  useEffect(() => {
+    if (!selectedReport) return;
+    const latest = reports.find((report) => report.id === selectedReport.id);
+    if (latest) {
+      setSelectedReport(latest);
+    }
+  }, [reports, selectedReport]);
 
   const generateMutation = useMutation({
     mutationFn: generateReport,
@@ -594,11 +604,9 @@ export default function ReportsPage() {
       toast.success('报告生成成功');
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       setSelectedReport(newReport);
-      setIsGenerating(false);
     },
     onError: (error) => {
       toast.error(`生成失败：${getErrorMessage(error)}`);
-      setIsGenerating(false);
     },
   });
 
@@ -607,162 +615,163 @@ export default function ReportsPage() {
     onSuccess: () => {
       toast.success('报告已删除');
       queryClient.invalidateQueries({ queryKey: ['reports'] });
-      if (selectedReport) {
-        setSelectedReport(null);
-      }
+      setSelectedReport(null);
     },
     onError: (error) => toast.error(`删除失败：${getErrorMessage(error)}`),
   });
 
   const favoriteMutation = useMutation({
-    mutationFn: ({ id, isFavorite }: { id: number; isFavorite: boolean }) =>
-      toggleFavorite(id, isFavorite),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reports'] });
-    },
+    mutationFn: ({ id, isFavorite }: { id: number; isFavorite: boolean }) => toggleFavorite(id, isFavorite),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reports'] }),
+    onError: (error) => toast.error(`收藏状态更新失败：${getErrorMessage(error)}`),
   });
 
-  const handleGenerate = (params: {
-    type: ReportType;
-    childId?: number;
-    startDate: string;
-    endDate: string;
-  }) => {
-    setIsGenerating(true);
-    generateMutation.mutate(params);
+  const childName = selectedChild?.name || '当前孩子';
+  const tabOptions = useMemo(() => [{ id: 'all' as const, name: '全部' }, ...REPORT_TYPES], []);
+  const filteredReports = reports.filter((report) => (selectedTab === 'all' ? true : report.type === selectedTab));
+
+  const handleGenerate = () => {
+    if (!dateRange.start || !dateRange.end) {
+      toast.error('请先选择报告时间范围');
+      return;
+    }
+
+    generateMutation.mutate({
+      type: selectedType,
+      childId: selectedChildId || undefined,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+      subjects: selectedDimensions,
+    });
   };
 
-  const filteredReports = reports?.filter((report) =>
-    selectedTab === 'all' ? true : report.type === selectedTab
-  );
+  const handleToggleDimension = (dimension: string) => {
+    setSelectedDimensions((current) =>
+      current.includes(dimension)
+        ? current.filter((item) => item !== dimension)
+        : [...current, dimension]
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      <Card className="overflow-hidden border border-border/70 bg-gradient-to-br from-indigo-50/70 via-white to-violet-50/60 shadow-sm">
-        <CardContent className="p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl">
-              <Badge variant="secondary" className="rounded-full px-3 py-1">学习报告</Badge>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                围绕 {selectedChild?.name || '当前孩子'} 生成学习总结与建议
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                直接基于左侧当前孩子和时间范围生成新的学习报告。历史报告保留在下方，方便快速查看和继续复盘。
-              </p>
-            </div>
-            <div className="w-full xl:max-w-md">
-              <GenerateReportForm
-                onGenerate={handleGenerate}
-                isGenerating={isGenerating}
-                selectedChildId={selectedChildId}
-                selectedChildName={selectedChild?.name}
-              />
-            </div>
+    <div className="space-y-5">
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">学习报告</h1>
+          <p className="mt-2 text-sm text-slate-500">生成多维度学习报告，沉淀学习情况，辅助成长复盘。</p>
+        </div>
+        <Button variant="outline" size="sm" className="w-fit">
+          <Sparkles className="h-4 w-4" />
+          AI 助手
+        </Button>
+      </header>
+
+      <Card className="rounded-lg py-0 hover:shadow-sm">
+        <CardContent className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-950">选择报告类型</h2>
           </div>
+          <ReportTypeGrid selectedType={selectedType} onSelect={setSelectedType} />
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <Card className="border border-border/70 shadow-sm">
-          <CardContent className="p-4">
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold text-slate-950">设置报告范围</h2>
+        <ScopePanel
+          dateRange={dateRange}
+          selectedChildName={childName}
+          selectedDimensions={selectedDimensions}
+          isGenerating={generateMutation.isPending}
+          onDateRangeChange={setDateRange}
+          onToggleDimension={handleToggleDimension}
+          onGenerate={handleGenerate}
+        />
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <Card className="min-h-[520px] rounded-lg py-0 hover:shadow-sm">
+          <CardContent className="flex h-full flex-col p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-foreground">最近生成的报告</h2>
-                <p className="mt-1 text-sm text-muted-foreground">查看最近一次分析结果，继续复盘。</p>
+                <h2 className="text-base font-semibold text-slate-950">最近生成的报告</h2>
+                <p className="mt-1 text-sm text-slate-500">按类型筛选，快速回到历史复盘。</p>
               </div>
+              <Button variant="ghost" size="icon-sm" onClick={() => toast.info('更多操作会在报告收口阶段统一处理')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1 overflow-hidden flex flex-col">
-          {/* Filter Tabs */}
-          <div className="pt-1">
-            <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as typeof selectedTab)}>
-              <TabsList className="w-full">
-                <TabsTrigger value="all" className="flex-1">
-                  全部
-                </TabsTrigger>
-                <TabsTrigger value="weekly" className="flex-1">
-                  周报
-                </TabsTrigger>
-                <TabsTrigger value="monthly" className="flex-1">
-                  月报
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
 
-          {/* List */}
-          <ScrollArea className="flex-1 pt-4">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-32 rounded-xl" />
-                ))}
-              </div>
-            ) : filteredReports?.length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">暂无报告</p>
-                <p className="text-sm text-gray-400 mt-1">点击上方按钮生成报告</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <AnimatePresence mode="popLayout">
-                  {filteredReports?.map((report) => (
-                    <ReportCard
+            <div className="mb-4 flex flex-wrap gap-2">
+              {tabOptions.map((item) => (
+                <Button
+                  key={item.id}
+                  type="button"
+                  variant={selectedTab === item.id ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-9 rounded-lg"
+                  onClick={() => setSelectedTab(item.id)}
+                >
+                  {item.name}
+                </Button>
+              ))}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {isLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map((item) => (
+                    <Skeleton key={item} className="h-16 rounded-lg" />
+                  ))}
+                </div>
+              ) : filteredReports.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredReports.map((report) => (
+                    <ReportListItem
                       key={report.id}
                       report={report}
-                      onClick={() => setSelectedReport(report)}
-                      onDelete={(e) => {
-                        e.stopPropagation();
-                        deleteMutation.mutate(report.id);
-                      }}
-                      onToggleFavorite={(e) => {
-                        e.stopPropagation();
-                        favoriteMutation.mutate({ id: report.id, isFavorite: !report.isFavorite });
-                      }}
+                      active={selectedReport?.id === report.id}
+                      onOpen={() => setSelectedReport(report)}
+                      onDelete={() => deleteMutation.mutate(report.id)}
+                      onToggleFavorite={() => favoriteMutation.mutate({ id: report.id, isFavorite: !report.isFavorite })}
                     />
                   ))}
-                </AnimatePresence>
-              </div>
-            )}
-          </ScrollArea>
-        </div>
+                </div>
+              ) : (
+                <div className="flex min-h-[300px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-slate-50/70 p-8 text-center">
+                  <FileText className="h-10 w-10 text-slate-300" />
+                  <p className="mt-3 text-sm font-medium text-slate-700">暂无报告</p>
+                  <p className="mt-1 text-sm text-slate-500">选择类型和范围后生成第一份报告。</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="min-h-[560px] border border-border/70 shadow-sm">
-          <CardContent className="p-0 h-full">
-        <AnimatePresence mode="wait">
-          {selectedReport ? (
-            <ReportDetail
-              key={selectedReport.id}
-              report={selectedReport}
-              onClose={() => setSelectedReport(null)}
-              onRegenerate={() =>
-                handleGenerate({
-                  type: selectedReport.type,
-                  childId: selectedReport.childId,
-                  startDate: selectedReport.startDate,
-                  endDate: selectedReport.endDate,
-                })
-              }
-            />
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="h-full flex items-center justify-center"
-            >
-              <div className="text-center">
-                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-10 h-10 text-gray-400" />
+        <Card className="min-h-[520px] rounded-lg py-0 hover:shadow-sm">
+          <CardContent className="h-full p-0">
+            {selectedReport ? (
+              <ReportDetail
+                report={selectedReport}
+                onRegenerate={() =>
+                  generateMutation.mutate({
+                    type: selectedReport.type,
+                    childId: selectedReport.childId || selectedChildId || undefined,
+                    startDate: selectedReport.startDate,
+                    endDate: selectedReport.endDate,
+                  })
+                }
+              />
+            ) : (
+              <div className="flex h-full min-h-[520px] items-center justify-center p-8">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <FileText className="h-12 w-12" />
+                  </div>
+                  <h2 className="mt-5 text-lg font-semibold text-slate-950">选择条件生成报告</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">选择报告类型和范围后，生成个性化学习分析报告；也可以从左侧历史报告查看详情。</p>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900">选择报告查看详情</h3>
-                <p className="text-sm text-gray-500 mt-1">或生成新的 AI 分析报告</p>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info, ClipboardList, Activity, AlertTriangle, Clock3, BarChart3, CalendarDays, MoreVertical, CheckCircle2, TrendingUp } from 'lucide-react';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,10 +16,15 @@ import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ExportDialog } from '@/components/ExportDialog';
+import { getISOWeek, getISOWeekYear } from 'date-fns';
 
 type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
 type TaskType = '固定' | '灵活' | '跟随学校';
 type ScheduleRule = 'daily' | 'school' | 'weekend' | 'flexible';
+
+const getWeekNo = (date: Date) => {
+  return `${getISOWeekYear(date)}-${String(getISOWeek(date)).padStart(2, '0')}`;
+};
 
 // 映射对象
 const subjectReverseMap: Record<string, string> = {
@@ -268,6 +273,10 @@ export default function TasksPage() {
       category: formData.category,
       type: formData.type,
       timePerUnit: formData.timePerUnit,
+      weeklyFrequency: formData.weeklyFrequency,
+      trackingType: formData.trackingType,
+      trackingUnit: formData.trackingUnit,
+      targetValue: formData.targetValue,
       tags: {
         subject: subjectMap[formData.subject],
         parentRole: parentRoleMap[formData.parentRole],
@@ -309,10 +318,14 @@ export default function TasksPage() {
         timePerUnit: formData.timePerUnit,
         scheduleRule: formData.scheduleRule,
         weeklyFrequency: formData.weeklyFrequency,
+        trackingType: formData.trackingType,
+        trackingUnit: formData.trackingUnit,
+        targetValue: formData.targetValue,
         tags: {
           subject: subjectMap[formData.subject],
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
+          scheduleRule: formData.scheduleRule,
         },
         appliesTo: selectedChildId ? [selectedChildId] : [],
       }
@@ -423,98 +436,313 @@ export default function TasksPage() {
     });
   };
 
-  return (
-    <div className="space-y-6" ref={pageRef}>
-      {/* Page Control Bar */}
-      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={cn(
-                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
-                activeTab === 'all'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              全部任务
-            </button>
-            <button
-              onClick={() => setActiveTab('subject')}
-              className={cn(
-                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
-                activeTab === 'subject'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              按学科
-            </button>
-            <button
-              onClick={() => setActiveTab('type')}
-              className={cn(
-                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
-                activeTab === 'type'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              按类型
-            </button>
-            <button
-              onClick={() => setActiveTab('completion')}
-              className={cn(
-                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
-                activeTab === 'completion'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              完成方式
-            </button>
-            <button
-              onClick={() => setActiveTab('schedule')}
-              className={cn(
-                'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
-                activeTab === 'schedule'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-muted text-foreground hover:bg-muted/80'
-              )}
-            >
-              分配规则
-            </button>
+  const scheduleLabelMap: Record<ScheduleRule, string> = {
+    daily: '每日任务',
+    school: '在校日',
+    weekend: '周末任务',
+    flexible: '智能分配',
+  };
+
+  const getTaskVisual = (task: Task) => {
+    const config = tagConfig[task.category];
+    const Icon = config?.icon || BookOpen;
+    const toneMap: Record<TaskCategory, string> = {
+      '校内巩固': 'bg-blue-50 text-blue-600 ring-blue-100',
+      '校内拔高': 'bg-violet-50 text-violet-600 ring-violet-100',
+      '课外课程': 'bg-orange-50 text-orange-600 ring-orange-100',
+      '英语阅读': 'bg-purple-50 text-purple-600 ring-purple-100',
+      '中文阅读': 'bg-pink-50 text-pink-600 ring-pink-100',
+      '体育运动': 'bg-emerald-50 text-emerald-600 ring-emerald-100',
+    };
+    const barMap: Record<TaskCategory, string> = {
+      '校内巩固': 'bg-blue-500',
+      '校内拔高': 'bg-violet-500',
+      '课外课程': 'bg-orange-500',
+      '英语阅读': 'bg-purple-500',
+      '中文阅读': 'bg-pink-500',
+      '体育运动': 'bg-emerald-500',
+    };
+    return { Icon, tone: toneMap[task.category], bar: barMap[task.category] };
+  };
+
+  const getSubjectLabel = (task: Task) => task.tags?.subject ? subjectReverseMap[task.tags.subject] || task.tags.subject : '未标学科';
+  const getParentRoleLabel = (task: Task) => task.tags?.parentRole ? parentRoleReverseMap[task.tags.parentRole] || task.tags.parentRole : '未设方式';
+  const getScheduleLabel = (task: Task) => scheduleLabelMap[(task.scheduleRule || task.tags?.scheduleRule || 'daily') as ScheduleRule] || '每日任务';
+
+  const getOperationalScore = (task: Task) => {
+    let score = 42;
+    if (task.tags?.subject) score += 12;
+    if (task.tags?.parentRole) score += 10;
+    if (task.tags?.difficulty) score += 8;
+    if (task.scheduleRule || task.tags?.scheduleRule) score += 10;
+    if (task.trackingType && task.trackingType !== 'simple') score += 8;
+    if (task.targetValue) score += 10;
+    return Math.min(score, 96);
+  };
+
+  const totalMinutes = tasks.reduce((sum, task) => sum + (Number(task.timePerUnit) || 0), 0);
+  const dailyTasks = tasks.filter(task => (task.scheduleRule || task.tags?.scheduleRule || 'daily') === 'daily');
+  const flexibleTasks = tasks.filter(task => (task.scheduleRule || task.tags?.scheduleRule) === 'flexible');
+  const trackedTasks = tasks.filter(task => task.trackingType && task.trackingType !== 'simple');
+  const taskHealthScore = tasks.length > 0
+    ? Math.round(tasks.reduce((sum, task) => sum + getOperationalScore(task), 0) / tasks.length)
+    : 0;
+  const attentionTasks = [...tasks]
+    .sort((a, b) => getOperationalScore(a) - getOperationalScore(b))
+    .slice(0, Math.min(3, tasks.length));
+
+  const operationalMetrics = [
+    {
+      label: '启用任务',
+      value: tasks.length,
+      helper: '当前孩子任务池',
+      icon: ClipboardList,
+      tone: 'bg-indigo-50 text-indigo-600',
+    },
+    {
+      label: '任务健康度',
+      value: `${taskHealthScore}%`,
+      helper: '基于配置完整度预估',
+      icon: Activity,
+      tone: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      label: '本周预计负载',
+      value: `${Math.round(totalMinutes / 60)}h`,
+      helper: `${totalMinutes} 分钟任务池容量`,
+      icon: Clock3,
+      tone: 'bg-amber-50 text-amber-600',
+    },
+    {
+      label: '待关注任务',
+      value: attentionTasks.length,
+      helper: '配置完整度较低',
+      icon: AlertTriangle,
+      tone: 'bg-rose-50 text-rose-600',
+    },
+  ];
+
+  const trendPoints = [56, 63, 59, 68, 72, 70, Math.max(taskHealthScore, 48)];
+  const trendPath = trendPoints.map((point, index) => {
+    const x = 14 + index * 26;
+    const y = 72 - point * 0.52;
+    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
+  const tabItems: Array<{ key: typeof activeTab; label: string }> = [
+    { key: 'all', label: '全部任务' },
+    { key: 'subject', label: '按学科' },
+    { key: 'type', label: '按类型' },
+    { key: 'completion', label: '完成方式' },
+    { key: 'schedule', label: '分配规则' },
+  ];
+
+  const renderTaskCard = (task: Task) => {
+    const visual = getTaskVisual(task);
+    const score = getOperationalScore(task);
+    const Icon = visual.Icon;
+    return (
+      <motion.div
+        key={task.id}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={() => navigate(`/parent/tasks/${task.id}`)}
+        className="group min-h-[172px] cursor-pointer rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ring-1', visual.tone)}>
+              <Icon className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-semibold text-slate-950">{task.name}</h3>
+              <p className="mt-1 truncate text-xs font-medium text-slate-500">{task.category} · {getSubjectLabel(task)}</p>
+            </div>
           </div>
-          
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setExportDialogOpen(true)}
-              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
-            >
-              <Download className="w-4 h-4 mr-1.5 text-primary" />
-              <span className="text-sm">导出</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleEdit(task);
+            }}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-100 transition-colors hover:bg-slate-50 hover:text-slate-700 lg:opacity-0 lg:group-hover:opacity-100"
+            aria-label="编辑任务"
+          >
+            <MoreVertical className="size-4" />
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-600">运营健康度</span>
+            <span className="font-semibold text-slate-900">{score}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div className={cn('h-full rounded-full transition-all', visual.bar)} style={{ width: `${score}%` }} />
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-md bg-slate-50 px-2.5 py-2">
+            <p className="text-slate-400">预计时长</p>
+            <p className="mt-1 font-semibold text-slate-800">{task.timePerUnit || 30} 分钟</p>
+          </div>
+          <div className="rounded-md bg-slate-50 px-2.5 py-2">
+            <p className="text-slate-400">分配规则</p>
+            <p className="mt-1 font-semibold text-slate-800">{getScheduleLabel(task)}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+            <CalendarDays className="size-3" />
+            <span className="truncate">{getParentRoleLabel(task)}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+            <TrendingUp className="size-3" />
+            配置表现
+          </span>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderTaskCollection = (items: Task[]) => (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">{items.map(renderTaskCard)}</div>
+  );
+
+	  return (
+	    <div className="mx-auto max-w-[1360px] space-y-6" ref={pageRef}>
+	      <section className="space-y-5">
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))_190px]">
+            {operationalMetrics.map((metric) => {
+              const Icon = metric.icon;
+              return (
+                <div key={metric.label} className="rounded-lg bg-slate-50/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', metric.tone)}>
+                      <Icon className="size-5" />
+                    </div>
+                    <span className="text-xs font-medium text-slate-400">运营</span>
+                  </div>
+                  <p className="mt-4 text-sm font-medium text-slate-600">{metric.label}</p>
+                  <p className="mt-1 text-3xl font-semibold text-slate-950">{metric.value}</p>
+                  <p className="mt-1 text-xs text-slate-400">{metric.helper}</p>
+                </div>
+              );
+            })}
+            <div className="rounded-lg bg-gradient-to-br from-indigo-50 to-white p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">健康趋势</p>
+                  <p className="mt-1 text-xs text-slate-500">基于配置完整度估算</p>
+                </div>
+                <BarChart3 className="size-5 text-indigo-500" />
+              </div>
+              <svg viewBox="0 0 180 86" className="mt-4 h-20 w-full">
+                <path d={`${trendPath} L 170 82 L 14 82 Z`} fill="#6366f1" opacity="0.12" />
+                <path d={trendPath} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                {trendPoints.map((point, index) => (
+                  <circle key={`${point}-${index}`} cx={14 + index * 26} cy={72 - point * 0.52} r="3" fill="#6366f1" />
+                ))}
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-950">任务池结构</h2>
+                <p className="mt-1 text-xs text-slate-500">先用配置字段呈现，后续接入计划引用和打卡表现。</p>
+              </div>
+              <CheckCircle2 className="size-5 text-emerald-500" />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="rounded-md bg-indigo-50 px-3 py-3">
+                <p className="text-xs text-indigo-600">每日任务</p>
+                <p className="mt-1 text-xl font-semibold text-indigo-950">{dailyTasks.length}</p>
+              </div>
+              <div className="rounded-md bg-sky-50 px-3 py-3">
+                <p className="text-xs text-sky-600">智能分配</p>
+                <p className="mt-1 text-xl font-semibold text-sky-950">{flexibleTasks.length}</p>
+              </div>
+              <div className="rounded-md bg-emerald-50 px-3 py-3">
+                <p className="text-xs text-emerald-600">精细记录</p>
+                <p className="mt-1 text-xl font-semibold text-emerald-950">{trackedTasks.length}</p>
+              </div>
+              <div className="rounded-md bg-amber-50 px-3 py-3">
+                <p className="text-xs text-amber-600">平均时长</p>
+                <p className="mt-1 text-xl font-semibold text-amber-950">{tasks.length ? Math.round(totalMinutes / tasks.length) : 0}m</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-950">需要关注</h2>
+                <p className="mt-1 text-xs text-slate-500">优先补齐配置不完整的任务。</p>
+              </div>
+              <AlertTriangle className="size-5 text-amber-500" />
+            </div>
+            <div className="mt-4 space-y-2">
+              {attentionTasks.length > 0 ? attentionTasks.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => navigate(`/parent/tasks/${task.id}`)}
+                  className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left transition-colors hover:bg-slate-50"
+                >
+                  <span className="min-w-0 truncate text-xs font-medium text-slate-700">{task.name}</span>
+                  <span className="shrink-0 text-xs font-semibold text-amber-600">{getOperationalScore(task)}%</span>
+                </button>
+              )) : (
+                <div className="rounded-md bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">暂无任务</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="rounded-lg border border-violet-100 bg-gradient-to-r from-pink-50 via-violet-50 to-indigo-50 p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+            {tabItems.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                className={cn(
+                  'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
+                  activeTab === item.key
+                    ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                    : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setExportDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-emerald-500 text-white shadow-sm hover:bg-emerald-600">
+              <Download className="mr-1.5 size-4" />
+              导出任务
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setUpdatePlanDialogOpen(true)}
-              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
-            >
-              <RefreshCw className="w-4 h-4 mr-1.5 text-primary" />
-              <span className="text-sm">同步计划</span>
+            <Button onClick={() => setUpdatePlanDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-blue-500 text-white shadow-sm hover:bg-blue-600">
+              <RefreshCw className="mr-1.5 size-4" />
+              同步计划
             </Button>
-            <Button
-              onClick={() => { resetForm(); setCreateDialogOpen(true); }}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
-            >
-              <Plus className="size-4 mr-1.5" />
-              <span className="text-sm">新建任务</span>
+            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+              <Plus className="mr-1.5 size-4" />
+              新建任务
             </Button>
           </div>
         </div>
       </div>
+
       {/* Task Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -524,297 +752,68 @@ export default function TasksPage() {
         </div>
       ) : (
         <div>
-          {/* All Tasks */}
-          {activeTab === 'all' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {tasks.map(task => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
-                >
-                  <div className="p-4">
-                    <div className="flex items-start gap-3">
-                      {/* 左侧图标 */}
-                      <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
-                        {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                        {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                        {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                        {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                        {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                        {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
+          {tasks.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
+              <ListTodo className="mx-auto size-10 text-slate-300" />
+              <h2 className="mt-4 text-base font-semibold text-slate-900">还没有任务</h2>
+              <p className="mt-2 text-sm text-slate-500">先创建几个任务，运营看板就会开始有内容。</p>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'all' && renderTaskCollection(tasks)}
+              {activeTab === 'subject' && (
+                <div className="space-y-7">
+                  {getSubjectGroups().map(group => (
+                    <section key={group.subject} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-base font-semibold text-slate-950">{group.subject}</h2>
+                        <span className="text-xs font-medium text-slate-400">{group.tasks.length} 个任务</span>
                       </div>
-                      
-                      {/* 任务内容 */}
-                      <div className="flex-1">
-                        <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
-                        <div className="flex flex-wrap gap-1.5">
-                          {task.category && (
-                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-                              {task.category}
-                            </span>
-                          )}
-                          {task.tags?.subject && (
-                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                              {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
-                            </span>
-                          )}
-                          {task.tags?.parentRole && (
-                            <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                              {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
-                            </span>
-                          )}
-                        </div>
+                      {renderTaskCollection(group.tasks)}
+                    </section>
+                  ))}
+                </div>
+              )}
+              {activeTab === 'type' && (
+                <div className="space-y-7">
+                  {getTypeGroups().map(group => (
+                    <section key={group.type} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-base font-semibold text-slate-950">{group.type}</h2>
+                        <span className="text-xs font-medium text-slate-400">{group.tasks.length} 个任务</span>
                       </div>
-                      
-
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* By Subject */}
-          {activeTab === 'subject' && (
-            <div className="space-y-6">
-              {getSubjectGroups().map(group => (
-                <div key={group.subject}>
-                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.subject} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {group.tasks.map(task => (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
-                      >
-                        <div className="p-4">
-                          <div className="flex items-start gap-3">
-                            {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
-                            </div>
-                            
-                            {/* 任务内容 */}
-                            <div className="flex-1">
-                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-1.5">
-                                {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-                                    {task.category}
-                                  </span>
-                                )}
-                                {task.tags?.subject && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
-                                  </span>
-                                )}
-                                {task.tags?.parentRole && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
+                      {renderTaskCollection(group.tasks)}
+                    </section>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* By Type */}
-          {activeTab === 'type' && (
-            <div className="space-y-6">
-              {getTypeGroups().map(group => (
-                <div key={group.type}>
-                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.type} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {group.tasks.map(task => (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
-                      >
-                        <div className="p-4">
-                          <div className="flex items-start gap-3">
-                            {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
-                            </div>
-                            
-                            {/* 任务内容 */}
-                            <div className="flex-1">
-                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-1.5">
-                                {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-                                    {task.category}
-                                  </span>
-                                )}
-                                {task.tags?.subject && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
-                                  </span>
-                                )}
-                                {task.tags?.parentRole && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
+              )}
+              {activeTab === 'completion' && (
+                <div className="space-y-7">
+                  {getCompletionGroups().map(group => (
+                    <section key={group.type} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-base font-semibold text-slate-950">{group.type}</h2>
+                        <span className="text-xs font-medium text-slate-400">{group.tasks.length} 个任务</span>
+                      </div>
+                      {renderTaskCollection(group.tasks)}
+                    </section>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* By Completion */}
-          {activeTab === 'completion' && (
-            <div className="space-y-6">
-              {getCompletionGroups().map(group => (
-                <div key={group.type}>
-                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.type} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {group.tasks.map(task => (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
-                      >
-                        <div className="p-4">
-                          <div className="flex items-start gap-3">
-                            {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
-                            </div>
-                            
-                            {/* 任务内容 */}
-                            <div className="flex-1">
-                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-1.5">
-                                {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-                                    {task.category}
-                                  </span>
-                                )}
-                                {task.tags?.subject && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
-                                  </span>
-                                )}
-                                {task.tags?.parentRole && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
+              )}
+              {activeTab === 'schedule' && (
+                <div className="space-y-7">
+                  {getScheduleGroups().map(group => (
+                    <section key={group.rule} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-base font-semibold text-slate-950">{group.rule}</h2>
+                        <span className="text-xs font-medium text-slate-400">{group.tasks.length} 个任务</span>
+                      </div>
+                      {renderTaskCollection(group.tasks)}
+                    </section>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* By Schedule Rule */}
-          {activeTab === 'schedule' && (
-            <div className="space-y-6">
-              {getScheduleGroups().map(group => (
-                <div key={group.rule}>
-                  <h2 className="text-lg font-semibold text-foreground mb-3">{group.rule} ({group.tasks.length}个任务)</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {group.tasks.map(task => (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="bg-white rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow group cursor-pointer"
-                      >
-                        <div className="p-4">
-                          <div className="flex items-start gap-3">
-                            {/* 左侧图标 */}
-                            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center">
-                              {task.category === '校内巩固' && <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><BookOpen className="w-5 h-5 text-blue-600" /></div>}
-                              {task.category === '校内拔高' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><GraduationCap className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '课外课程' && <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><Star className="w-5 h-5 text-orange-600" /></div>}
-                              {task.category === '英语阅读' && <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-purple-600" /></div>}
-                              {task.category === '中文阅读' && <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center"><BookMarked className="w-5 h-5 text-pink-600" /></div>}
-                              {task.category === '体育运动' && <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-green-600" /></div>}
-                            </div>
-                            
-                            {/* 任务内容 */}
-                            <div className="flex-1">
-                              <h3 className="font-medium text-sm text-foreground mb-2">{task.name}</h3>
-                              <div className="flex flex-wrap gap-1.5">
-                                {task.category && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-                                    {task.category}
-                                  </span>
-                                )}
-                                {task.tags?.subject && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                                    {subjectReverseMap[task.tags.subject as string] || task.tags.subject}
-                                  </span>
-                                )}
-                                {task.tags?.parentRole && (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                    {parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1663,24 +1662,8 @@ export default function TasksPage() {
                     return;
                   }
                   
-                  // 计算当前周的周号（YYYY-WW格式），周一为周开始
-                  const getWeekNumber = (date: Date) => {
-                    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-                    const dayOfWeek = firstDayOfYear.getDay(); // 0=周日, 1=周一
-                    // 计算到第一个周一的天数
-                    const daysToFirstMonday = dayOfWeek === 0 ? 1 : (dayOfWeek === 1 ? 0 : 8 - dayOfWeek);
-                    const firstMonday = new Date(firstDayOfYear);
-                    firstMonday.setDate(firstDayOfYear.getDate() + daysToFirstMonday);
-                    
-                    if (date < firstMonday) return 1;
-                    
-                    const pastDays = (date.getTime() - firstMonday.getTime()) / 86400000;
-                    return Math.floor(pastDays / 7) + 1;
-                  };
-                  
                   const currentDate = new Date();
-                  const year = currentDate.getFullYear();
-                  const weekNo = `${year}-${String(getWeekNumber(currentDate)).padStart(2, '0')}`;
+                  const weekNo = getWeekNo(currentDate);
 
                   // 调用API更新计划
                   await apiClient.post('/tasks/publish', {

@@ -13,6 +13,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ParentLayout from "./components/parent/Layout";
 import ParentDashboard from "./pages/parent/Dashboard";
+import GrowthDashboard from "./pages/parent/GrowthDashboard";
+import ParentGoals from "./pages/parent/Goals";
 import ParentTasks from "./pages/parent/Tasks";
 import ParentTaskDetail from "./pages/parent/TaskDetail";
 import ParentTaskTemplates from "./pages/parent/TaskTemplates";
@@ -20,7 +22,6 @@ import ParentPlans from "./pages/parent/Plans";
 import ParentLibrary from "./pages/parent/Library";
 import BookDetail from "./pages/parent/BookDetail";
 import BookInsights from "./pages/parent/BookInsights";
-import ParentReading from "./pages/parent/Reading";
 import ParentAchievements from "./pages/parent/Achievements";
 import ParentStatistics from "./pages/parent/Statistics";
 import ReportsPage from "./pages/parent/Reports";
@@ -68,6 +69,8 @@ function App() {
                 {/* Debt route removed */}
                 <Route path="/parent" element={<ParentLayout />}>
                   <Route index data-genie-title="Parent Dashboard" data-genie-key="ParentDashboard" element={<PageTransition transition="slide-up"><ParentDashboard /></PageTransition>} />
+                  <Route path="growth-dashboard" data-genie-title="Growth Dashboard" data-genie-key="GrowthDashboard" element={<PageTransition transition="slide-up"><GrowthDashboard /></PageTransition>} />
+                  <Route path="goals" data-genie-title="Goals" data-genie-key="ParentGoals" element={<PageTransition transition="slide-up"><ParentGoals /></PageTransition>} />
                   <Route path="tasks" data-genie-title="Tasks" data-genie-key="ParentTasks" element={<PageTransition transition="slide-up"><ParentTasks /></PageTransition>} />
                   <Route path="tasks/:id" data-genie-title="Task Detail" data-genie-key="ParentTaskDetail" element={<PageTransition transition="slide-up"><ParentTaskDetail /></PageTransition>} />
                   <Route path="task-templates" data-genie-title="Task Templates" data-genie-key="ParentTaskTemplates" element={<PageTransition transition="slide-up"><ParentTaskTemplates /></PageTransition>} />
@@ -75,7 +78,7 @@ function App() {
                   <Route path="library" data-genie-title="Library" data-genie-key="ParentLibrary" element={<PageTransition transition="slide-up"><ParentLibrary /></PageTransition>} />
                   <Route path="library/:id" data-genie-title="Book Detail" data-genie-key="BookDetail" element={<PageTransition transition="slide-up"><BookDetail /></PageTransition>} />
                   <Route path="library/:id/insights" data-genie-title="AI Reading Insights" data-genie-key="BookInsights" element={<PageTransition transition="slide-up"><BookInsights /></PageTransition>} />
-                  <Route path="reading" data-genie-title="Reading" data-genie-key="ParentReading" element={<PageTransition transition="slide-up"><ParentReading /></PageTransition>} />
+                  <Route path="reading" element={<Navigate to="/parent/library" replace />} />
                   <Route path="achievements" data-genie-title="Achievements" data-genie-key="ParentAchievements" element={<PageTransition transition="slide-up"><ParentAchievements /></PageTransition>} />
                   <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<Navigate to="/parent/settings/children" replace />} />
                   <Route path="statistics" data-genie-title="Statistics" data-genie-key="ParentStatistics" element={<PageTransition transition="slide-up"><ParentStatistics /></PageTransition>} />

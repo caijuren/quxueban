@@ -33,13 +33,6 @@ async function updateUsername(name: string, password: string): Promise<{ name: s
   return response.data.data;
 }
 
-// 模拟操作历史数据
-const mockActivityHistory = [
-  { id: 1, action: '修改用户名', detail: '从 "andycoy" 改为 "糊涂棒棒"', time: '2024-04-19 15:30', type: 'success' },
-  { id: 2, action: '更换头像', detail: '上传了新头像', time: '2024-04-18 10:20', type: 'success' },
-  { id: 3, action: '修改密码', detail: '密码已更新', time: '2024-04-15 09:15', type: 'success' },
-];
-
 export default function AccountSettings() {
   const [avatar, setAvatar] = useState('');
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
@@ -259,12 +252,8 @@ export default function AccountSettings() {
     let score = 0;
     if (userInfo?.data?.avatar) score += 20;
     if (userInfo?.data?.name && userInfo.data.name.length >= 2) score += 20;
-    // Check if password was recently changed (mock)
-    score += 20;
-    // Check if has activity history
-    score += 20;
     // Base score
-    score += 20;
+    score += 40;
     return Math.min(score, 100);
   };
 
@@ -648,23 +637,9 @@ export default function AccountSettings() {
           <History className="w-4 h-4" />
           操作历史
         </h4>
-        <p className="mt-1 mb-4 text-sm text-muted-foreground">帮助你快速确认最近的账户修改动作。</p>
-        <div className="space-y-2">
-          {mockActivityHistory.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-              <div className={cn(
-                "w-2 h-2 rounded-full mt-2",
-                activity.type === 'success' ? "bg-green-500" : "bg-yellow-500"
-              )} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-sm">{activity.action}</span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.time}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{activity.detail}</p>
-              </div>
-            </div>
-          ))}
+        <p className="mt-1 mb-4 text-sm text-muted-foreground">操作日志会在审计能力完成后展示。</p>
+        <div className="rounded-lg border border-dashed border-border bg-muted/40 p-8 text-center text-sm text-muted-foreground">
+          暂无可展示的真实操作记录
         </div>
         </CardContent>
       </Card>

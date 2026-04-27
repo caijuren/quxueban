@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, X, LayoutGrid, List, Plus, Upload, CheckSquare, Square, ChevronDown } from 'lucide-react';
+import { Search, X, Upload, ChevronDown, Plus, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -9,8 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { ReadStatus, ViewMode } from '@/types/library';
-import { ageRanges, bookTypes, readStatusOptions, sortOptions } from '@/types/library';
+import type { ReadStatus } from '@/types/library';
+import { bookTypes, readStatusOptions, sortOptions } from '@/types/library';
 
 interface BookFilterProps {
   searchInput: string;
@@ -19,16 +19,11 @@ interface BookFilterProps {
   onTypeChange: (value: string) => void;
   selectedReadStatus: ReadStatus;
   onReadStatusChange: (value: ReadStatus) => void;
-  selectedAgeRange: string;
-  onAgeRangeChange: (value: string) => void;
   sortBy: string;
   onSortChange: (value: string) => void;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
-  batchMode: boolean;
-  onBatchModeToggle: () => void;
   onImportClick: () => void;
-  onAddBookClick: () => void;
+  onAddClick?: () => void;
+  onExportClick?: () => void;
   importing: boolean;
   importProgress: number;
   resultCount: number;
@@ -41,27 +36,21 @@ export function BookFilter({
   onTypeChange,
   selectedReadStatus,
   onReadStatusChange,
-  selectedAgeRange,
-  onAgeRangeChange,
   sortBy,
   onSortChange,
-  viewMode,
-  onViewModeChange,
-  batchMode,
-  onBatchModeToggle,
   onImportClick,
-  onAddBookClick,
+  onAddClick,
+  onExportClick,
   importing,
   importProgress,
   resultCount,
 }: BookFilterProps) {
   const hasActiveFilters =
-    selectedType !== 'all' || selectedReadStatus !== 'all' || selectedAgeRange !== 'all' || sortBy !== '' || !!searchInput;
+    selectedType !== 'all' || selectedReadStatus !== 'all' || sortBy !== '' || !!searchInput;
 
   const clearAllFilters = () => {
     onReadStatusChange('all');
     onTypeChange('all');
-    onAgeRangeChange('all');
     onSortChange('');
     onSearchChange('');
   };
@@ -75,39 +64,22 @@ export function BookFilter({
     ? '全部状态'
     : readStatusOptions.find(s => s.value === selectedReadStatus)?.label || '全部状态';
 
-  const selectedAgeLabel = selectedAgeRange === 'all'
-    ? '全部年龄'
-    : ageRanges.find(a => a.value === selectedAgeRange)?.label || '全部年龄';
-  
   const selectedSortLabel = sortBy === ''
     ? '默认排序'
     : sortOptions.find(s => s.value === sortBy)?.label || '默认排序';
 
   return (
-    <div className="space-y-3">
-      {/* Filter Bar - All in one row */}
-      <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">书目筛选</p>
-            <p className="text-xs text-muted-foreground">按状态、类型、年龄和关键词快速定位当前孩子的书。</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>当前结果</span>
-            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">{resultCount} 本</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Search Input - Compact */}
-          <div className="relative flex-shrink-0">
+    <div className="bg-muted/50 border border-border rounded-lg p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
+          <div className="relative shrink-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               value={searchInput}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="搜索书名、作者..."
-            className="h-10 w-52 rounded-xl border-gray-200 bg-white pl-8 pr-7 text-sm focus:border-primary focus:ring-primary"
-          />
+              className="h-10 w-52 rounded-lg border-border bg-white pl-8 pr-7 text-sm focus:border-primary focus:ring-primary"
+            />
             {searchInput && (
               <button
                 onClick={() => onSearchChange('')}
@@ -118,32 +90,26 @@ export function BookFilter({
             )}
           </div>
 
-          <div className="hidden h-6 w-px bg-border sm:block" />
+          {readStatusOptions.map((status) => (
+            <button
+              key={status.value}
+              onClick={() => onReadStatusChange(status.value as ReadStatus)}
+              className={cn(
+                'shrink-0 px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                selectedReadStatus === status.value
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
+              )}
+            >
+              {status.label}
+            </button>
+          ))}
 
-          {/* Read Status Pills */}
-          <div className="flex flex-wrap gap-1.5">
-            {readStatusOptions.map((status) => (
-              <button
-                key={status.value}
-                onClick={() => onReadStatusChange(status.value as ReadStatus)}
-                className={cn(
-                  'rounded-full px-3 py-2 text-sm font-medium transition-all',
-                  selectedReadStatus === status.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                )}
-              >
-                {status.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Book Type Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
-              "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
-              "bg-white border border-gray-200 shadow-sm",
+              "flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 transition-all duration-200",
+              "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/20",
+              "bg-white border border-border shadow-sm",
               selectedType !== 'all' && "border-primary/50 bg-primary/5"
             )}>
               <span className="text-sm font-medium text-gray-700">{selectedTypeLabel}</span>
@@ -185,46 +151,11 @@ export function BookFilter({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Age Range Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
-              "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
-              "bg-white border border-gray-200 shadow-sm",
-              selectedAgeRange !== 'all' && "border-primary/50 bg-primary/5"
-            )}>
-              <span className="text-sm font-medium text-gray-700">{selectedAgeLabel}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
-              <div className="px-2.5 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-100">
-                选择适读年龄
-              </div>
-              {ageRanges.map((age) => (
-                <DropdownMenuItem
-                  key={age.value}
-                  onClick={() => onAgeRangeChange(age.value)}
-                  className={cn(
-                    "flex items-center justify-between px-2.5 py-2 cursor-pointer",
-                    selectedAgeRange === age.value && "bg-primary/5"
-                  )}
-                >
-                  <span className={cn(
-                    "text-sm",
-                    selectedAgeRange === age.value ? "font-medium text-gray-900" : "text-gray-700"
-                  )}>{age.label}</span>
-                  {selectedAgeRange === age.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Sort Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-              "flex items-center gap-1.5 rounded-xl px-2.5 py-2 transition-all duration-200",
-              "hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20",
-              "bg-white border border-gray-200 shadow-sm",
+              "flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 transition-all duration-200",
+              "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/20",
+              "bg-white border border-border shadow-sm",
               sortBy !== '' && "border-primary/50 bg-primary/5"
             )}>
               <span className="text-sm font-medium text-gray-700">{selectedSortLabel}</span>
@@ -252,131 +183,98 @@ export function BookFilter({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <div className="flex-1" />
-
-          {/* View Mode Toggle */}
-          <div className="flex flex-shrink-0 gap-0.5 rounded-xl border border-gray-200 bg-white p-0.5 shadow-sm">
-            <button
-              onClick={() => onViewModeChange('grid')}
-              className={cn(
-                'p-1.5 rounded-md transition-all',
-                viewMode === 'grid'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'
-              )}
-              title="网格视图"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onViewModeChange('list')}
-              className={cn(
-                'p-1.5 rounded-md transition-all',
-                viewMode === 'list'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'
-              )}
-              title="列表视图"
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-1.5 flex-shrink-0">
-            <Button
-              variant="outline"
-              onClick={onBatchModeToggle}
-              className={cn(
-                "h-10 rounded-xl border-gray-200 px-2.5 shadow-sm",
-                batchMode && "bg-primary/10 border-primary text-primary"
-              )}
-              title={batchMode ? '退出批量操作' : '进入批量操作'}
-            >
-              {batchMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={onImportClick}
-              disabled={importing}
-              className="relative h-10 rounded-xl border-gray-200 px-2.5 shadow-sm"
-              title="导入图书"
-            >
-              <Upload className="w-4 h-4" />
-              {importing && (
-                <div className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary/20 rounded-b-lg">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 rounded-b-lg"
-                    style={{ width: `${importProgress}%` }}
-                  />
-                </div>
-              )}
-            </Button>
-
-            <Button
-              onClick={onAddBookClick}
-              className="h-10 rounded-xl bg-primary px-4 text-white shadow-sm hover:bg-primary/90"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              <span className="text-sm">添加图书</span>
-            </Button>
-          </div>
         </div>
 
-        {/* Search Result & Active Filters Display */}
-        {hasActiveFilters && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            {searchInput && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                搜索: {searchInput}
-                <button onClick={() => onSearchChange('')} className="rounded-full p-0.5 hover:bg-primary/20">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {selectedType !== 'all' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                {selectedTypeLabel}
-                <button onClick={() => onTypeChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {selectedReadStatus !== 'all' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                {readStatusOptions.find(s => s.value === selectedReadStatus)?.label}
-                <button onClick={() => onReadStatusChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {selectedAgeRange !== 'all' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                {ageRanges.find(a => a.value === selectedAgeRange)?.label}
-                <button onClick={() => onAgeRangeChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {sortBy && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                {sortOptions.find(s => s.value === sortBy)?.label}
-                <button onClick={() => onSortChange('')} className="rounded-full p-0.5 hover:bg-primary/20">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            <button
-              onClick={clearAllFilters}
-              className="ml-auto text-xs font-medium text-primary hover:underline"
-            >
-              清除全部
-            </button>
+        <div className="flex gap-2">
+          <div className="hidden items-center gap-2 text-sm text-muted-foreground lg:flex">
+            <span>当前结果</span>
+            <span className="rounded-lg bg-muted px-3 py-2 font-medium text-primary">{resultCount} 本</span>
           </div>
-        )}
+
+          <Button
+            variant="outline"
+            onClick={onImportClick}
+            disabled={importing}
+            className="relative h-10 rounded-lg border-border hover:bg-muted min-w-20"
+          >
+            <Upload className="w-4 h-4 mr-1.5 text-primary" />
+            <span className="text-sm">导入</span>
+            {importing && (
+              <div className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary/20 rounded-b-lg">
+                <div
+                  className="h-full bg-primary transition-all duration-300 rounded-b-lg"
+                  style={{ width: `${importProgress}%` }}
+                />
+              </div>
+            )}
+          </Button>
+
+          {onAddClick && (
+            <Button
+              onClick={onAddClick}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+            >
+              <Plus className="size-4 mr-1.5" />
+              <span className="text-sm">添加图书</span>
+            </Button>
+          )}
+
+          {onExportClick && (
+            <Button
+              variant="outline"
+              onClick={onExportClick}
+              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
+            >
+              <Download className="w-4 h-4 mr-1.5 text-primary" />
+              <span className="text-sm">导出</span>
+            </Button>
+          )}
+
+        </div>
       </div>
+
+      {hasActiveFilters && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          {searchInput && (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              搜索: {searchInput}
+              <button onClick={() => onSearchChange('')} className="rounded-full p-0.5 hover:bg-primary/20">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {selectedType !== 'all' && (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              {selectedTypeLabel}
+              <button onClick={() => onTypeChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {selectedReadStatus !== 'all' && (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              {readStatusOptions.find(s => s.value === selectedReadStatus)?.label}
+              <button onClick={() => onReadStatusChange('all')} className="rounded-full p-0.5 hover:bg-primary/20">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {sortBy && (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              {sortOptions.find(s => s.value === sortBy)?.label}
+              <button onClick={() => onSortChange('')} className="rounded-full p-0.5 hover:bg-primary/20">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button
+            onClick={clearAllFilters}
+            className="ml-auto text-xs font-medium text-primary hover:underline"
+          >
+            清除全部
+          </button>
+        </div>
+      )}
     </div>
   );
 }

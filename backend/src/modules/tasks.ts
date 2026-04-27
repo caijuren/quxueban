@@ -28,6 +28,7 @@ const VALID_SUBJECTS = ['chinese', 'math', 'english', 'sports']
 const VALID_PARENT_ROLES = ['independent', 'accompany', 'parent-led']
 const VALID_DIFFICULTIES = ['basic', 'advanced', 'challenge']
 const VALID_AMOUNT_UNITS = ['page', 'chapter', 'section', 'time', 'question']
+const VALID_TRACKING_TYPES = ['simple', 'numeric', 'progress']
 
 const SUBJECT_MAP: Record<string, string> = { chinese: '语文', math: '数学', english: '英语', sports: '体育' }
 const PARENT_ROLE_MAP: Record<string, string> = { independent: '独立完成', accompany: '家长陪伴', 'parent-led': '家长主导', parent: '家长主导' }
@@ -139,6 +140,10 @@ function formatTaskRecord(task: any) {
     tags: taskTags,
     appliesTo: normalizeAppliesTo(task.applies_to),
     scheduleRule,
+    trackingType: task.tracking_type || 'simple',
+    trackingUnit: task.tracking_unit || '',
+    targetValue: task.target_value || 0,
+    weeklyFrequency: task.weekly_frequency || taskTags.weeklyFrequency || null,
     createdAt: task.created_at,
     updatedAt: task.updated_at,
   }
@@ -147,7 +152,7 @@ function formatTaskRecord(task: any) {
 
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
-  const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId } = req.body
+  const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId, weeklyFrequency, trackingType, trackingUnit, targetValue } = req.body
   const { familyId } = req.user!
   if (!name || !category || !type) throw new AppError(400, 'Missing required fields: name, category, type')
 
@@ -167,6 +172,10 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
 
   const scheduleRule = tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) ? tags.scheduleRule : 'daily'
   if (scheduleRule) validatedTags.scheduleRule = scheduleRule
+  if (Number(weeklyFrequency) > 0) validatedTags.weeklyFrequency = Number(weeklyFrequency)
+  const nextTrackingType = VALID_TRACKING_TYPES.includes(trackingType) ? trackingType : 'simple'
+  const nextTrackingUnit = nextTrackingType === 'simple' ? '' : (typeof trackingUnit === 'string' ? trackingUnit : '')
+  const nextTargetValue = Number(targetValue) > 0 ? Number(targetValue) : null
   const normalizedAppliesTo = normalizeAppliesTo(appliesTo)
   const effectiveAppliesTo = normalizedAppliesTo.length > 0
     ? normalizedAppliesTo
@@ -187,6 +196,10 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
       tags,
       applies_to,
       schedule_rule,
+      tracking_type,
+      tracking_unit,
+      target_value,
+      weekly_frequency,
       created_at,
       updated_at
     ) VALUES (
@@ -201,10 +214,14 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
       ${JSON.stringify(validatedTags)}::jsonb,
       ${JSON.stringify(effectiveAppliesTo)}::jsonb,
       ${scheduleRule},
+      ${nextTrackingType},
+      ${nextTrackingUnit},
+      ${nextTargetValue},
+      ${Number(weeklyFrequency) > 0 ? Number(weeklyFrequency) : null},
       NOW(),
       NOW()
     )
-    RETURNING id, family_id, name, category, type, time_per_unit, weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+    RETURNING id, family_id, name, category, type, time_per_unit, weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, tracking_type, tracking_unit, target_value, weekly_frequency, created_at, updated_at
   ` as any[]
 
   res.status(201).json({ status: 'success', message: 'Task created', data: formatTaskRecord(createdRows[0]) })
@@ -297,7 +314,7 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const tasks = await prisma.$queryRaw`
       SELECT id, family_id, name, category, type, time_per_unit,
-             weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+             weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, tracking_type, tracking_unit, target_value, weekly_frequency, created_at, updated_at
       FROM tasks
       WHERE family_id = ${familyId} AND is_active = true
       ORDER BY sort_order, created_at DESC
@@ -319,7 +336,7 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
 tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const { name, category, type, timePerUnit, tags, appliesTo, childId } = req.body
+  const { name, category, type, timePerUnit, tags, appliesTo, childId, scheduleRule, weeklyFrequency, trackingType, trackingUnit, targetValue } = req.body
   
   // 强制要求提供childId参数，确保数据隔离
   if (!childId) {
@@ -352,11 +369,17 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   if (tags?.parentRole && VALID_PARENT_ROLES.includes(tags.parentRole)) validatedTags.parentRole = tags.parentRole
   if (tags?.difficulty && VALID_DIFFICULTIES.includes(tags.difficulty)) validatedTags.difficulty = tags.difficulty
   if (tags?.totalAmount?.value > 0 && tags?.totalAmount?.unit && VALID_AMOUNT_UNITS.includes(tags.totalAmount.unit)) validatedTags.totalAmount = tags.totalAmount
-  if (tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule)) validatedTags.scheduleRule = tags.scheduleRule
+  const bodyScheduleRule = tags?.scheduleRule || scheduleRule
+  if (bodyScheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(bodyScheduleRule)) validatedTags.scheduleRule = bodyScheduleRule
+  if (Number(weeklyFrequency) > 0) validatedTags.weeklyFrequency = Number(weeklyFrequency)
 
-  const nextScheduleRule = tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule)
-    ? tags.scheduleRule
+  const nextScheduleRule = bodyScheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(bodyScheduleRule)
+    ? bodyScheduleRule
     : null
+  const nextTrackingType = VALID_TRACKING_TYPES.includes(trackingType) ? trackingType : null
+  const nextTrackingUnit = typeof trackingUnit === 'string' ? trackingUnit : null
+  const nextTargetValue = Number(targetValue) > 0 ? Number(targetValue) : null
+  const nextWeeklyFrequency = Number(weeklyFrequency) > 0 ? Number(weeklyFrequency) : null
 
   const updatedRows = await prisma.$queryRaw`
     UPDATE tasks
@@ -371,9 +394,13 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
       END,
       applies_to = ${JSON.stringify(effectiveAppliesTo)}::jsonb,
       schedule_rule = COALESCE(${nextScheduleRule}, schedule_rule),
+      tracking_type = COALESCE(${nextTrackingType}, tracking_type),
+      tracking_unit = COALESCE(${nextTrackingUnit}, tracking_unit),
+      target_value = ${nextTargetValue},
+      weekly_frequency = ${nextWeeklyFrequency},
       updated_at = NOW()
     WHERE id = ${id} AND family_id = ${familyId}
-    RETURNING id, family_id, name, category, type, time_per_unit, weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, created_at, updated_at
+    RETURNING id, family_id, name, category, type, time_per_unit, weekly_rule, sort_order, is_active, tags, applies_to, schedule_rule, tracking_type, tracking_unit, target_value, weekly_frequency, created_at, updated_at
   ` as any[]
 
   res.json({ status: 'success', message: 'Task updated', data: formatTaskRecord(updatedRows[0]) })
@@ -400,14 +427,14 @@ tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /publish - 发布下周计划
- * Body: { childIds, weekNo, selectedTaskIds?, taskRules? }
+ * Body: { childIds, weekNo, weekStartDate?, selectedTaskIds?, taskRules? }
  */
 tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   try {
-  const { childIds, weekNo, selectedTaskIds, taskRules } = req.body
+  const { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules } = req.body
   const { familyId } = req.user!
 
-  console.log('[PUBLISH] Request:', { childIds, weekNo, selectedTaskIds, taskRules })
+  console.log('[PUBLISH] Request:', { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules })
 
   if (!childIds || !Array.isArray(childIds) || childIds.length === 0) {
     throw new AppError(400, 'Missing or invalid childIds')
@@ -454,9 +481,9 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, 'Some children not found or do not belong to your family')
   }
 
-  // 解析 weekNo 获取周开始日期
+  // 解析周开始日期。新版前端会直接传 weekStartDate，避免前后端周序号算法在跨年周发生偏差。
   const [year, week] = weekNo.split('-').map(Number)
-  const weekStartDate = getWeekStartDate(year, week)
+  const weekStartDate = parseWeekStartDate(requestedWeekStartDate) || getWeekStartDate(year, week)
 
   console.log('[PUBLISH] Week start:', weekStartDate)
 
@@ -475,7 +502,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
       // 过滤适用于该孩子的任务
       const childTasks = tasks.filter(task => {
         const appliesTo = normalizeAppliesTo(task.applies_to)
-        return appliesTo.includes(child.id)
+        return appliesTo.includes(child.id) || appliesTo.length === 0
       })
 
       for (const task of childTasks) {
@@ -515,6 +542,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
             progress,
             week_no,
             status,
+            assigned_days,
             created_at,
             updated_at
           ) VALUES (
@@ -525,6 +553,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
             0,
             ${weekNo},
             ${target > 0 ? 'active' : 'inactive'},
+            ${JSON.stringify(daysAllocated)}::jsonb,
             NOW(),
             NOW()
           )
@@ -552,6 +581,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     message: 'Weekly plan published successfully',
     data: {
       weekNo,
+      weekStartDate: weekStartDate.toISOString().slice(0, 10),
       children: results,
     },
   })
@@ -635,6 +665,25 @@ function getWeekStartDate(year: number, week: number): Date {
   weekStart.setDate(firstMonday.getDate() + (week - 1) * 7)
   
   return weekStart
+}
+
+function parseWeekStartDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null
+  }
+
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new AppError(400, 'Invalid weekStartDate')
+  }
+
+  return date
 }
 
 export default tasksRouter

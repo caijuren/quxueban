@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   BookOpen,
@@ -8,8 +9,6 @@ import {
   Plus,
   Minus,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,6 +80,7 @@ export default function ReadingPage() {
   const [readingToStop, setReadingToStop] = useState<ActiveReading | null>(null);
 
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { selectedChildId, selectedChild } = useSelectedChild();
 
   const { data: readings = [], isLoading } = useQuery({
@@ -158,7 +158,7 @@ export default function ReadingPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-16 rounded-2xl" />
+        <Skeleton className="h-[74px] rounded-lg" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-28 rounded-2xl" />
@@ -175,28 +175,29 @@ export default function ReadingPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-sky-50/70 via-white to-indigo-50/40 shadow-sm">
-        <CardContent className="p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <Badge variant="secondary" className="rounded-full px-3 py-1">阅读中心</Badge>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                {selectedChild?.name || '当前孩子'} 的在读图书与阅读进度
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                这里集中查看当前在读、最近阅读次数和本月阅读节奏。更新进度后，图书馆和统计页会同步变化。
-              </p>
-            </div>
+      {/* Page Control Bar */}
+      <section className="bg-muted/50 border border-border rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
+            <span className="px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg bg-primary text-white shadow-sm">
+              阅读中心
+            </span>
+            <span className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-foreground">
+              {selectedChild?.name || '当前孩子'}
+            </span>
+          </div>
+
+          <div className="flex gap-2">
             <Button
-              onClick={() => (window.location.href = '/parent/library')}
-              className="rounded-xl shadow-sm"
+              onClick={() => navigate('/parent/library')}
+              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
             >
-              <BookOpen className="mr-2 h-4 w-4" />
-              去图书馆选书
+              <BookOpen className="w-4 h-4 mr-1.5" />
+              <span className="text-sm">去图书馆选书</span>
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -268,7 +269,7 @@ export default function ReadingPage() {
           <h3 className="font-semibold text-gray-900 text-lg">暂无在读图书</h3>
           <p className="text-gray-500 mt-1">先去图书馆挑一本书，再回来持续记录阅读进度。</p>
           <Button
-            onClick={() => (window.location.href = '/parent/library')}
+            onClick={() => navigate('/parent/library')}
             className="mt-4 rounded-xl bg-primary text-primary-foreground"
           >
             去图书馆选书

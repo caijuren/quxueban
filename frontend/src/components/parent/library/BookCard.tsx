@@ -1,31 +1,15 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, MoreVertical, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { BookOpen, Trash2 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Book } from '@/types/library';
-import { bookTypes } from '@/types/library';
 
 interface BookCardProps {
   book: Book;
   index: number;
-  batchMode: boolean;
-  isSelected: boolean;
-  onToggleSelection: () => void;
-  onStartReading: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onBorrow: () => void;
-  viewMode: 'grid' | 'list';
+  onDelete?: (book: Book) => void;
 }
 
 export function formatBookName(name: string): string {
@@ -35,47 +19,21 @@ export function formatBookName(name: string): string {
 export function BookCard({
   book,
   index,
-  batchMode,
-  isSelected,
-  onToggleSelection,
-  onStartReading,
-  onEdit,
   onDelete,
-  onBorrow,
-  viewMode,
 }: BookCardProps) {
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
 
-  const totalPages = book.totalPages || 0;
-  const readPages = book.totalReadPages || 0;
-  const progress = totalPages > 0 ? Math.round((readPages / totalPages) * 100) : 0;
-  const lastReadLabel = book.lastReadDate
-    ? new Date(book.lastReadDate).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
-    : '暂无记录';
-
-  let readStatus = '未开始';
-  let statusColor = 'text-muted-foreground';
-  let statusBg = 'bg-muted';
-
-  if (book.readState?.status === 'finished') {
-    readStatus = '已读完';
-    statusColor = 'text-green-600';
-    statusBg = 'bg-green-50';
-  } else if (book.activeReadings?.length > 0) {
-    readStatus = '在读中';
-    statusColor = 'text-blue-600';
-    statusBg = 'bg-blue-50';
-  }
-
   const handleClick = () => {
-    if (batchMode) {
-      onToggleSelection();
-    } else {
-      navigate(`/parent/library/${book.id}`);
-    }
+    navigate(`/parent/library/${book.id}`);
   };
+
+  const progress = book.totalPages > 0 ? Math.min(100, Math.round(((book.totalReadPages || 0) / book.totalPages) * 100)) : 0;
+  const isFinished = book.readState?.status === 'finished';
+  const statusMeta = isFinished
+    ? { label: '已读完', className: 'bg-emerald-100 text-emerald-700', detail: '已读完' }
+    : { label: '在读中', className: 'bg-blue-100 text-blue-700', detail: '阅读中' };
 
   const renderCover = () => (
     <div className="relative w-full h-full bg-muted">
@@ -103,142 +61,9 @@ export function BookCard({
           <BookOpen className="w-10 h-10 text-muted-foreground/50" />
         </div>
       )}
-      {progress > 0 && progress < 100 && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
-          <div
-            className="h-full bg-primary transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      )}
     </div>
   );
 
-  if (viewMode === 'list') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: Math.min(index * 0.03, 0.3) }}
-        className="group relative"
-      >
-        {batchMode && (
-          <div
-            className="absolute top-4 left-4 z-20"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSelection();
-            }}
-          >
-            <div className={cn(
-              "w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all",
-              isSelected
-                ? "bg-primary border-primary"
-                : "bg-white border-border hover:border-primary"
-            )}>
-              {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
-            </div>
-          </div>
-        )}
-
-        <Card className="border border-border/70 shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-300">
-          <div className="flex">
-            <div
-              className="w-24 h-32 relative cursor-pointer flex-shrink-0"
-              onClick={handleClick}
-            >
-              {renderCover()}
-            </div>
-
-            <div className="flex-1 flex flex-col min-w-0">
-              <CardContent className="p-4 flex-1">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-foreground text-lg truncate">
-                      {formatBookName(book.name)}
-                    </h4>
-                    <p className="text-sm text-muted-foreground mt-1 truncate">
-                      {book.author || '未知作者'}
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {bookTypes.find(t => t.value === book.type)?.label || '其他'}
-                      </Badge>
-                      <Badge className={cn("text-xs", statusColor, statusBg)}>
-                        {readStatus}
-                      </Badge>
-                      {book.totalPages > 0 && (
-                        <span className="text-xs text-muted-foreground self-center">
-                          {book.totalPages} 页
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="w-full md:w-48 flex-shrink-0">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">阅读进度</span>
-                      <span className="font-medium">{progress}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all duration-500"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-
-              <div className="px-4 py-3 border-t border-border flex items-center justify-between">
-                <div className="flex gap-2">
-                  {book.readState?.status === 'finished' ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs bg-green-50 text-green-600 hover:bg-green-100"
-                      disabled
-                    >
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      已读完
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onStartReading();
-                      }}
-                      className="text-xs"
-                    >
-                      {book.activeReadings?.length > 0 ? '继续阅读' : '开始阅读'}
-                    </Button>
-                  )}
-                </div>
-                {!batchMode && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="w-8 h-8">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={onEdit}>编辑信息</DropdownMenuItem>
-                      <DropdownMenuItem onClick={onBorrow}>借出</DropdownMenuItem>
-                      <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                        删除
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
-      </motion.div>
-    );
-  }
-
-  // Grid view
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -246,111 +71,47 @@ export function BookCard({
       transition={{ delay: Math.min(index * 0.03, 0.3) }}
       className="group relative"
     >
-      {batchMode && (
-        <div
-          className="absolute top-2 left-2 z-20"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelection();
-          }}
-        >
-          <div className={cn(
-            "w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all",
-            isSelected
-              ? "bg-primary border-primary"
-              : "bg-white border-border hover:border-primary"
-          )}>
-            {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
-          </div>
-        </div>
-      )}
-
-      <Card className="border border-border/70 shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 h-full flex flex-col">
-        <div className="flex flex-col h-full">
-          <div
-            className="aspect-[3/4] relative cursor-pointer"
-            onClick={handleClick}
-          >
-            {renderCover()}
+      <Card className="group/card flex h-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+        <button type="button" onClick={handleClick} className="flex h-full flex-col text-left">
+          <div className="relative rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50 p-4">
+            <span className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-xs font-medium ${statusMeta.className}`}>
+              {statusMeta.label}
+            </span>
+            <div className="mx-auto aspect-[3/4] w-[68%] overflow-hidden rounded-md bg-slate-100 shadow-lg shadow-slate-200">
+              {renderCover()}
+            </div>
           </div>
 
-          <div className="flex-1 flex flex-col p-3">
-            <div className="flex-1">
-              <h4 className="font-semibold text-foreground text-sm line-clamp-2 min-h-[2.5rem]">
+          <div className="flex flex-1 flex-col pt-3">
+            <div className="min-w-0 flex-1">
+              <h4 className="text-base font-semibold leading-6 text-foreground line-clamp-2">
                 {formatBookName(book.name)}
               </h4>
-              <p className="text-xs text-muted-foreground mt-1 truncate">
-                {book.author || '未知作者'}
-              </p>
-              <div className="flex flex-wrap gap-1 mt-2">
-                <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                  {bookTypes.find(t => t.value === book.type)?.label || '其他'}
-                </Badge>
-                <Badge className={cn("text-xs px-1.5 py-0", statusColor, statusBg)}>
-                  {readStatus}
-                </Badge>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>{readPages}/{totalPages || '--'} 页</span>
-                <span>{lastReadLabel}</span>
-              </div>
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="text-muted-foreground">进度</span>
-                <span className="font-medium">{progress}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-2.5">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                {book.readState?.status === 'finished' ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs bg-green-50 text-green-600 hover:bg-green-100 w-full rounded-lg"
-                    disabled
-                  >
-                    <CheckCircle2 className="w-3 h-3 mr-1" />
-                    已读完
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStartReading();
-                    }}
-                    className="text-xs w-full rounded-lg"
-                  >
-                    {book.activeReadings?.length > 0 ? '继续阅读' : '开始阅读'}
-                  </Button>
-                )}
-                {!batchMode && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="w-8 h-8 ml-2 rounded-lg">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={onEdit}>编辑</DropdownMenuItem>
-                      <DropdownMenuItem onClick={onBorrow}>借出</DropdownMenuItem>
-                      <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                        删除
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+              <p className="mt-1 truncate text-sm text-muted-foreground">{book.author || '未知作者'}</p>
+              <div className="mt-4">
+                <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {isFinished ? '已读完' : `阅读中 · ${progress}%`}
+                </p>
               </div>
             </div>
           </div>
-        </div>
+        </button>
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(book);
+            }}
+            className="absolute right-5 top-5 z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-white/80 bg-white/90 text-slate-400 opacity-100 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600 lg:opacity-0 lg:group-hover/card:opacity-100"
+            aria-label="删除图书"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        ) : null}
       </Card>
     </motion.div>
   );

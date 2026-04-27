@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,15 @@ export default function Login() {
     username: '',
     password: ''
   });
+
+  useEffect(() => {
+    setFormData({ username: '', password: '' });
+    const timer = window.setTimeout(() => {
+      setFormData({ username: '', password: '' });
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,11 +59,13 @@ export default function Login() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             <div>
               <Label className="text-sm font-medium text-gray-700">用户名</Label>
               <Input
                 type="text"
+                name="quxueban-login-username"
+                autoComplete="off"
                 placeholder="输入用户名"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -67,6 +78,8 @@ export default function Login() {
               <Label className="text-sm font-medium text-gray-700">密码</Label>
               <Input
                 type="password"
+                name="quxueban-login-password"
+                autoComplete="new-password"
                 placeholder="输入密码"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}

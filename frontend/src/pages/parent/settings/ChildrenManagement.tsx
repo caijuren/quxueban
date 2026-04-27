@@ -12,10 +12,18 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +67,45 @@ interface DingTalkConfig {
   childName: string;
   webhookUrl: string;
   secret: string;
+}
+
+interface SemesterConfig {
+  schoolYear: string;
+  term: 'first' | 'second';
+  grade: string;
+  startDate: string;
+  endDate: string;
+  readingStage: string;
+}
+
+const gradeOptions = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '初一', '初二', '初三'];
+const readingStageSuggestions = ['幼儿园小班', '幼儿园中班', '幼儿园大班', '一年级上', '一年级寒假', '一年级下', '一年级暑假', '二年级上'];
+
+function getDefaultSemesterConfig(): SemesterConfig {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const isSecondTerm = month >= 2 && month <= 7;
+
+  if (isSecondTerm) {
+    return {
+      schoolYear: `${year - 1}-${year}`,
+      term: 'second',
+      grade: '一年级',
+      startDate: `${year}-02-17`,
+      endDate: `${year}-07-05`,
+      readingStage: '一年级下',
+    };
+  }
+
+  return {
+    schoolYear: `${year}-${year + 1}`,
+    term: 'first',
+    grade: '一年级',
+    startDate: `${year}-09-01`,
+    endDate: `${year + 1}-01-20`,
+    readingStage: '一年级上',
+  };
 }
 
 function isImageAvatar(value?: string) {
@@ -117,6 +164,11 @@ async function getChildDingTalkConfig(childId: number): Promise<any> {
   return response.data;
 }
 
+async function getChildSemesterConfig(childId: number): Promise<any> {
+  const response = await apiClient.get(`/children/${childId}/semester`);
+  return response.data;
+}
+
 async function createChild(data: { name: string; avatar: string }): Promise<any> {
   const response = await apiClient.post('/add-child', data);
   return response.data;
@@ -132,6 +184,11 @@ async function deleteChild(childId: number): Promise<void> {
 
 async function updateChildDingTalkConfig(childId: number, data: { webhookUrl: string; secret?: string }): Promise<any> {
   const response = await apiClient.put(`/children/${childId}/dingtalk-config`, data);
+  return response.data;
+}
+
+async function updateChildSemesterConfig(childId: number, data: SemesterConfig): Promise<any> {
+  const response = await apiClient.put(`/children/${childId}/semester`, data);
   return response.data;
 }
 
@@ -153,6 +210,7 @@ export default function ChildrenManagement() {
   const [childAvatar, setChildAvatar] = useState('🐶');
   const [dingtalkWebhookUrl, setDingtalkWebhookUrl] = useState('');
   const [dingtalkSecret, setDingtalkSecret] = useState('');
+  const [semesterConfig, setSemesterConfig] = useState<SemesterConfig>(getDefaultSemesterConfig);
 
   const { data: childrenData, refetch } = useQuery({
     queryKey: ['children'],
@@ -168,6 +226,12 @@ export default function ChildrenManagement() {
   const { data: dingtalkConfigData, refetch: refetchDingTalkConfig } = useQuery({
     queryKey: ['child-dingtalk-config', selectedChild?.id],
     queryFn: () => getChildDingTalkConfig(selectedChild!.id),
+    enabled: !!selectedChild,
+  });
+
+  const { data: semesterConfigData, refetch: refetchSemesterConfig } = useQuery({
+    queryKey: ['child-semester-config', selectedChild?.id],
+    queryFn: () => getChildSemesterConfig(selectedChild!.id),
     enabled: !!selectedChild,
   });
 
@@ -232,6 +296,18 @@ export default function ChildrenManagement() {
     },
     onError: (error) => {
       toast.error(`测试失败：${getErrorMessage(error)}`);
+    },
+  });
+
+  const saveSemesterMutation = useMutation({
+    mutationFn: ({ childId, data }: { childId: number; data: SemesterConfig }) =>
+      updateChildSemesterConfig(childId, data),
+    onSuccess: () => {
+      toast.success('学期配置已保存');
+      refetchSemesterConfig();
+    },
+    onError: (error) => {
+      toast.error(`保存失败：${getErrorMessage(error)}`);
     },
   });
 
@@ -307,6 +383,35 @@ export default function ChildrenManagement() {
     });
   };
 
+  const handleSaveSemesterConfig = () => {
+    if (!selectedChild) return;
+    if (!semesterConfig.schoolYear.trim()) {
+      toast.error('请输入学年');
+      return;
+    }
+    if (!semesterConfig.grade.trim()) {
+      toast.error('请选择年级');
+      return;
+    }
+    if (!semesterConfig.startDate || !semesterConfig.endDate) {
+      toast.error('请填写学期开始和结束日期');
+      return;
+    }
+    if (!semesterConfig.readingStage.trim()) {
+      toast.error('请输入当前阅读阶段');
+      return;
+    }
+    if (new Date(semesterConfig.startDate) > new Date(semesterConfig.endDate)) {
+      toast.error('开始日期不能晚于结束日期');
+      return;
+    }
+
+    saveSemesterMutation.mutate({
+      childId: selectedChild.id,
+      data: semesterConfig,
+    });
+  };
+
   const children: Child[] = childrenData?.data || [];
   const stats: ChildStats = statsData?.data || {
     weeklyStudyTime: 0,
@@ -316,6 +421,7 @@ export default function ChildrenManagement() {
     weeklyProgress: 0,
   };
   const dingtalkConfig: DingTalkConfig | null = dingtalkConfigData?.data || null;
+  const savedSemesterConfig: SemesterConfig | null = semesterConfigData?.data || null;
 
   useEffect(() => {
     if (dingtalkConfig) {
@@ -329,6 +435,11 @@ export default function ChildrenManagement() {
       setDingtalkSecret('');
     }
   }, [dingtalkConfig, selectedChild]);
+
+  useEffect(() => {
+    if (!selectedChild) return;
+    setSemesterConfig({ ...getDefaultSemesterConfig(), ...(savedSemesterConfig || {}) });
+  }, [savedSemesterConfig, selectedChild]);
 
   return (
     <div className="space-y-6">
@@ -485,6 +596,127 @@ export default function ChildrenManagement() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">根据本周任务完成和学习记录自动更新。</p>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Semester Config */}
+            <section className="space-y-4 rounded-2xl border border-border/70 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="font-medium">当前学期配置</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    成长仪表盘的“本学期”会使用这里的开始和结束日期统计数据。
+                  </p>
+                </div>
+                {savedSemesterConfig ? (
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                    已配置
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                    使用默认建议
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>学年</Label>
+                  <Input
+                    value={semesterConfig.schoolYear}
+                    onChange={(e) => setSemesterConfig({ ...semesterConfig, schoolYear: e.target.value })}
+                    placeholder="例如 2025-2026"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>学期</Label>
+                  <Select
+                    value={semesterConfig.term}
+                    onValueChange={(value) => setSemesterConfig({ ...semesterConfig, term: value as SemesterConfig['term'] })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="选择学期" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="first">上学期</SelectItem>
+                      <SelectItem value="second">下学期</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>年级</Label>
+                  <Select
+                    value={semesterConfig.grade}
+                    onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="选择年级" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {gradeOptions.map((grade) => (
+                        <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>开始日期</Label>
+	                  <DatePicker value={semesterConfig.startDate} onChange={(startDate) => setSemesterConfig({ ...semesterConfig, startDate })} className="w-full" align="start" />
+                </div>
+                <div className="space-y-2">
+                  <Label>结束日期</Label>
+	                  <DatePicker value={semesterConfig.endDate} onChange={(endDate) => setSemesterConfig({ ...semesterConfig, endDate })} className="w-full" align="start" />
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                <div className="space-y-1">
+                  <Label>当前阅读阶段</Label>
+                  <p className="text-xs text-muted-foreground">
+                    添加阅读记录时会默认带入这个阶段，用于后续按年级、假期或幼儿园阶段分析阅读。
+                  </p>
+                </div>
+                <Input
+                  value={semesterConfig.readingStage}
+                  onChange={(e) => setSemesterConfig({ ...semesterConfig, readingStage: e.target.value })}
+                  placeholder="例如：一年级上 / 一年级暑假 / 幼儿园大班下"
+                  className="bg-white"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {readingStageSuggestions.map((stage) => (
+                    <button
+                      key={stage}
+                      type="button"
+                      onClick={() => setSemesterConfig({ ...semesterConfig, readingStage: stage })}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs font-medium transition',
+                        semesterConfig.readingStage === stage
+                          ? 'border-indigo-500 bg-indigo-600 text-white'
+                          : 'border-indigo-100 bg-white text-indigo-700 hover:border-indigo-300'
+                      )}
+                    >
+                      {stage}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  onClick={handleSaveSemesterConfig}
+                  disabled={!selectedChild || saveSemesterMutation.isPending}
+                  className="rounded-xl shadow-sm"
+                >
+                  {saveSemesterMutation.isPending ? '保存中...' : '保存学期配置'}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  示例：{semesterConfig.readingStage || `${semesterConfig.grade}${semesterConfig.term === 'first' ? '上' : '下'}`} · {semesterConfig.startDate} 至 {semesterConfig.endDate}
+                </p>
               </div>
             </section>
 

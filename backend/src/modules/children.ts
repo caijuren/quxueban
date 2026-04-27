@@ -8,6 +8,50 @@ export const childrenRouter: Router = Router()
 childrenRouter.use(authMiddleware)
 childrenRouter.use(requireRole('parent'))
 
+type ChildSemesterSettings = {
+  schoolYear: string
+  term: 'first' | 'second'
+  grade: string
+  startDate: string
+  endDate: string
+  readingStage?: string
+}
+
+function validateDateString(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new AppError(400, `${fieldName} 格式应为 YYYY-MM-DD`)
+  }
+
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new AppError(400, `${fieldName} 不是有效日期`)
+  }
+
+  return value
+}
+
+async function ensureChildInFamily(childId: number, familyId: number) {
+  const child = await prisma.user.findFirst({
+    where: {
+      id: childId,
+      familyId,
+      role: 'child',
+      status: 'active',
+    },
+  })
+
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  return child
+}
+
 // 获取家庭下所有孩子列表
 childrenRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
@@ -28,6 +72,99 @@ childrenRouter.get('/', async (req: AuthRequest, res: Response) => {
   })
   
   res.json({ status: 'success', data: children })
+})
+
+// 获取孩子的当前学期配置
+childrenRouter.get('/:childId/semester', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+
+  if (isNaN(childId)) {
+    throw new AppError(400, '无效的孩子ID')
+  }
+
+  await ensureChildInFamily(childId, familyId)
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  const settings = (family?.settings as any) || {}
+  const semester = settings.childSemesters?.[String(childId)] || null
+
+  res.json({
+    status: 'success',
+    data: semester,
+  })
+})
+
+// 更新孩子的当前学期配置
+childrenRouter.put('/:childId/semester', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+  const { schoolYear, term, grade, startDate, endDate, readingStage } = req.body
+
+  if (isNaN(childId)) {
+    throw new AppError(400, '无效的孩子ID')
+  }
+
+  await ensureChildInFamily(childId, familyId)
+
+  if (typeof schoolYear !== 'string' || !schoolYear.trim()) {
+    throw new AppError(400, '请输入学年')
+  }
+  if (term !== 'first' && term !== 'second') {
+    throw new AppError(400, '请选择上学期或下学期')
+  }
+  if (typeof grade !== 'string' || !grade.trim()) {
+    throw new AppError(400, '请输入年级')
+  }
+
+  const validStartDate = validateDateString(startDate, '开始日期')
+  const validEndDate = validateDateString(endDate, '结束日期')
+
+  if (new Date(validStartDate) > new Date(validEndDate)) {
+    throw new AppError(400, '开始日期不能晚于结束日期')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as any) || {}
+  const nextSemester: ChildSemesterSettings = {
+    schoolYear: schoolYear.trim(),
+    term,
+    grade: grade.trim(),
+    startDate: validStartDate,
+    endDate: validEndDate,
+    readingStage: typeof readingStage === 'string' ? readingStage.trim().slice(0, 50) : '',
+  }
+
+  await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: {
+        ...currentSettings,
+        childSemesters: {
+          ...(currentSettings.childSemesters || {}),
+          [String(childId)]: nextSemester,
+        },
+      },
+    },
+  })
+
+  res.json({
+    status: 'success',
+    message: '学期配置已保存',
+    data: nextSemester,
+  })
 })
 
 // 获取孩子的钉钉配置

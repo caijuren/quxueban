@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Send, Check, Clock, AlertCircle, RefreshCw, Trash2, Settings, CalendarOff, User } from 'lucide-react';
-import { format, startOfWeek, addWeeks } from 'date-fns';
+import { format, getISOWeek, getISOWeekYear, startOfWeek, addWeeks } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,10 @@ const RULE_OPTIONS = [
 ];
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+const getWeekNo = (date: Date) => {
+  return `${getISOWeekYear(date)}-${String(getISOWeek(date)).padStart(2, '0')}`;
+};
 
 export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, selectedChildName, onSuccess }: PublishPlanDialogProps) {
   const [step, setStep] = useState(1);
@@ -79,7 +84,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
     });
   }, [selectedTasks, tasks]);
 
-  const getSelectedWeekStart = () => {
+  const getSelectedWeekStart = useCallback(() => {
     if (selectedWeek === 'this') {
       return startOfWeek(new Date(), { weekStartsOn: 1 });
     } else if (selectedWeek === 'next') {
@@ -87,12 +92,12 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
     } else {
       return customWeekStart;
     }
-  };
+  }, [customWeekStart, selectedWeek]);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
       const selectedWeekStart = getSelectedWeekStart();
-      const weekNo = format(selectedWeekStart, 'yyyy-ww');
+      const weekNo = getWeekNo(selectedWeekStart);
 
       const rules: Record<number, string> = {};
       selectedTasks.forEach(taskId => {
@@ -104,6 +109,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
       await apiClient.post('/tasks/publish', {
         childIds: [selectedChildId],
         weekNo,
+        weekStartDate: format(selectedWeekStart, 'yyyy-MM-dd'),
         selectedTaskIds: selectedTasks,
         taskRules: rules,
         skipHolidays,
@@ -179,6 +185,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
         [0, 1, 3, 4].forEach(d => dayMinutes[d] += task.timePerUnit);
       }
       else if (rule === 'flexible') {
+        return;
       }
       else if (rule === 'weekend') {
         [5, 6].forEach(d => dayMinutes[d] += task.timePerUnit);
@@ -233,7 +240,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
       });
     }
     return schedule;
-  }, [selectedTasks, taskRules, tasks, shuffleSeed, skipHolidays]);
+  }, [selectedTasks, taskRules, tasks, shuffleSeed, getSelectedWeekStart]);
 
   const stats = useMemo(() => {
     const totalTasks = selectedTasks.length;
@@ -328,12 +335,12 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                   {selectedWeek === 'custom' && (
                     <div className='mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200'>
                       <label className='block text-sm font-medium text-gray-700 mb-2'>选择周一开始日期</label>
-                      <input 
-                        type='date' 
-                        value={format(customWeekStart, 'yyyy-MM-dd')} 
-                        onChange={(e) => setCustomWeekStart(startOfWeek(new Date(e.target.value), { weekStartsOn: 1 }))} 
-                        className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 outline-none'
-                      />
+	                      <DatePicker
+	                        value={format(customWeekStart, 'yyyy-MM-dd')}
+	                        onChange={(value) => setCustomWeekStart(startOfWeek(new Date(value), { weekStartsOn: 1 }))}
+	                        className="w-full justify-start"
+	                        align="start"
+	                      />
                     </div>
                   )}
                 </div>

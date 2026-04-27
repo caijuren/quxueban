@@ -150,6 +150,7 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
       wp.progress,
       wp.week_no,
       wp.status,
+      wp.assigned_days,
       wp.created_at,
       wp.updated_at,
       t.name AS task_name,
@@ -603,6 +604,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         wp.progress,
         wp.week_no,
         wp.status,
+        wp.assigned_days,
         wp.created_at,
         wp.updated_at,
         t.name AS task_name,
@@ -882,14 +884,14 @@ plansRouter.get('/history', async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /modify - Modify weekly plan (remove/move task on specific day)
- * Body: { taskId, action: 'remove'|'move', date?, fromDate?, toDate? }
+ * Body: { taskId, childId, action: 'remove'|'move', date?, fromDate?, toDate? }
  */
 plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
   try {
     const { familyId, role } = req.user!
-    const { taskId, action, date, fromDate, toDate } = req.body
+    const { taskId, childId, action, date, fromDate, toDate } = req.body
 
-    console.log('[MODIFY] Request:', { taskId, action, date, fromDate, toDate })
+    console.log('[MODIFY] Request:', { taskId, childId, action, date, fromDate, toDate })
 
     if (role !== 'parent') {
       throw new AppError(403, 'Only parents can modify plans')
@@ -909,14 +911,21 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
       throw new AppError(400, 'Invalid taskId: must be a number')
     }
 
+    const parsedChildId = parseInt(childId)
+    if (isNaN(parsedChildId)) {
+      throw new AppError(400, 'Invalid childId: must be a number')
+    }
+
     // Parse the target date to get day of week
     const targetDate = action === 'move' ? new Date(fromDate!) : new Date(date!)
     const dayOfWeek = targetDate.getDay() // 0=Sunday, 1=Monday, ..., 6=Saturday
     const weekNo = getWeekNo(targetDate)
 
-    // Find the weekly plan for this task
+    // Find the weekly plan for this task and child. The same task can exist in multiple children's plans.
     const weeklyPlan = await prisma.weeklyPlan.findFirst({
       where: {
+        familyId,
+        childId: parsedChildId,
         taskId: parsedTaskId,
         weekNo,
       },

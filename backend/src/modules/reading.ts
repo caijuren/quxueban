@@ -10,6 +10,38 @@ export const readingRouter: Router = Router()
 readingRouter.use(authMiddleware)
 readingRouter.use(requireRole('parent'))
 
+function parseLocalDateRange(startValue: unknown, endValue: unknown) {
+  const parse = (value: unknown): Date | null => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return null
+    }
+
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null
+    }
+
+    return date
+  }
+
+  const startDate = parse(startValue)
+  const endDate = parse(endValue)
+
+  if (!startDate || !endDate || startDate > endDate) {
+    return null
+  }
+
+  startDate.setHours(0, 0, 0, 0)
+  endDate.setHours(23, 59, 59, 999)
+
+  return { startDate, endDate }
+}
+
 /**
  * GET / - List all active readings (currently reading books)
  * Query: ?childId=
@@ -94,8 +126,9 @@ readingRouter.post('/:id/progress', async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
   const { pagesRead } = req.body
+  const parsedPagesRead = Number(pagesRead)
 
-  if (!pagesRead || pagesRead < 1) {
+  if (!Number.isFinite(parsedPagesRead) || parsedPagesRead < 1) {
     throw new AppError(400, '请填写本次阅读的页数')
   }
 
@@ -112,7 +145,7 @@ readingRouter.post('/:id/progress', async (req: AuthRequest, res: Response) => {
       },
     }
 
-    const newReadPages = mockActiveReading.readPages + pagesRead
+    const newReadPages = mockActiveReading.readPages + parsedPagesRead
     const totalPages = mockActiveReading.book.totalPages
 
     // Check if book is completed
@@ -148,8 +181,9 @@ readingRouter.post('/:id/progress', async (req: AuthRequest, res: Response) => {
     throw new AppError(404, '阅读记录不存在')
   }
 
-  const newReadPages = activeReading.readPages + pagesRead
+  const newReadPages = activeReading.readPages + parsedPagesRead
   const totalPages = activeReading.book.totalPages
+  const isCompleted = totalPages > 0 && newReadPages >= totalPages
 
   // Create progress log
   await prisma.readingProgressLog.create({
@@ -158,14 +192,31 @@ readingRouter.post('/:id/progress', async (req: AuthRequest, res: Response) => {
       childId: activeReading.childId,
       bookId: activeReading.bookId,
       activeReadingId: id,
-      pagesRead,
+      pagesRead: parsedPagesRead,
       totalReadPages: newReadPages,
       readDate: new Date(),
     },
   })
 
-  // Check if book is completed
-  const isCompleted = totalPages > 0 && newReadPages >= totalPages
+  await prisma.bookReadState.upsert({
+    where: {
+      childId_bookId: {
+        childId: activeReading.childId,
+        bookId: activeReading.bookId,
+      },
+    },
+    update: {
+      status: isCompleted ? 'finished' : 'reading',
+      finishedAt: isCompleted ? new Date() : null,
+    },
+    create: {
+      familyId,
+      childId: activeReading.childId,
+      bookId: activeReading.bookId,
+      status: isCompleted ? 'finished' : 'reading',
+      finishedAt: isCompleted ? new Date() : null,
+    },
+  })
 
   if (isCompleted) {
     // Update active reading as completed
@@ -254,6 +305,7 @@ readingRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
 readingRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const childId = req.query.childId ? parseInt(req.query.childId as string) : undefined
+  const requestedRange = parseLocalDateRange(req.query.startDate, req.query.endDate)
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -310,6 +362,18 @@ readingRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   })
 
   const monthReadCount = monthProgressLogs.length
+  const rangeReadCount = requestedRange
+    ? await prisma.readingProgressLog.count({
+      where: {
+        familyId,
+        ...(childId && { childId }),
+        readDate: {
+          gte: requestedRange.startDate,
+          lte: requestedRange.endDate,
+        },
+      },
+    })
+    : monthReadCount
 
   res.json({
     status: 'success',
@@ -317,6 +381,7 @@ readingRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       readingCount,
       weekReadCount,
       monthReadCount,
+      rangeReadCount,
     },
   })
 })

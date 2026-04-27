@@ -98,7 +98,7 @@ readingRouter.get('/books/:bookId/logs', async (req: AuthRequest, res: Response)
 readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const bookId = parseInt(req.params.bookId as string)
   const { familyId, name } = req.user!
-  const { childId, readDate, effect, performance, note, readStage, pages, minutes, startPage, endPage, evidenceUrl } = req.body
+  const { childId, readDate, effect, performance, note, readStage, pages, minutes, startPage, endPage, currentPage, evidenceUrl } = req.body
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -141,8 +141,16 @@ readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: Aut
     throw new AppError(404, '书籍不存在')
   }
 
-  // Calculate pages read
-  const pagesRead = endPage && startPage ? endPage - startPage + 1 : 0;
+  const targetPage = Math.max(0, parseInt(String(currentPage ?? endPage ?? 0), 10) || 0)
+  const previousProgress = childId
+    ? await prisma.readingLog.aggregate({
+        where: { bookId, childId },
+        _max: { endPage: true },
+      })
+    : null
+  const previousPage = previousProgress?._max.endPage || 0
+  const calculatedStartPage = targetPage > 0 ? previousPage + 1 : (startPage || 0)
+  const pagesRead = targetPage > 0 ? Math.max(0, targetPage - previousPage) : (pages || 0)
 
   const log = await prisma.readingLog.create({
     data: {
@@ -156,8 +164,8 @@ readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: Aut
       readStage: readStage || '',
       pages: pagesRead,
       minutes: minutes || 0,
-      startPage: startPage || 0,
-      endPage: endPage || 0,
+      startPage: calculatedStartPage,
+      endPage: targetPage || endPage || 0,
       evidenceUrl: evidenceUrl || '',
     },
     include: {
@@ -185,7 +193,7 @@ readingRouter.post('/books/:bookId/logs', requireRole('parent'), async (req: Aut
     })
 
     const totalPagesRead = totalReadPages._sum.pages || 0;
-    const isFinished = endPage >= book.totalPages;
+    const isFinished = Boolean(book.totalPages && targetPage >= book.totalPages);
 
     if (existingState) {
       await prisma.bookReadState.update({

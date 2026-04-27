@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { PublishPlanDialog } from '@/components/PublishPlanDialog';
-import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles } from 'lucide-react';
+import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles, ClipboardCheck, Calculator, Languages, Dumbbell, BookMarked, Shapes } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { format, startOfWeek, addWeeks, addDays, isToday, isSameDay } from 'date-fns';
@@ -40,6 +40,7 @@ interface WeeklyPlan {
 
 interface TaskDetailProps {
   task: TaskAllocation;
+  childId: number;
   weekStartDate: Date;
   onClose: () => void;
   onRefresh: () => void;
@@ -51,8 +52,37 @@ const subjectColor = (s: string | null) => s === 'chinese' ? 'bg-emerald-50 text
 const diffLabel = (d: string | null) => d === 'basic' ? '基础' : d === 'advanced' ? '提升' : d === 'challenge' ? '挑战' : '';
 const ruleLabel = (r: string) => r === 'daily' ? '每日任务' : r === 'school' ? '在校日任务' : r === 'flexible' ? '智能分配' : r === 'weekend' ? '周末任务' : r || '每日任务';
 
+const categoryOrder: { [key: string]: number } = {
+  school: 0,
+  advanced: 1,
+  extra: 2,
+  chinese: 3,
+  english: 4,
+  sports: 5,
+};
+
+const getCategoryStyle = (category: string) => {
+  const cat = (category || '').toLowerCase();
+  switch (cat) {
+    case 'school':
+      return { bg: 'bg-emerald-400', text: 'text-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-300', hex: '#6ee7b7', icon: ClipboardCheck };
+    case 'advanced':
+      return { bg: 'bg-pink-400', text: 'text-pink-700', light: 'bg-pink-50', border: 'border-pink-300', hex: '#f472b6', icon: Target };
+    case 'extra':
+      return { bg: 'bg-cyan-400', text: 'text-cyan-700', light: 'bg-cyan-50', border: 'border-cyan-300', hex: '#67e8f9', icon: Shapes };
+    case 'chinese':
+      return { bg: 'bg-violet-500', text: 'text-violet-700', light: 'bg-violet-50', border: 'border-violet-300', hex: '#8b5cf6', icon: BookMarked };
+    case 'english':
+      return { bg: 'bg-orange-400', text: 'text-orange-700', light: 'bg-orange-50', border: 'border-orange-300', hex: '#fb923c', icon: Languages };
+    case 'sports':
+      return { bg: 'bg-emerald-500', text: 'text-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-300', hex: '#34d399', icon: Dumbbell };
+    default:
+      return { bg: 'bg-blue-500', text: 'text-blue-700', light: 'bg-blue-50', border: 'border-blue-300', hex: '#3b82f6', icon: Calculator };
+  }
+};
+
 // 优化后的任务详情弹窗
-function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetailProps) {
+function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: TaskDetailProps) {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedMoveDay, setSelectedMoveDay] = useState<number | null>(null);
@@ -98,6 +128,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
       
       const response = await apiClient.post('/plans/modify', {
         taskId: task.taskId,
+        childId,
         action: 'remove',
         date: dateStr,
       });
@@ -124,6 +155,7 @@ function TaskDetailModal({ task, weekStartDate, onClose, onRefresh }: TaskDetail
       
       const response = await apiClient.post('/plans/modify', {
         taskId: task.taskId,
+        childId,
         action: 'move',
         fromDate: format(fromDate, 'yyyy-MM-dd'),
         toDate: format(toDate, 'yyyy-MM-dd'),
@@ -555,10 +587,10 @@ export default function PlansPage() {
                 key={category.value}
                 onClick={() => setSelectedCategory(category.value)}
                 className={cn(
-                  'px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg',
+                  'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
                   selectedCategory === category.value
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-muted text-foreground hover:bg-muted/80'
+                    ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
                 )}
               >
                 {category.label}
@@ -567,7 +599,7 @@ export default function PlansPage() {
           </div>
           
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {/* 推送按钮 - 只在有计划数据时显示 */}
             {displayPlan && displayPlan.childId !== "0" && (
               <button
@@ -585,7 +617,7 @@ export default function PlansPage() {
                     toast.error(error.response?.data?.message || '推送失败');
                   }
                 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 shadow-sm text-sm font-medium h-10"
+                className="flex h-11 items-center gap-2 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-600"
               >
                 <Send className="size-4" />
                 推送
@@ -593,8 +625,8 @@ export default function PlansPage() {
             )}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-border shadow-sm hover:shadow transition-all duration-200 h-10">
-                  <span className="text-sm font-medium text-foreground">{weekLabel}</span>
+                <button className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm transition-all duration-200 hover:shadow">
+                  <span className="text-sm font-semibold text-slate-900">{weekLabel}</span>
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </button>
               </PopoverTrigger>
@@ -632,14 +664,14 @@ export default function PlansPage() {
 
             <Button
               onClick={() => setAdvancedExportOpen(true)}
-              className="h-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm min-w-20"
+              className="h-11 min-w-24 rounded-xl bg-emerald-500 text-white shadow-sm hover:bg-emerald-600"
             >
               <Download className="w-4 h-4 mr-1.5" />
               <span className="text-sm">导出</span>
             </Button>
             <Button
               onClick={() => setPublishDialogOpen(true)}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+              className="h-11 min-w-28 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
             >
               <Plus className="size-4 mr-1.5" />
               <span className="text-sm">发布计划</span>
@@ -665,57 +697,43 @@ export default function PlansPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1, duration: 0.5, ease: "easeOut" }}
             >
-              <Card className="border border-border shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-all duration-300">
-                <CardContent className="px-4 py-4">
+              <Card className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:shadow-md">
+                <CardContent className="p-5">
                   <div className="overflow-x-auto">
-                    <div className="min-w-[600px]">
+                    <div className="min-w-[1180px]">
                       {/* Day headers */}
-                      <div className="grid grid-cols-8 gap-2 mb-3">
+                      <div className="mb-2 grid grid-cols-[250px_repeat(7,minmax(112px,1fr))] gap-2">
                         <div className="p-2"></div>
                         {weekDays.map((day, i) => {
                           const date = weekDates[i];
                           const isTodayDate = isToday(date);
-                          // 新索引系统：前端和后端一致，0=周一, 1=周二, ..., 5=周六, 6=周日
-                          const backendIndex = i;
+                          const isHoliday = format(date, 'MM-dd') === '05-01';
+                          const backendIndex = i === 6 ? 0 : i + 1;
                           const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(backendIndex));
-                          const dayTotalMin = dayTasks.reduce((s, a) => s + a.timePerUnit, 0);
                           return (
-                            <div key={day} className={cn('p-2 text-center rounded-lg transition-all duration-300', isTodayDate ? 'bg-primary text-white shadow-sm' : 'bg-muted hover:bg-muted/80')}>
-                              <div className={cn('flex items-center justify-center gap-1', isTodayDate ? 'text-white' : 'text-foreground')}>
-                                <span className={cn('text-xs font-medium', isTodayDate ? 'text-white/80' : 'text-muted-foreground')}>{day}</span>
-                                <span className={cn('text-sm font-semibold', isTodayDate ? 'text-white' : 'text-foreground')}>{format(date, 'M/d')}</span>
+                            <div
+                              key={day}
+                              className={cn(
+                                'rounded-lg px-3 py-2 text-center transition-all duration-300',
+                                isTodayDate
+                                  ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                                  : isHoliday
+                                    ? 'bg-rose-50 text-slate-900'
+                                    : 'bg-slate-50 text-slate-900 hover:bg-slate-100'
+                              )}
+                            >
+                              <div className="text-sm font-bold">
+                                {day} {format(date, 'M/d')}
                               </div>
-                              {dayTotalMin > 0 && <span className={cn('text-xs mt-1 block', isTodayDate ? 'text-white/70' : 'text-muted-foreground')}>{dayTotalMin}m</span>}
+                              <div className={cn('mt-1 text-xs font-semibold', isTodayDate ? 'text-white/80' : 'text-slate-500')}>
+                                {isHoliday ? '劳动节' : `${dayTasks.length}项任务`}
+                              </div>
                             </div>
                           );
                         })}
                       </div>
                       {/* 任务列表 - 直接平铺，无分组 */}
                       {(() => {
-                        // 学科排序顺序
-                        const categoryOrder: { [key: string]: number } = {
-                          'school': 0,    // 校内作业
-                          'advanced': 1,  // 拔高
-                          'extra': 2,     // 课外
-                          'chinese': 3,   // 语文
-                          'english': 4,   // 英语
-                          'sports': 5,    // 体育
-                        };
-
-                        // 获取分类颜色
-                        const getCategoryColor = (category: string) => {
-                          const cat = (category || '').toLowerCase();
-                          switch (cat) {
-                            case 'school': return { bg: 'bg-blue-400', text: 'text-primary', light: 'bg-blue-50' };
-                            case 'advanced': return { bg: 'bg-indigo-400', text: 'text-indigo-700', light: 'bg-indigo-50' };
-                            case 'extra': return { bg: 'bg-purple-400', text: 'text-purple-700', light: 'bg-purple-50' };
-                            case 'chinese': return { bg: 'bg-emerald-400', text: 'text-emerald-700', light: 'bg-emerald-50' };
-                            case 'english': return { bg: 'bg-orange-400', text: 'text-orange-700', light: 'bg-orange-50' };
-                            case 'sports': return { bg: 'bg-yellow-400', text: 'text-yellow-700', light: 'bg-yellow-50' };
-                            default: return { bg: 'bg-gray-400', text: 'text-gray-600', light: 'bg-gray-50' };
-                          }
-                        };
-
                         // 按分类筛选并排序任务
                         const filteredAndSortedTasks = [...plan.allocations]
                           .filter(task => selectedCategory === 'all' || task.category === selectedCategory)
@@ -728,7 +746,8 @@ export default function PlansPage() {
 
                         return filteredAndSortedTasks.map((taskItem) => {
                           const hasAssignedDays = taskItem.assignedDays && taskItem.assignedDays.length > 0;
-                          const color = getCategoryColor(taskItem.category);
+                          const color = getCategoryStyle(taskItem.category);
+                          const Icon = color.icon;
 
                           // 转换前端索引到后端索引
                           const getBackendDayIndex = (frontendIndex: number) => {
@@ -741,50 +760,73 @@ export default function PlansPage() {
                             return taskItem.assignedDays && taskItem.assignedDays.includes(backendIndex);
                           };
 
-                          const getDotColor = () => {
-                            if (!hasAssignedDays) return 'bg-gray-300';
-                            return color.bg;
-                          };
+                          const progressPercent = taskItem.target > 0 ? Math.min(100, Math.round((taskItem.progress / taskItem.target) * 100)) : 0;
+                          const stageSummary = taskItem.target > 0
+                            ? `本周目标 ${taskItem.target} 次`
+                            : `本周安排 ${taskItem.assignedDays?.length || 0} 天`;
+                          const isKeyTask = taskItem.difficulty === 'challenge' || taskItem.category === 'advanced';
 
                           return (
                             <motion.div 
                               key={taskItem.taskId} 
-                              className="grid grid-cols-8 gap-2 group/row mb-1"
+                              className="group/row mb-2 grid grid-cols-[250px_repeat(7,minmax(112px,1fr))] gap-2"
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ duration: 0.3, ease: "easeOut" }}
                               whileHover={{ backgroundColor: 'rgba(249, 250, 251, 0.5)' }}
                             >
-                              <div className="p-2 flex items-center gap-2 pr-3 rounded-lg hover:bg-muted/50 transition-all duration-300" title={taskItem.taskName}>
-                                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDotColor())} />
-                                <span className={cn('text-sm font-medium truncate', !hasAssignedDays && 'text-muted-foreground')}>
-                                  {taskItem.taskName}
-                                  {!hasAssignedDays && <span className="ml-1 text-xs text-muted-foreground">(未分配)</span>}
-                                </span>
+                              <div className="flex min-h-[64px] items-center gap-3 rounded-lg px-3 py-2 transition-all duration-300 hover:bg-slate-50" title={taskItem.taskName}>
+                                <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm', color.bg)}>
+                                  <Icon className="h-5 w-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className={cn('truncate text-sm font-bold text-slate-950', !hasAssignedDays && 'text-slate-400')}>
+                                      {taskItem.taskName}
+                                    </p>
+                                    <span className="shrink-0 text-xs font-semibold text-slate-600">{taskItem.progress}/{taskItem.target}</span>
+                                  </div>
+                                  <p className="mt-1 text-xs font-medium text-slate-500">{stageSummary}</p>
+                                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                    <div className={cn('h-full rounded-full', color.bg)} style={{ width: `${progressPercent}%` }} />
+                                  </div>
+                                </div>
                               </div>
                               {weekDays.map((_, i) => {
                                 const isAssigned = isTaskAssignedOnDay(i);
                                 const dayProgress = plan.dailyProgress.find(d => d.day === i);
                                 const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
-
+                                const isHoliday = format(weekDates[i], 'MM-dd') === '05-01';
                                 return (
-                                  <div key={i} className={cn('p-2 flex items-center justify-center rounded-lg min-h-[40px] transition-all duration-300', isToday(weekDates[i]) && 'bg-primary/5 hover:bg-primary/10')}>
+                                  <div
+                                    key={i}
+                                    className={cn(
+                                      'flex min-h-[64px] items-center justify-center rounded-lg border border-slate-100 bg-white p-1 transition-all duration-300',
+                                      isToday(weekDates[i]) && 'border-indigo-100 bg-indigo-50/40',
+                                      isHoliday && 'border-rose-50 bg-rose-50/50'
+                                    )}
+                                  >
                                     <div className="relative">
                                       {isAssigned ? (
                                         <motion.button 
                                           onClick={() => setSelectedTask(taskItem)} 
-                                          className={cn('w-6 h-6 rounded-full cursor-pointer shadow-sm', isCompleted ? 'bg-emerald-400 ring-2 ring-emerald-200' : getDotColor())} 
+                                          className={cn(
+                                            'flex h-6 w-6 cursor-pointer items-center justify-center rounded-md shadow-sm transition-all',
+                                            isCompleted
+                                              ? cn(color.bg, 'text-white ring-2 ring-slate-100')
+                                              : cn('border-[3px] bg-white', color.border)
+                                          )}
                                           title={`${taskItem.taskName} - 点击查看详情`}
                                           whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
                                           whileTap={{ scale: 0.95 }}
                                         >
-                                          {isCompleted && <span className="text-white text-xs">✓</span>}
-                                          {taskItem.difficulty === 'challenge' && !isCompleted && (
-                                            <span className="absolute -top-1 -right-1 text-[8px] text-amber-500">★</span>
+                                          {isCompleted && <span className="text-xs font-bold leading-none">✓</span>}
+                                          {isKeyTask && (
+                                            <span className="absolute -right-2 -top-2 text-[13px] leading-none text-amber-400 drop-shadow-sm">★</span>
                                           )}
                                         </motion.button>
                                       ) : (
-                                        <div className="w-6 h-6 rounded-full bg-muted shadow-sm"></div>
+                                        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-300">−</div>
                                       )}
                                     </div>
                                   </div>
@@ -795,7 +837,17 @@ export default function PlansPage() {
                         });
                       })()}
                       {plan.allocations.length === 0 && (
-                        <div className="py-8 text-center text-muted-foreground text-sm bg-muted rounded-lg">该周暂无任务安排</div>
+                        <div className="rounded-xl bg-slate-50 py-10 text-center text-sm text-muted-foreground">该周暂无任务安排</div>
+                      )}
+                      {plan.allocations.length > 0 && (
+                        <div className="mt-5 flex w-max min-w-full flex-wrap items-center gap-x-8 gap-y-3 border-t border-slate-100 pt-4 text-sm">
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400 text-xs font-bold text-white">✓</i> 已完成</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="h-6 w-6 rounded-full border-[5px] border-orange-300 bg-white" /> 进行中</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-300">−</i> 未安排</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap font-medium text-slate-600">
+                            <i className="text-amber-400">★</i> 重点任务
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -812,8 +864,9 @@ export default function PlansPage() {
       {selectedTask && (
         <TaskDetailModal 
           task={selectedTask} 
+          childId={parseInt(displayPlan.childId)}
           weekStartDate={currentWeekStart}
-          onClose={() => setSelectedTask(null)} 
+          onClose={() => setSelectedTask(null)}
           onRefresh={() => refetchPlans()}
         />
       )}

@@ -6,6 +6,7 @@ export default {
   testPathIgnorePatterns: ['/node_modules/', '/dist/', 'setup.ts'],
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
+    '^node-fetch$': '<rootDir>/src/__tests__/mocks/node-fetch.ts',
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
@@ -24,5 +25,6 @@ export default {
     '!src/**/*.spec.ts',
     '!src/__tests__/setup.ts',
   ],
+  setupFiles: ['<rootDir>/src/__tests__/env.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
 };

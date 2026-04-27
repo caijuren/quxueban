@@ -2,6 +2,8 @@ import { Router, Response } from 'express'
 import multer from 'multer'
 import * as XLSX from 'xlsx'
 import fetch, { Response as FetchResponse } from 'node-fetch'
+import fs from 'fs/promises'
+import path from 'path'
 import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
@@ -13,23 +15,379 @@ export const libraryRouter: Router = Router()
 // Configure multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() })
 
+const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org'
+const LOCAL_COVER_DIR = path.resolve(process.cwd(), 'uploads/book-covers')
+
+async function saveCoverLocally(buffer: Buffer, fileExt = 'jpg'): Promise<string> {
+  await fs.mkdir(LOCAL_COVER_DIR, { recursive: true })
+  const safeExt = fileExt.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'jpg'
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`
+  const filePath = path.join(LOCAL_COVER_DIR, fileName)
+  await fs.writeFile(filePath, buffer)
+  return `/uploads/book-covers/${fileName}`
+}
+
+async function storeCoverBuffer(buffer: Buffer, fileExt: string, contentType?: string): Promise<string> {
+  if (supabase && env.SUPABASE_STORAGE_BUCKET) {
+    const fileName = `covers/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+    const { error } = await supabase.storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .upload(fileName, buffer, {
+        cacheControl: '3600',
+        upsert: false,
+        ...(contentType ? { contentType } : {}),
+      })
+
+    if (!error) {
+      const { data: urlData } = supabase.storage
+        .from(env.SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(fileName)
+      if (urlData.publicUrl) return urlData.publicUrl
+    }
+
+    console.error('[Cover Storage] Supabase upload failed, falling back to local:', error)
+  }
+
+  return saveCoverLocally(buffer, fileExt)
+}
+
+function cleanIsbn(isbn: string): string {
+  return String(isbn || '').replace(/[\s-]/g, '')
+}
+
+function normalizeBookName(name: string): string {
+  return String(name || '')
+    .trim()
+    .replace(/[《》<>]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+}
+
+function normalizeText(value: string): string {
+  return String(value || '')
+    .trim()
+    .replace(/[《》<>]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+}
+
+function normalizeYear(value: unknown): string {
+  const match = String(value || '').match(/\d{4}/)
+  return match ? match[0] : ''
+}
+
+function firstText(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(', ')
+  }
+  return value ? String(value) : ''
+}
+
+function firstNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const parsed = parseInt(String(value || ''), 10)
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed
+  }
+  return 0
+}
+
+function pickRowValue(row: any, keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key]
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return String(value).trim()
+    }
+  }
+  return ''
+}
+
+function parseExcelDate(value: unknown): Date {
+  if (!value) return new Date()
+  if (value instanceof Date) return value
+  if (typeof value === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(value)
+    if (parsed) return new Date(parsed.y, parsed.m - 1, parsed.d)
+  }
+  const parsedDate = new Date(String(value))
+  return Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate
+}
+
+function buildOpenLibraryCoverUrl(doc: any, isbn?: string): string {
+  if (doc?.cover_i) {
+    return `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
+  }
+  const cleanedIsbn = cleanIsbn(isbn || doc?.isbn?.[0] || '')
+  return cleanedIsbn ? `https://covers.openlibrary.org/b/isbn/${cleanedIsbn}-L.jpg?default=false` : ''
+}
+
+async function fetchJsonWithTimeout(url: string, timeoutMs = 3500): Promise<any> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'quxueban/1.0 (book metadata lookup)' },
+    })
+    if (!response.ok) {
+      throw new Error(`OpenLibrary request failed: ${response.status}`)
+    }
+    return await response.json()
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function transformOpenLibraryDoc(doc: any, fallbackIsbn = '') {
+  const isbn = cleanIsbn(fallbackIsbn || doc?.isbn?.[0] || '')
+  return {
+    name: doc?.title || '',
+    author: firstText(doc?.author_name),
+    isbn,
+    publisher: firstText(doc?.publisher),
+    coverUrl: buildOpenLibraryCoverUrl(doc, isbn),
+    totalPages: firstNumber(doc?.number_of_pages_median, doc?.number_of_pages, doc?.edition_count),
+    publishYear: doc?.first_publish_year || null,
+  }
+}
+
+interface BookMatchInput {
+  name: string;
+  isbn?: string | null;
+  author?: string | null;
+  publisher?: string | null;
+  publishYear?: string | number | null;
+}
+
+function scoreBookCandidate(candidate: any, input: BookMatchInput): number {
+  const candidateName = normalizeBookName(candidate.name || candidate.title || '')
+  const inputName = normalizeBookName(input.name || '')
+  if (!candidateName || !inputName) return -1
+
+  let score = 0
+  if (candidateName === inputName) score += 80
+  else if (candidateName.includes(inputName) || inputName.includes(candidateName)) score += 45
+  else return -1
+
+  const inputAuthor = normalizeText(input.author || '')
+  const candidateAuthor = normalizeText(candidate.author || '')
+  if (inputAuthor && candidateAuthor) {
+    score += candidateAuthor.includes(inputAuthor) || inputAuthor.includes(candidateAuthor) ? 25 : -20
+  }
+
+  const inputPublisher = normalizeText(input.publisher || '')
+  const candidatePublisher = normalizeText(candidate.publisher || '')
+  if (inputPublisher && candidatePublisher) {
+    score += candidatePublisher.includes(inputPublisher) || inputPublisher.includes(candidatePublisher) ? 15 : -8
+  }
+
+  const inputYear = normalizeYear(input.publishYear)
+  const candidateYear = normalizeYear(candidate.publishYear)
+  if (inputYear && candidateYear) {
+    score += inputYear === candidateYear ? 10 : -5
+  }
+
+  if (candidate.coverUrl) score += 5
+  return score
+}
+
+function rankBookCandidates(candidates: any[], input: BookMatchInput) {
+  return candidates
+    .map(candidate => ({ candidate, score: scoreBookCandidate(candidate, input) }))
+    .filter(item => item.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .map(item => ({ ...item.candidate, matchScore: item.score }))
+}
+
+function buildOpenLibraryQuery(input: BookMatchInput): string {
+  const params = new URLSearchParams()
+  params.set('title', input.name)
+  if (input.author) params.set('author', input.author)
+  if (input.publisher) params.set('publisher', input.publisher)
+  return params.toString()
+}
+
+async function searchOpenLibraryByIsbn(isbn: string) {
+  const cleanedIsbn = cleanIsbn(isbn)
+  if (!cleanedIsbn || (cleanedIsbn.length !== 10 && cleanedIsbn.length !== 13)) return null
+  const data = await fetchJsonWithTimeout(`${OPEN_LIBRARY_BASE_URL}/search.json?isbn=${encodeURIComponent(cleanedIsbn)}&limit=1`)
+  const doc = data?.docs?.[0]
+  return doc ? transformOpenLibraryDoc(doc, cleanedIsbn) : null
+}
+
+async function searchOpenLibraryByTitle(title: string, limit = 10) {
+  const data = await fetchJsonWithTimeout(`${OPEN_LIBRARY_BASE_URL}/search.json?title=${encodeURIComponent(title)}&limit=${limit}`)
+  return (data?.docs || []).map((doc: any) => transformOpenLibraryDoc(doc)).filter((book: any) => book.name)
+}
+
+async function searchOpenLibraryByMatch(input: BookMatchInput, limit = 10) {
+  const query = buildOpenLibraryQuery(input)
+  const data = await fetchJsonWithTimeout(`${OPEN_LIBRARY_BASE_URL}/search.json?${query}&limit=${limit}`)
+  const candidates = (data?.docs || []).map((doc: any) => transformOpenLibraryDoc(doc)).filter((book: any) => book.name)
+  return rankBookCandidates(candidates, input)
+}
+
+async function findOpenLibraryBook(book: BookMatchInput) {
+  if (book.isbn) {
+    const byIsbn = await searchOpenLibraryByIsbn(book.isbn)
+    if (byIsbn) return byIsbn
+  }
+  const byMatch = await searchOpenLibraryByMatch(book, 5)
+  return byMatch[0] || null
+}
+
+function transformLocalBook(book: any) {
+  return {
+    id: book.id,
+    name: book.name || '',
+    author: book.author || '',
+    isbn: book.isbn || '',
+    publisher: book.publisher || '',
+    coverUrl: book.coverUrl || '',
+    totalPages: book.totalPages || 0,
+    source: 'local',
+  }
+}
+
+async function findLocalBookByIsbn(familyId: number, isbn: string) {
+  const cleanedIsbn = cleanIsbn(isbn)
+  if (!cleanedIsbn) return null
+
+  const books = await prisma.book.findMany({
+    where: { familyId, status: 'active', isbn: { not: '' } },
+    select: { id: true, name: true, author: true, isbn: true, publisher: true, coverUrl: true, totalPages: true },
+    take: 2000,
+  })
+
+  const book = books.find(item => cleanIsbn(item.isbn) === cleanedIsbn)
+  return book ? transformLocalBook(book) : null
+}
+
+async function findLocalBooksByMatch(familyId: number, input: BookMatchInput, limit = 10) {
+  const normalizedTitle = normalizeBookName(input.name)
+  if (!normalizedTitle) return []
+
+  const books = await prisma.book.findMany({
+    where: {
+      familyId,
+      status: 'active',
+      name: { contains: input.name.trim(), mode: 'insensitive' },
+    },
+    select: { id: true, name: true, author: true, isbn: true, publisher: true, coverUrl: true, totalPages: true },
+    take: Math.max(limit, 20),
+  })
+
+  return rankBookCandidates(books.map(transformLocalBook), input)
+    .slice(0, limit)
+}
+
+async function persistRemoteCover(bookData: any, source: string) {
+  if (!bookData?.coverUrl) return { ...bookData, source }
+
+  const storedCoverUrl = await downloadAndUploadCover(bookData.coverUrl, bookData.name || bookData.isbn || 'book')
+  return {
+    ...bookData,
+    coverUrl: storedCoverUrl || bookData.coverUrl,
+    source,
+    coverStored: Boolean(storedCoverUrl),
+  }
+}
+
+async function updateLocalBookCoverIfMissing(bookId: number | undefined, coverUrl: string) {
+  if (!bookId || !coverUrl) return
+
+  const book = await prisma.book.findUnique({
+    where: { id: bookId },
+    select: { coverUrl: true },
+  })
+
+  if (!book || book.coverUrl) return
+
+  await prisma.book.update({
+    where: { id: bookId },
+    data: { coverUrl },
+  })
+}
+
+function buildReadingLogFromImportRow(row: any, familyId: number, bookId: number, childId?: number | null) {
+  const startPage = firstNumber(pickRowValue(row, ['开始页', '起始页', 'startPage']))
+  const explicitEndPage = firstNumber(pickRowValue(row, ['结束页', '截止页', 'endPage']))
+  const pages = firstNumber(pickRowValue(row, ['阅读页数', '页数', 'pages']))
+  const endPage = explicitEndPage || (startPage && pages ? startPage + pages - 1 : 0)
+  const minutes = firstNumber(pickRowValue(row, ['阅读时长', '时长', '分钟', 'minutes']))
+  const note = pickRowValue(row, ['备注', '心得', '内容', '阅读内容', 'note'])
+  const performance = pickRowValue(row, ['孩子表现', '表现', 'performance'])
+  const effect = pickRowValue(row, ['阅读效果', '效果', 'effect'])
+  const readStage = pickRowValue(row, ['阅读阶段', '阶段', 'readStage'])
+  const evidenceUrl = pickRowValue(row, ['证据链接', '照片', '图片', 'evidenceUrl'])
+
+  if (!startPage && !endPage && !pages && !minutes && !note && !performance && !effect && !readStage) {
+    return null
+  }
+
+  return {
+    familyId,
+    childId: childId || null,
+    bookId,
+    readDate: parseExcelDate(pickRowValue(row, ['阅读日期', '日期', 'readDate'])),
+    startPage,
+    endPage,
+    pages: pages || (startPage && endPage && endPage >= startPage ? endPage - startPage + 1 : 0),
+    minutes,
+    note,
+    performance,
+    effect,
+    readStage,
+    evidenceUrl,
+  }
+}
+
 /**
- * GET /fetch-by-isbn/:isbn - Fetch book info by ISBN from Jisu API
+ * GET /fetch-by-isbn/:isbn - Fetch book info by ISBN from OpenLibrary, fallback to Jisu API
  */
 libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: Response) => {
   let { isbn } = req.params
 
   try {
-    if (!env.JISU_API_KEY) {
-      throw new Error('JISU_API_KEY is not configured')
-    }
-
-    // Clean ISBN: remove spaces and hyphens
-    isbn = isbn.replace(/[\s-]/g, '')
-
-    // Validate ISBN length
+    const familyId = req.user?.familyId
+    let localBook: any = null
+    isbn = cleanIsbn(isbn)
     if (!isbn || (isbn.length !== 10 && isbn.length !== 13)) {
       throw new Error('Invalid ISBN format')
+    }
+
+    if (familyId) {
+      localBook = await findLocalBookByIsbn(familyId, isbn)
+      if (localBook?.coverUrl) {
+        res.json({
+          status: 'success',
+          data: localBook,
+        })
+        return
+      }
+    }
+
+    let openLibraryBook = null
+    try {
+      openLibraryBook = await searchOpenLibraryByIsbn(isbn)
+    } catch (openLibraryError: any) {
+      console.warn(`[OpenLibrary ISBN] ${isbn}:`, openLibraryError.message)
+    }
+    if (openLibraryBook) {
+      const storedBook = await persistRemoteCover(openLibraryBook, 'openlibrary')
+      await updateLocalBookCoverIfMissing(localBook?.id, storedBook.coverUrl)
+      res.json({
+        status: 'success',
+        data: storedBook,
+      })
+      return
+    }
+
+    if (!env.JISU_API_KEY) {
+      res.json({
+        status: 'success',
+        data: localBook || null
+      })
+      return
     }
 
     // Add timeout to fetch - 10 seconds
@@ -112,12 +470,15 @@ libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: 
         publisher: bookData.publisher || '',
         coverUrl: coverUrl,
         totalPages: parseInt(bookData.page) || 0,
+        source: 'jisu',
+        coverStored: Boolean(coverUrl && supabase && env.SUPABASE_STORAGE_BUCKET),
       }
 
       res.json({
         status: 'success',
         data: transformedData,
       })
+      await updateLocalBookCoverIfMissing(localBook?.id, transformedData.coverUrl)
     } catch (fetchError: any) {
       clearTimeout(timeoutId)
       throw fetchError
@@ -150,66 +511,48 @@ libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: 
 })
 
 /**
- * GET /search-by-title/:title - Search books by title from Google Books API
+ * GET /search-by-title/:title - Search books by title from OpenLibrary
  */
 libraryRouter.get('/search-by-title/:title', authMiddleware, async (req: any, res: Response) => {
   const { title } = req.params
+  let localResults: any[] = []
 
   try {
-    // Add timeout to fetch - 5 seconds
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-
-    try {
-      // Call Google Books API to search books (keeping this as Jisu API doesn't support title search)
-      const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title as string)}&maxResults=10&langRestrict=zh`,
-        { signal: controller.signal }
-      )
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error('Failed to search books from Google Books')
-      }
-
-      const searchData = await response.json() as any
-
-      // Transform the data to match our expected format
-      const transformedResults = (searchData.items || []).map((item: any) => {
-        const book = item.volumeInfo || {}
-        return {
-          name: book.title || '',
-          author: book.authors?.join(', ') || '',
-          coverUrl: book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '',
-          totalPages: book.pageCount || 0,
-        }
-      })
-
+    const familyId = req.user?.familyId
+    const matchInput: BookMatchInput = {
+      name: String(title),
+      author: req.query.author ? String(req.query.author) : '',
+      publisher: req.query.publisher ? String(req.query.publisher) : '',
+      publishYear: req.query.publishYear ? String(req.query.publishYear) : '',
+    }
+    localResults = familyId ? await findLocalBooksByMatch(familyId, matchInput, 10) : []
+    const localResultsWithCover = localResults.filter(book => book.coverUrl)
+    if (localResultsWithCover.length > 0) {
       res.json({
         status: 'success',
-        data: transformedResults,
+        data: localResultsWithCover,
       })
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId)
-      
-      // If timeout or network error, return empty results with warning
-      if (fetchError.name === 'AbortError' || fetchError.message?.includes('Failed to fetch') || fetchError.message?.includes('network')) {
-        console.warn('[Title Search] Network timeout or error, returning empty results')
-        res.json({
-          status: 'success',
-          data: [],
-          message: '网络连接较慢，请稍后重试或手动输入'
-        })
-      } else {
-        throw fetchError
-      }
+      return
     }
-  } catch (error: any) {
-    console.error('[Title Search] Error:', error)
-    // Return empty results instead of error to allow manual input
+
+    const onlineResults = await searchOpenLibraryByMatch(matchInput, 10)
+    const transformedResults = []
+    for (const book of onlineResults) {
+      transformedResults.push(await persistRemoteCover(book, 'openlibrary'))
+    }
+    if (transformedResults[0]?.coverUrl && localResults[0]?.id) {
+      await updateLocalBookCoverIfMissing(localResults[0].id, transformedResults[0].coverUrl)
+    }
+
     res.json({
       status: 'success',
-      data: [],
+      data: transformedResults.length > 0 ? transformedResults : localResults,
+    })
+  } catch (error: any) {
+    console.error('[Title Search] Error:', error)
+    res.json({
+      status: 'success',
+      data: localResults,
       message: '搜索服务暂时不可用，请手动输入'
     })
   }
@@ -311,32 +654,57 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
     orderBy: { createdAt: 'desc' },
     include: {
       activeReadings: {
-        where: { status: 'reading' },
+        where: { status: 'reading', ...(parsedChildId ? { childId: parsedChildId } : {}) },
         select: { id: true, childId: true, readPages: true },
       },
       bookReadStates: {
+        where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
         select: { id: true, status: true, finishedAt: true },
       },
       readingLogs: {
-        select: { pages: true, minutes: true },
+        where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
+        orderBy: { readDate: 'desc' },
+        select: { pages: true, minutes: true, readDate: true, endPage: true },
       },
     },
   })
 
+  const progressTotals = await prisma.readingProgressLog.groupBy({
+    by: ['bookId'],
+    where: { familyId, ...(parsedChildId ? { childId: parsedChildId } : {}) },
+    _max: {
+      readDate: true,
+    },
+  })
+  const progressByBookId = new Map(progressTotals.map(item => [item.bookId, item._max]))
+
   // Transform books to match frontend expectations
   const transformedBooks = books.map(book => {
     // Calculate total read pages and minutes
-    const totalReadPages = book.readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0);
-    const totalReadMinutes = book.readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0);
-    
+    const logReadPages = book.readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0)
+    const totalReadMinutes = book.readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0)
+    const progress = progressByBookId.get(book.id)
+    const latestLogReadDate = book.readingLogs[0]?.readDate || null
+
     return {
       ...book,
       readState: book.bookReadStates[0] || null,
-      totalReadPages,
+      totalReadPages: logReadPages,
       totalReadMinutes,
+      lastReadDate: latestLogReadDate || progress?.readDate || null,
       readLogCount: book.readingLogs.length,
-    };
-  });
+    }
+  })
+
+  transformedBooks.sort((a, b) => {
+    const aFinished = a.readState?.status === 'finished' ? 1 : 0
+    const bFinished = b.readState?.status === 'finished' ? 1 : 0
+    if (aFinished !== bFinished) return aFinished - bFinished
+
+    const aTime = new Date(a.lastReadDate || a.updatedAt || a.createdAt || 0).getTime()
+    const bTime = new Date(b.lastReadDate || b.updatedAt || b.createdAt || 0).getTime()
+    return bTime - aTime
+  })
 
   res.json({
     status: 'success',
@@ -346,11 +714,11 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
 
 /**
  * POST / - Create a new book in library
- * Body: { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge, childId }
+ * Body: { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, description, childId }
  */
 libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
-  const { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge, childId } = req.body
+  const { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, description, childId } = req.body
 
   if (!name) {
     throw new AppError(400, '书名不能为空')
@@ -371,6 +739,7 @@ libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthR
       totalPages: totalPages || 0,
       wordCount: wordCount || null,
       characterTag: characterTag || '',
+      description: description || '',
       readCount: 0,
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -399,6 +768,7 @@ libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthR
       totalPages: totalPages || 0,
       wordCount: wordCount || null,
       characterTag: characterTag || '',
+      description: description || '',
       ...(parsedBookChildId && { childId: parsedBookChildId }),
     },
   })
@@ -416,7 +786,7 @@ libraryRouter.post('/', authMiddleware, requireRole('parent'), async (req: AuthR
 libraryRouter.put('/:id', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId } = req.user!
-  const { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, suitableAge } = req.body
+  const { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, description } = req.body
 
   const book = await prisma.book.findFirst({
     where: { id, familyId },
@@ -425,6 +795,8 @@ libraryRouter.put('/:id', authMiddleware, requireRole('parent'), async (req: Aut
   if (!book) {
     throw new AppError(404, '图书不存在')
   }
+
+  const normalizedDescription = typeof description === 'string' ? description.trim() : description
 
   const updatedBook = await prisma.book.update({
     where: { id },
@@ -438,6 +810,7 @@ libraryRouter.put('/:id', authMiddleware, requireRole('parent'), async (req: Aut
       ...(totalPages !== undefined && { totalPages }),
       ...(wordCount !== undefined && { wordCount }),
       ...(characterTag !== undefined && { characterTag }),
+      ...(description !== undefined && { description: normalizedDescription || '' }),
     },
   })
 
@@ -534,11 +907,111 @@ libraryRouter.get('/stats', authMiddleware, requireRole('parent'), async (req: A
 })
 
 /**
+ * POST /refresh-openlibrary - Refresh existing book metadata and covers from OpenLibrary
+ * Body: { limit?, overwrite? }
+ */
+libraryRouter.post('/refresh-openlibrary', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const limit = Math.min(parseInt(String(req.body.limit || '20'), 10) || 20, 100)
+  const overwrite = Boolean(req.body.overwrite)
+  const missingOnly = req.body.missingOnly !== false
+
+  const books = await prisma.book.findMany({
+    where: {
+      familyId,
+      status: 'active',
+      ...(!overwrite && missingOnly ? { coverUrl: '' } : {}),
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: limit,
+    select: {
+      id: true,
+      name: true,
+      author: true,
+      isbn: true,
+      publisher: true,
+      coverUrl: true,
+      totalPages: true,
+    },
+  })
+
+  let matched = 0
+  let updated = 0
+  let failed = 0
+  const samples: any[] = []
+
+  for (const book of books) {
+    try {
+      const openLibraryBook = await findOpenLibraryBook(book)
+      if (!openLibraryBook) {
+        failed++
+        continue
+      }
+
+      matched++
+      const storedOpenLibraryBook = openLibraryBook.coverUrl
+        ? await persistRemoteCover(openLibraryBook, 'openlibrary')
+        : openLibraryBook
+      const data: any = {}
+      if (storedOpenLibraryBook.author && (overwrite || !book.author)) data.author = storedOpenLibraryBook.author
+      if (storedOpenLibraryBook.publisher && (overwrite || !book.publisher)) data.publisher = storedOpenLibraryBook.publisher
+      if (storedOpenLibraryBook.isbn && (overwrite || !book.isbn)) data.isbn = storedOpenLibraryBook.isbn
+      if (storedOpenLibraryBook.coverUrl && (overwrite || !book.coverUrl)) data.coverUrl = storedOpenLibraryBook.coverUrl
+      if (storedOpenLibraryBook.totalPages && (overwrite || !book.totalPages)) data.totalPages = storedOpenLibraryBook.totalPages
+
+      if (Object.keys(data).length > 0) {
+        await prisma.book.update({
+          where: { id: book.id },
+          data,
+        })
+        updated++
+      }
+
+      if (samples.length < 10) {
+        samples.push({
+          id: book.id,
+          name: book.name,
+          matchedName: storedOpenLibraryBook.name,
+          updatedFields: Object.keys(data),
+          coverUrl: data.coverUrl || book.coverUrl,
+        })
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 120))
+    } catch (error: any) {
+      failed++
+      console.error(`[OpenLibrary Refresh] ${book.name}:`, error.message)
+    }
+  }
+
+  res.json({
+    status: 'success',
+    data: {
+      total: books.length,
+      matched,
+      updated,
+      failed,
+      samples,
+    },
+  })
+})
+
+/**
  * GET /:id - Get book details with reading logs
  */
 libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string)
   const { familyId, name } = req.user!
+  let childId = req.query.childId as string | undefined
+
+  if (Array.isArray(childId)) {
+    childId = childId[0]
+  }
+
+  const parsedChildId = childId ? parseInt(childId) : null
+  if (childId && isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
 
   // Handle mock mode
   if (!env.DATABASE_URL) {
@@ -608,13 +1081,15 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
     where: { id, familyId, status: 'active' },
     include: {
       activeReadings: {
-        where: { status: 'reading' },
+        where: { status: 'reading', ...(parsedChildId ? { childId: parsedChildId } : {}) },
         select: { id: true, childId: true, readPages: true },
       },
       bookReadStates: {
+        where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
         select: { id: true, status: true, finishedAt: true },
       },
       readingLogs: {
+        where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
         orderBy: { readDate: 'desc' },
         include: {
           child: { select: { id: true, name: true, avatar: true } }
@@ -627,16 +1102,23 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
     throw new AppError(404, '图书不存在')
   }
 
-  const totalReadPages = book.readingLogs.reduce((sum, log: any) => sum + (log.pages || 0), 0)
+  const progress = await prisma.readingProgressLog.aggregate({
+    where: { familyId, bookId: id, ...(parsedChildId ? { childId: parsedChildId } : {}) },
+    _max: {
+      readDate: true,
+    },
+  })
+
+  const logReadPages = book.readingLogs.reduce((sum, log: any) => sum + (log.pages || 0), 0)
   const totalReadMinutes = book.readingLogs.reduce((sum, log: any) => sum + (log.minutes || 0), 0)
-  const lastReadDate = book.readingLogs[0]?.readDate || null
+  const lastReadDate = book.readingLogs[0]?.readDate || progress._max.readDate || null
 
   res.json({
     status: 'success',
     data: {
       ...book,
       readState: book.bookReadStates[0] || null,
-      totalReadPages,
+      totalReadPages: logReadPages,
       totalReadMinutes,
       lastReadDate,
       readLogCount: book.readingLogs.length,
@@ -679,39 +1161,13 @@ libraryRouter.post('/upload-cover', authMiddleware, requireRole('parent'), uploa
       throw new AppError(400, '请选择要上传的图片')
     }
 
-    if (!supabase || !env.SUPABASE_STORAGE_BUCKET) {
-      throw new AppError(500, '存储服务未配置')
-    }
-
     const fileExt = req.file.originalname.split('.').pop() || 'jpg'
-    const fileName = `covers/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
-
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
-      .upload(fileName, req.file.buffer, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (error) {
-      console.error('[Supabase Upload] Error:', error)
-      throw new AppError(500, '上传失败')
-    }
-
-    // Get the public URL
-    const { data: urlData } = supabase.storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
-      .getPublicUrl(fileName)
-
-    if (!urlData.publicUrl) {
-      throw new AppError(500, '获取图片链接失败')
-    }
+    const coverUrl = await storeCoverBuffer(req.file.buffer, fileExt, req.file.mimetype)
 
     res.json({
       status: 'success',
       data: {
-        coverUrl: urlData.publicUrl
+        coverUrl
       }
     })
   } catch (error: any) {
@@ -778,6 +1234,26 @@ libraryRouter.post('/:id/start', authMiddleware, requireRole('parent'), async (r
       readPages: 0,
       readCount: 0,
       status: 'reading',
+    },
+  })
+
+  await prisma.bookReadState.upsert({
+    where: {
+      childId_bookId: {
+        childId: parsedChildId,
+        bookId,
+      },
+    },
+    update: {
+      status: 'reading',
+      finishedAt: null,
+    },
+    create: {
+      familyId,
+      childId: parsedChildId,
+      bookId,
+      status: 'reading',
+      finishedAt: null,
     },
   })
 
@@ -967,7 +1443,7 @@ libraryRouter.post('/batch/finish', authMiddleware, requireRole('parent'), async
  * Download image from URL and upload to Supabase
  */
 async function downloadAndUploadCover(imageUrl: string, bookName: string): Promise<string> {
-  if (!imageUrl || !supabase || !env.SUPABASE_STORAGE_BUCKET) {
+  if (!imageUrl) {
     return ''
   }
 
@@ -1006,37 +1482,9 @@ async function downloadAndUploadCover(imageUrl: string, bookName: string): Promi
     else if (contentType.includes('gif')) fileExt = 'gif'
     else if (contentType.includes('webp')) fileExt = 'webp'
     
-    // Generate unique filename
-    const sanitizedName = bookName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_').substring(0, 20)
-    const fileName = `covers/import/${sanitizedName}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}.${fileExt}`
-
-    console.log(`[COVER] Uploading to Supabase: ${fileName}`)
-    
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
-      .upload(fileName, imageBuffer, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: contentType || `image/${fileExt}`
-      })
-
-    if (error) {
-      console.error('[COVER] Supabase upload error:', error)
-      return ''
-    }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
-      .getPublicUrl(fileName)
-    
-    if (urlData.publicUrl) {
-      console.log(`[COVER] Success: ${urlData.publicUrl}`)
-      return urlData.publicUrl
-    }
-    
-    return ''
+    const storedUrl = await storeCoverBuffer(imageBuffer, fileExt, contentType || `image/${fileExt}`)
+    console.log(`[COVER] Success: ${storedUrl}`)
+    return storedUrl
   } catch (error: any) {
     console.error(`[COVER] Error processing cover for "${bookName}":`, error.message)
     return ''
@@ -1109,19 +1557,24 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
 
     let imported = 0
     let skipped = 0
+    let matchedBooks = 0
+    let readingLogsCreated = 0
     let coverSuccess = 0
     let coverFailed = 0
-    const batchSize = 10 // Smaller batch for cover processing
-    const booksToCreate: any[] = []
     const totalRows = data.length
 
     // 先获取所有已存在的书籍名称，减少数据库查询次数
     const existingBooks = await prisma.book.findMany({
       where: { familyId },
-      select: { name: true }
+      select: { id: true, name: true, isbn: true }
     })
-    const existingBookNames = new Set(existingBooks.map(book => book.name))
-    console.log(`[IMPORT] Found ${existingBookNames.size} existing books`)
+    const existingBookByKey = new Map<string, { id: number; name: string; isbn: string }>()
+    for (const book of existingBooks) {
+      const isbnKey = cleanIsbn(book.isbn || '')
+      if (isbnKey) existingBookByKey.set(`isbn:${isbnKey}`, book)
+      existingBookByKey.set(`name:${normalizeBookName(book.name)}`, book)
+    }
+    console.log(`[IMPORT] Found ${existingBookByKey.size} existing book keys`)
 
     // 启用分块响应
     res.writeHead(200, {
@@ -1137,11 +1590,9 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
         continue
       }
 
-      // Check if book already exists (using Set for faster lookup)
-      if (existingBookNames.has(String(name))) {
-        skipped++
-        continue
-      }
+      const isbn = cleanIsbn(String(row['ISBN'] || ''))
+      const bookKey = isbn ? `isbn:${isbn}` : `name:${normalizeBookName(String(name))}`
+      let targetBook = existingBookByKey.get(bookKey) || existingBookByKey.get(`name:${normalizeBookName(String(name))}`)
 
       // Map type
       const excelType = row['类型'] || ''
@@ -1174,7 +1625,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
 
       // Download and upload cover if URL exists
       let finalCoverUrl = ''
-      if (coverUrl && (coverUrl.startsWith('http://') || coverUrl.startsWith('https://'))) {
+      if (!targetBook && coverUrl && (coverUrl.startsWith('http://') || coverUrl.startsWith('https://'))) {
         finalCoverUrl = await downloadAndUploadCover(coverUrl, String(name))
         if (finalCoverUrl) {
           coverSuccess++
@@ -1183,58 +1634,61 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
         }
       }
 
-      booksToCreate.push({
-        familyId,
-        childId: childId ? parseInt(childId) : null,
-        name: String(name),
-        author: String(row['作者'] || ''),
-        type: bookType,
-        coverUrl: finalCoverUrl,
-        totalPages: parseInt(row['页数']) || 0,
-        isbn: String(row['ISBN'] || ''),
-        publisher: String(row['出版社'] || ''),
-      })
+      if (!targetBook) {
+        const createdBook = await prisma.book.create({
+          data: {
+            familyId,
+            childId: childId ? parseInt(childId) : null,
+            name: String(name),
+            author: String(row['作者'] || ''),
+            type: bookType,
+            coverUrl: finalCoverUrl,
+            totalPages: parseInt(row['页数']) || 0,
+            isbn,
+            publisher: String(row['出版社'] || ''),
+          },
+          select: { id: true, name: true, isbn: true },
+        })
+        targetBook = createdBook
+        imported++
+        if (isbn) existingBookByKey.set(`isbn:${isbn}`, createdBook)
+        existingBookByKey.set(`name:${normalizeBookName(String(name))}`, createdBook)
+      } else {
+        matchedBooks++
+      }
 
-      // Batch insert
-      if (booksToCreate.length >= batchSize) {
-        await prisma.book.createMany({ data: booksToCreate, skipDuplicates: true })
-        imported += booksToCreate.length
-        booksToCreate.length = 0
-        console.log(`[IMPORT] Batch inserted, total: ${imported}, covers: ${coverSuccess} success, ${coverFailed} failed`)
+      const logData = buildReadingLogFromImportRow(row, familyId, targetBook.id, childId ? parseInt(childId) : null)
+      if (logData) {
+        await prisma.readingLog.create({ data: logData })
+        readingLogsCreated++
+      }
 
-        // 发送进度信息
-        const progress = Math.round((i / totalRows) * 100)
+      if ((i + 1) % 10 === 0 || i === data.length - 1) {
+        const progress = Math.round(((i + 1) / totalRows) * 100)
         res.write(JSON.stringify({
           status: 'progress',
           data: {
             progress,
             imported,
             skipped,
-            processed: i,
+            matchedBooks,
+            readingLogsCreated,
+            processed: i + 1,
             coverSuccess,
             coverFailed
           }
         }) + '\n')
-        // 确保数据立即发送到前端
-        if (res.flush) {
-          res.flush()
-        }
+        if (res.flush) res.flush()
       }
     }
 
-    // Insert remaining books
-    if (booksToCreate.length > 0) {
-      await prisma.book.createMany({ data: booksToCreate, skipDuplicates: true })
-      imported += booksToCreate.length
-    }
-
-    console.log(`[IMPORT] Completed: ${imported} imported, ${skipped} skipped, ${coverSuccess} covers, ${coverFailed} failed`)
+    console.log(`[IMPORT] Completed: ${imported} imported, ${matchedBooks} matched, ${readingLogsCreated} logs, ${skipped} skipped, ${coverSuccess} covers, ${coverFailed} failed`)
 
     // 发送完成信息
     res.write(JSON.stringify({
       status: 'success',
-      message: `导入完成：成功 ${imported} 本，跳过 ${skipped} 本，封面 ${coverSuccess} 个`,
-      data: { imported, skipped, coverSuccess, coverFailed },
+      message: `导入完成：新建 ${imported} 本，匹配 ${matchedBooks} 本，阅读记录 ${readingLogsCreated} 条，跳过 ${skipped} 条，封面 ${coverSuccess} 个`,
+      data: { imported, createdBooks: imported, matchedBooks, readingLogsCreated, skipped, coverSuccess, coverFailed },
     }) + '\n')
 
     res.end()
@@ -1253,4 +1707,3 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
     res.end()
   }
 })
-

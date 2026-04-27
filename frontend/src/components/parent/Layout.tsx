@@ -6,9 +6,9 @@ import {
   ListTodo,
   CalendarDays,
   Library,
-  BookOpen,
   Trophy,
   BarChart3,
+  ChartNoAxesCombined,
   Settings,
   LogOut,
   Menu,
@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import type { Child } from '@/contexts/SelectedChildContext';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const navGroups = [
@@ -43,19 +45,20 @@ const navGroups = [
     id: 'workflow',
     label: '学习主流程',
     items: [
-      { path: '/parent', label: '首页', icon: LayoutDashboard },
+      { path: '/parent/growth-dashboard', label: '仪表盘', icon: ChartNoAxesCombined },
+      { path: '/parent/goals', label: '目标', icon: Target },
+      { path: '/parent', label: '今日概览', icon: LayoutDashboard },
       { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
       { path: '/parent/plans', label: '学习计划', icon: CalendarDays },
       { path: '/parent/library', label: '图书馆', icon: Library },
-      { path: '/parent/reading', label: '阅读', icon: BookOpen },
     ],
   },
   {
     id: 'insight',
+    label: '复盘与激励',
     items: [
-      { path: '/parent/achievements', label: '成就', icon: Trophy },
-      { path: '/parent/statistics', label: '学习统计', icon: BarChart3 },
       { path: '/parent/reports', label: '学习报告', icon: FileText },
+      { path: '/parent/achievements', label: '成就', icon: Trophy },
     ],
   },
   {
@@ -68,13 +71,14 @@ const navGroups = [
 ];
 
 const pageTitleMap: Record<string, string> = {
-  '/parent': '首页',
+  '/parent': '今日概览',
   '/parent/tasks': '任务管理',
   '/parent/task-templates': '任务模板',
   '/parent/plans': '学习计划',
   '/parent/library': '图书馆',
-  '/parent/reading': '阅读管理',
   '/parent/achievements': '成就系统',
+  '/parent/growth-dashboard': '仪表盘',
+  '/parent/goals': '目标',
   '/parent/children': '孩子管理',
   '/parent/statistics': '学习统计',
   '/parent/reports': '学习报告',
@@ -112,6 +116,72 @@ const overlayVariants = {
   open: { opacity: 1 },
 };
 
+function ChildSwitcherButton({
+  childrenList,
+  selectedChild,
+  selectChild,
+  compact = false,
+}: {
+  childrenList: Child[];
+  selectedChild: Child | null;
+  selectChild: (childId: number | null) => void;
+  compact?: boolean;
+}) {
+  if (childrenList.length === 0) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-slate-50',
+            compact ? 'max-w-[116px]' : 'min-w-[148px] max-w-[190px]'
+          )}
+        >
+          <Avatar className="size-7 shrink-0 ring-1 ring-white/80 shadow-sm">
+            <AvatarImage src={selectedChild?.avatar} />
+            <AvatarFallback className="bg-indigo-100 text-[11px] font-semibold text-indigo-700">
+              {selectedChild?.name?.charAt(0) || 'C'}
+            </AvatarFallback>
+          </Avatar>
+          <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold text-slate-900', compact && 'hidden sm:block')}>
+            {selectedChild?.name || '选择孩子'}
+          </span>
+          <ChevronDown className={cn('size-3.5 shrink-0 text-slate-500', compact && 'hidden sm:block')} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44 p-1">
+        {childrenList.map((child) => {
+          const isSelected = selectedChild?.id === child.id;
+          return (
+            <DropdownMenuItem
+              key={child.id}
+              onClick={() => selectChild(child.id)}
+              className={cn(
+                'flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2',
+                isSelected && 'bg-indigo-50 text-primary focus:bg-indigo-50 focus:text-primary'
+              )}
+            >
+              <Avatar className="size-6 ring-1 ring-white/80">
+                <AvatarImage src={child.avatar} />
+                <AvatarFallback className={cn(
+                  'text-[10px] font-semibold',
+                  isSelected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'
+                )}>
+                  {child.name?.charAt(0) || 'C'}
+                </AvatarFallback>
+              </Avatar>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{child.name}</span>
+              {isSelected ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function ParentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -128,39 +198,6 @@ export default function ParentLayout() {
       ? location.pathname === '/parent'
       : location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
-
-  // 模拟通知数据
-  useEffect(() => {
-    // 这里可以从API获取实际的通知数据
-    const mockNotifications = [
-      {
-        id: 1,
-        title: '任务完成提醒',
-        message: '臭沫沫完成了今日的阅读任务',
-        type: 'success',
-        time: '2分钟前',
-        read: false,
-      },
-      {
-        id: 2,
-        title: '学习计划更新',
-        message: '本周学习计划已更新',
-        type: 'info',
-        time: '1小时前',
-        read: false,
-      },
-      {
-        id: 3,
-        title: '成就解锁',
-        message: '小胖子解锁了"连续学习7天"成就',
-        type: 'success',
-        time: '昨天',
-        read: true,
-      },
-    ];
-    setNotifications(mockNotifications);
-    setUnreadCount(mockNotifications.filter(n => !n.read).length);
-  }, []);
 
   const markAsRead = (id: number) => {
     setNotifications(prev => prev.map(n => 
@@ -227,60 +264,6 @@ export default function ParentLayout() {
             </div>
           </div>
         </div>
-
-        {/* Child Selector */}
-        {childrenList.length > 0 && (
-          <div className="px-2.5 pt-2.5 pb-2 flex-shrink-0">
-            <div className="mx-1.5 mb-2 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-gradient-to-r from-slate-50 to-white px-2.5 py-2 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-white">
-                  <Avatar className="size-7 ring-1 ring-white/80 shadow-sm">
-                    <AvatarImage src={selectedChild?.avatar} />
-                    <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[10px] font-semibold">
-                      {selectedChild?.name?.charAt(0) || 'C'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-medium text-slate-900">
-                      {selectedChild?.name || '选择孩子'}
-                    </p>
-                  </div>
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
-                    <ChevronDown className="size-3.5" />
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[150px] p-1">
-                {childrenList.map((child) => {
-                  const isSelected = selectedChild?.id === child.id;
-                  return (
-                    <DropdownMenuItem
-                      key={child.id}
-                      onClick={() => selectChild(child.id)}
-                      className={cn(
-                        'flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer',
-                        isSelected && 'bg-indigo-50 text-primary focus:bg-indigo-50 focus:text-primary'
-                      )}
-                    >
-                      <Avatar className="size-5 ring-1 ring-white/80">
-                        <AvatarImage src={child.avatar} />
-                        <AvatarFallback className={cn(
-                          'text-[9px] font-semibold',
-                          isSelected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'
-                        )}>
-                          {child.name?.charAt(0) || 'C'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="flex-1 truncate text-[12px] font-medium">{child.name}</span>
-                      {isSelected ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
 
         {/* Navigation */}
         <ScrollArea className="flex-1 px-2.5 py-1.5">
@@ -382,6 +365,11 @@ export default function ParentLayout() {
             <h1 className="text-base font-semibold text-foreground">{pageTitle}</h1>
           </div>
           <div className="flex items-center gap-2">
+            <ChildSwitcherButton
+              childrenList={childrenList}
+              selectedChild={selectedChild}
+              selectChild={selectChild}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
@@ -480,88 +468,96 @@ export default function ParentLayout() {
           <div className="min-w-0 text-center">
             <h1 className="font-semibold text-foreground text-sm truncate">{pageTitle}</h1>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground relative">
-                <Bell className="size-4" />
-                {unreadCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                    {unreadCount}
-                  </Badge>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-0">
-              <div className="p-4 border-b border-border">
-                  <div className="flex items-center justify-between mb-1">
-                    <DropdownMenuLabel>通知中心</DropdownMenuLabel>
-                    {unreadCount > 0 && (
-                      <button 
-                        onClick={markAllAsRead}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        全部标为已读
-                      </button>
-                    )}
+          <div className="flex items-center gap-2">
+            <ChildSwitcherButton
+              childrenList={childrenList}
+              selectedChild={selectedChild}
+              selectChild={selectChild}
+              compact
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground relative">
+                  <Bell className="size-4" />
+                  {unreadCount > 0 && (
+                    <Badge className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-0">
+                <div className="p-4 border-b border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <DropdownMenuLabel>通知中心</DropdownMenuLabel>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllAsRead}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          全部标为已读
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      您有 {unreadCount} 条未读通知
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    您有 {unreadCount} 条未读通知
-                  </p>
-                </div>
-              <ScrollArea className="max-h-80">
-                {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    暂无通知
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {notifications.map((notification) => (
-                      <DropdownMenuItem 
-                        key={notification.id}
-                        className={cn(
-                          "px-4 py-3 hover:bg-accent cursor-pointer",
-                          !notification.read && "bg-accent/50"
-                        )}
-                        onClick={() => markAsRead(notification.id)}
-                      >
-                        <div className="flex items-start gap-3 w-full">
-                          <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                            notification.type === 'success' && "bg-green-100 text-green-600",
-                            notification.type === 'info' && "bg-blue-100 text-blue-600",
-                            notification.type === 'warning' && "bg-yellow-100 text-yellow-600",
-                            notification.type === 'error' && "bg-red-100 text-red-600"
-                          )}>
-                            {notification.type === 'success' && <CheckCircle2 className="size-4" />}
-                            {notification.type === 'info' && <MessageSquare className="size-4" />}
-                            {notification.type === 'warning' && <AlertCircle className="size-4" />}
-                            {notification.type === 'error' && <AlertCircle className="size-4" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-foreground truncate">
-                              {notification.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                              {notification.message}
-                            </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="size-3" />
-                                {notification.time}
-                              </span>
-                              {!notification.read && (
-                                <Badge className="text-xs bg-primary text-primary-foreground">未读</Badge>
-                              )}
+                <ScrollArea className="max-h-80">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                      暂无通知
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {notifications.map((notification) => (
+                        <DropdownMenuItem
+                          key={notification.id}
+                          className={cn(
+                            "px-4 py-3 hover:bg-accent cursor-pointer",
+                            !notification.read && "bg-accent/50"
+                          )}
+                          onClick={() => markAsRead(notification.id)}
+                        >
+                          <div className="flex items-start gap-3 w-full">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                              notification.type === 'success' && "bg-green-100 text-green-600",
+                              notification.type === 'info' && "bg-blue-100 text-blue-600",
+                              notification.type === 'warning' && "bg-yellow-100 text-yellow-600",
+                              notification.type === 'error' && "bg-red-100 text-red-600"
+                            )}>
+                              {notification.type === 'success' && <CheckCircle2 className="size-4" />}
+                              {notification.type === 'info' && <MessageSquare className="size-4" />}
+                              {notification.type === 'warning' && <AlertCircle className="size-4" />}
+                              {notification.type === 'error' && <AlertCircle className="size-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm text-foreground truncate">
+                                {notification.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {notification.message}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="size-3" />
+                                  {notification.time}
+                                </span>
+                                {!notification.read && (
+                                  <Badge className="text-xs bg-primary text-primary-foreground">未读</Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         {/* Content */}
