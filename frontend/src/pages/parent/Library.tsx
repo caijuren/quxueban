@@ -254,7 +254,7 @@ export default function LibraryPage() {
     reset,
     formState: { errors },
   } = useForm<BookFormData>({
-    resolver: zodResolver(bookSchema),
+    resolver: zodResolver(bookSchema as never),
     defaultValues: {
       name: '',
       author: '',

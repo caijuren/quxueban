@@ -98,7 +98,7 @@ export default function AchievementsPage() {
   const queryClient = useQueryClient();
 
   const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<AchievementFormData>({
-    resolver: zodResolver(achievementSchema),
+    resolver: zodResolver(achievementSchema as never),
     defaultValues: { name: '', description: '', icon: '🏆', condition: '' }
   });
 
