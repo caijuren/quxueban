@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { PublishPlanDialog } from '@/components/PublishPlanDialog';
 import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles, ClipboardCheck, Calculator, Languages, Dumbbell, BookMarked, Shapes } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, startOfWeek, addWeeks, addDays, isToday, isSameDay } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -494,6 +494,7 @@ export default function PlansPage() {
   const [advancedExportOpen, setAdvancedExportOpen] = useState(false);
   const exportContainerRef = useRef<HTMLDivElement>(null);
   const { selectedChildId, selectedChild } = useSelectedChild();
+  const queryClient = useQueryClient();
   
   const toggleCategory = (category: string) => {
     setCollapsedCategories(prev => ({
@@ -524,6 +525,23 @@ export default function PlansPage() {
     queryFn: () => fetchWeeklyPlan(format(currentWeekStart, 'yyyy-MM-dd'), selectedChildId || undefined),
     staleTime: 5 * 60 * 1000
   });
+
+  const refreshPlanDependents = async () => {
+    await refetchPlans();
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['dashboard-tasks', selectedChildId] }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats', selectedChildId] }),
+      queryClient.invalidateQueries({ queryKey: ['today-checkins', selectedChildId] }),
+    ]);
+  };
+
+  const handlePlanPublished = () => {
+    setCurrentWeekStart(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }));
+    void queryClient.invalidateQueries({ queryKey: ['weekly-plan'] });
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-tasks', selectedChildId] });
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-stats', selectedChildId] });
+    void queryClient.invalidateQueries({ queryKey: ['today-checkins', selectedChildId] });
+  };
 
   if (error) {
     console.error('Error fetching weekly plans:', error);
@@ -867,11 +885,11 @@ export default function PlansPage() {
           childId={parseInt(displayPlan.childId)}
           weekStartDate={currentWeekStart}
           onClose={() => setSelectedTask(null)}
-          onRefresh={() => refetchPlans()}
+          onRefresh={() => void refreshPlanDependents()}
         />
       )}
 
-      <PublishPlanDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} tasks={planTasks} selectedChildId={selectedChildId!} selectedChildName={selectedChild?.name} onSuccess={() => setCurrentWeekStart(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }))} />
+      <PublishPlanDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} tasks={planTasks} selectedChildId={selectedChildId!} selectedChildName={selectedChild?.name} onSuccess={handlePlanPublished} />
 
       {/* Advanced Export Dialog */}
       <AdvancedExportDialog

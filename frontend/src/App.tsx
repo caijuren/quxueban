@@ -14,6 +14,7 @@ import Register from "./pages/Register";
 import ParentLayout from "./components/parent/Layout";
 import ParentDashboard from "./pages/parent/Dashboard";
 import GrowthDashboard from "./pages/parent/GrowthDashboard";
+import AbilityModel from "./pages/parent/AbilityModel";
 import ParentGoals from "./pages/parent/Goals";
 import ParentTasks from "./pages/parent/Tasks";
 import ParentTaskDetail from "./pages/parent/TaskDetail";
@@ -70,6 +71,7 @@ function App() {
                 <Route path="/parent" element={<ParentLayout />}>
                   <Route index data-genie-title="Parent Dashboard" data-genie-key="ParentDashboard" element={<PageTransition transition="slide-up"><ParentDashboard /></PageTransition>} />
                   <Route path="growth-dashboard" data-genie-title="Growth Dashboard" data-genie-key="GrowthDashboard" element={<PageTransition transition="slide-up"><GrowthDashboard /></PageTransition>} />
+                  <Route path="ability-model" data-genie-title="Ability Model" data-genie-key="AbilityModel" element={<PageTransition transition="slide-up"><AbilityModel /></PageTransition>} />
                   <Route path="goals" data-genie-title="Goals" data-genie-key="ParentGoals" element={<PageTransition transition="slide-up"><ParentGoals /></PageTransition>} />
                   <Route path="tasks" data-genie-title="Tasks" data-genie-key="ParentTasks" element={<PageTransition transition="slide-up"><ParentTasks /></PageTransition>} />
                   <Route path="tasks/:id" data-genie-title="Task Detail" data-genie-key="ParentTaskDetail" element={<PageTransition transition="slide-up"><ParentTaskDetail /></PageTransition>} />

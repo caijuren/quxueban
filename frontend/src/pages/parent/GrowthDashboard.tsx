@@ -835,40 +835,39 @@ export default function GrowthDashboard() {
     <div className="mx-auto max-w-[1360px] space-y-5">
       <PageToolbar
         left={
-          <>
-            <div className="flex gap-2">
-              {dashboardTabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => handleTabClick(tab.key)}
-                    className={cn(
-	                      'flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
-	                      activeTab === tab.key
-	                        ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
-	                        : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="hidden h-10 w-px shrink-0 bg-border lg:block" />
-
+          <div className="flex gap-2">
+            {dashboardTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabClick(tab.key)}
+                  className={cn(
+                    'flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
+                    activeTab === tab.key
+                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                      : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        }
+        right={
+          <div className="flex flex-wrap justify-end gap-2">
             <div className="flex gap-2">
               {periods.map((item) => (
                 <button
                   key={item}
                   onClick={() => handlePeriodClick(item)}
                   className={cn(
-	                    'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
-	                    period === item
-	                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
-	                      : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
+                    'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
+                    period === item
+                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                      : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
                   )}
                 >
                   {item}
@@ -922,7 +921,7 @@ export default function GrowthDashboard() {
                 </div>
               </PopoverContent>
             </Popover>
-          </>
+          </div>
         }
       />
 

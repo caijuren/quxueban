@@ -21,6 +21,7 @@ import {
   AlertCircle,
   FileText,
   Target,
+  Brain,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ const navGroups = [
     label: '学习主流程',
     items: [
       { path: '/parent/growth-dashboard', label: '仪表盘', icon: ChartNoAxesCombined },
+      { path: '/parent/ability-model', label: '能力模型', icon: Brain },
       { path: '/parent/goals', label: '目标', icon: Target },
       { path: '/parent', label: '今日概览', icon: LayoutDashboard },
       { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
@@ -78,6 +80,7 @@ const pageTitleMap: Record<string, string> = {
   '/parent/library': '图书馆',
   '/parent/achievements': '成就系统',
   '/parent/growth-dashboard': '仪表盘',
+  '/parent/ability-model': '能力模型',
   '/parent/goals': '目标',
   '/parent/children': '孩子管理',
   '/parent/statistics': '学习统计',

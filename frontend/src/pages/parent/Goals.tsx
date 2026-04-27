@@ -29,6 +29,11 @@ type GoalStatus = 'on-track' | 'attention' | 'strong';
 type GoalItem = {
   title: string;
   description: string;
+  level: string;
+  abilityCategory: string;
+  abilityPoint: string;
+  linkedTasks: string[];
+  reviewCadence: string;
   progress: number;
   target: string;
   current: string;
@@ -59,7 +64,12 @@ const goalSections: GoalSection[] = [
     items: [
       {
         title: '语文阅读理解',
-        description: '本月完成精读与复述训练，提升信息提取和表达能力。',
+        description: '从能力模型的“学科能力/阅读理解”承接，提升信息提取和表达能力。',
+        level: 'L3 三年级',
+        abilityCategory: '学科能力',
+        abilityPoint: '阅读理解',
+        linkedTasks: ['章节精读', '三句话复述', '关键词提取'],
+        reviewCadence: '每周复盘',
         progress: 72,
         target: '每周 4 次',
         current: '已完成 11/16 次',
@@ -68,7 +78,12 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '数学计算稳定性',
-        description: '控制基础计算错误率，形成检查习惯。',
+        description: '从能力模型的“学科能力/数学理解”承接，控制基础计算错误率。',
+        level: 'L3 三年级',
+        abilityCategory: '学科能力',
+        abilityPoint: '数学理解',
+        linkedTasks: ['限时口算', '错因标记', '二次检查'],
+        reviewCadence: '每周复盘',
         progress: 58,
         target: '正确率 90%',
         current: '当前 82%',
@@ -77,7 +92,12 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '英语自然拼读',
-        description: '巩固常见字母组合和短句朗读。',
+        description: '从能力模型的“学科能力/英语启蒙”承接，巩固常见字母组合和短句朗读。',
+        level: 'L2 二年级',
+        abilityCategory: '学科能力',
+        abilityPoint: '英语启蒙',
+        linkedTasks: ['自然拼读卡', '绘本跟读', '短句朗读'],
+        reviewCadence: '双周复盘',
         progress: 81,
         target: '掌握 20 组',
         current: '已掌握 16 组',
@@ -94,7 +114,12 @@ const goalSections: GoalSection[] = [
     items: [
       {
         title: '每周运动达标',
-        description: '保持有氧运动和户外活动频率。',
+        description: '从能力模型的“体育与健康/基础体能”承接，保持有氧运动和户外活动频率。',
+        level: 'L3 三年级',
+        abilityCategory: '体育与健康',
+        abilityPoint: '基础体能',
+        linkedTasks: ['跳绳训练', '户外快走', '核心动作'],
+        reviewCadence: '每周复盘',
         progress: 67,
         target: '每周 5 次',
         current: '已完成 3/5 次',
@@ -103,7 +128,12 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '身体数据跟踪',
-        description: '记录身高、体重和 BMI 变化趋势。',
+        description: '从能力模型的“体育与健康/作息管理”承接，记录身体状态和健康节奏。',
+        level: 'L3 三年级',
+        abilityCategory: '体育与健康',
+        abilityPoint: '作息管理',
+        linkedTasks: ['身高体重记录', '睡眠记录', '周末运动'],
+        reviewCadence: '每月复盘',
         progress: 45,
         target: '每月 2 次',
         current: '已记录 1 次',
@@ -120,7 +150,12 @@ const goalSections: GoalSection[] = [
     items: [
       {
         title: '问题拆解训练',
-        description: '用“问题-原因-方案”结构表达想法。',
+        description: '从能力模型的“思维与认知/问题理解”承接，用结构化方式表达想法。',
+        level: 'L3 三年级',
+        abilityCategory: '思维与认知',
+        abilityPoint: '问题理解',
+        linkedTasks: ['条件标记', '问题复述', '方案比较'],
+        reviewCadence: '每周复盘',
         progress: 76,
         target: '每周 3 次',
         current: '已完成 7/9 次',
@@ -129,7 +164,12 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '创造力表达',
-        description: '通过故事续写、图画表达或搭建任务进行创作。',
+        description: '从能力模型的“思维与认知/表达输出”承接，通过创作任务训练表达。',
+        level: 'L3 三年级',
+        abilityCategory: '思维与认知',
+        abilityPoint: '表达输出',
+        linkedTasks: ['故事续写', '图画表达', '思维导图'],
+        reviewCadence: '双周复盘',
         progress: 62,
         target: '每周 2 次',
         current: '已完成 5/8 次',
@@ -146,7 +186,12 @@ const goalSections: GoalSection[] = [
     items: [
       {
         title: '每日固定学习时段',
-        description: '建立稳定学习节奏，减少临时安排。',
+        description: '从能力模型的“学习习惯/学习计划制定”承接，建立稳定学习节奏。',
+        level: 'L3 三年级',
+        abilityCategory: '学习习惯',
+        abilityPoint: '学习计划制定',
+        linkedTasks: ['每日任务清单', '固定开始时间', '完成后反馈'],
+        reviewCadence: '每周复盘',
         progress: 84,
         target: '连续 21 天',
         current: '已坚持 18 天',
@@ -155,7 +200,12 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '错题复盘',
-        description: '形成错因记录和二次订正习惯。',
+        description: '从能力模型的“学习习惯/复盘与反思”承接，形成错因记录和二次订正习惯。',
+        level: 'L3 三年级',
+        abilityCategory: '学习习惯',
+        abilityPoint: '复盘与反思',
+        linkedTasks: ['错因记录', '二次订正', '错题周记'],
+        reviewCadence: '每周复盘',
         progress: 52,
         target: '每周 4 次',
         current: '已完成 6/12 次',
@@ -204,7 +254,10 @@ function GoalCard({ goal }: { goal: GoalItem }) {
     <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-950">{goal.title}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-950">{goal.title}</h3>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-indigo-600 ring-1 ring-indigo-100">{goal.level}</span>
+          </div>
           <p className="mt-1 text-xs leading-5 text-slate-500">{goal.description}</p>
         </div>
         <Badge variant="outline" className={cn('shrink-0 rounded-full', status.className)}>
@@ -224,9 +277,34 @@ function GoalCard({ goal }: { goal: GoalItem }) {
           <p className="mt-1 font-semibold text-slate-900">{goal.target}</p>
         </div>
       </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg bg-white p-3 text-xs">
+          <p className="font-semibold text-slate-900">关联能力</p>
+          <p className="mt-1 text-slate-500">{goal.abilityCategory} · {goal.abilityPoint}</p>
+        </div>
+        <div className="rounded-lg bg-white p-3 text-xs">
+          <p className="font-semibold text-slate-900">复盘节奏</p>
+          <p className="mt-1 text-slate-500">{goal.reviewCadence}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {goal.linkedTasks.map((task) => (
+          <span key={task} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-100">
+            {task}
+          </span>
+        ))}
+      </div>
       <div className="mt-4 flex gap-2 rounded-lg bg-white p-3 text-xs leading-5 text-slate-600">
         <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
         <span>{goal.suggestion}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white text-xs">
+          查看能力点
+        </Button>
+        <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white text-xs">
+          管理关联任务
+        </Button>
       </div>
     </div>
   );
@@ -305,7 +383,7 @@ export default function GoalsPage() {
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950">目标管理</h1>
               <p className="truncate text-xs text-slate-500 sm:text-sm">
-                {selectedChild?.name || '当前孩子'}的长期目标、阶段进度和调整建议
+                {selectedChild?.name || '当前孩子'}的能力目标、关联任务、阶段进度和复盘建议
               </p>
             </div>
           </div>
@@ -329,7 +407,7 @@ export default function GoalsPage() {
           { label: '综合进度', value: `${averageProgress}%`, hint: '四类目标平均', icon: Target, tone: 'bg-indigo-50 text-indigo-600' },
           { label: '领先目标', value: strongCount, hint: '建议继续强化', icon: Sparkles, tone: 'bg-emerald-50 text-emerald-600' },
           { label: '需关注目标', value: attentionCount, hint: '需要调整策略', icon: HeartPulse, tone: 'bg-amber-50 text-amber-600' },
-          { label: '可获得徽章', value: 3, hint: '本周潜在激励', icon: Award, tone: 'bg-violet-50 text-violet-600' },
+          { label: '关联能力点', value: new Set(allGoals.map(goal => goal.abilityPoint)).size, hint: '来自能力模型', icon: Brain, tone: 'bg-violet-50 text-violet-600' },
         ].map((item) => {
           const Icon = item.icon;
           return (
@@ -421,7 +499,7 @@ export default function GoalsPage() {
               <div>
                 <h2 className="text-base font-semibold text-slate-950">后续数据集成</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  这个页面后续会接入任务完成率、学科数据、阅读记录、运动记录和通知系统。当前先固定页面结构与交互口径，避免数据模型未定时反复返工。
+                  目标页面后续会承接能力模型的能力点，并接入任务完成率、阅读记录、运动记录和复盘数据。当前先固定“能力点 - 目标 - 任务 - 进度”的结构口径。
                 </p>
               </div>
             </div>

@@ -53,6 +53,11 @@ export interface Task {
     parentRole?: string;
     scheduleRule?: ScheduleRule;
     weeklyFrequency?: number;
+    taskKind?: string;
+    level?: string;
+    abilityCategory?: string;
+    abilityPoint?: string;
+    linkedGoal?: string;
   };
   appliesTo?: number[];
   // 精细化记录字段
@@ -80,6 +85,12 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
   '家长陪伴': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
   '家长主导': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
 };
+
+const taskKindOptions = ['学习', '阅读', '运动', '习惯', '生活', '情绪', '社交'];
+const levelOptions = ['L1 一年级', 'L2 二年级', 'L3 三年级', 'L4 四年级', 'L5 五年级'];
+const abilityCategoryOptions = ['学科能力', '思维与认知', '学习习惯', '体育与健康'];
+const abilityPointOptions = ['阅读理解', '数学理解', '英语启蒙', '问题理解', '表达输出', '学习计划制定', '时间管理', '复盘与反思', '学习专注力', '基础体能', '作息管理'];
+const linkedGoalOptions = ['不关联目标', '语文阅读理解', '数学计算稳定性', '每日固定学习时段', '错题复盘', '每周运动达标'];
 
 async function fetchTasks(childId?: number): Promise<Task[]> {
   // 强制传递childId，确保数据隔离
@@ -118,6 +129,11 @@ export default function TasksPage() {
     subject: '语文' as string,
     parentRole: '独立完成' as string,
     difficulty: '基础' as string,
+    taskKind: '学习' as string,
+    level: 'L3 三年级' as string,
+    abilityCategory: '学习习惯' as string,
+    abilityPoint: '学习专注力' as string,
+    linkedGoal: '不关联目标' as string,
     totalUnits: 0,
     completedUnits: 0,
     totalPages: 0,
@@ -201,6 +217,11 @@ export default function TasksPage() {
       subject: '语文',
       parentRole: '独立完成',
       difficulty: '基础',
+      taskKind: '学习',
+      level: 'L3 三年级',
+      abilityCategory: '学习习惯',
+      abilityPoint: '学习专注力',
+      linkedGoal: '不关联目标',
       totalUnits: 0,
       completedUnits: 0,
       totalPages: 0,
@@ -234,6 +255,11 @@ export default function TasksPage() {
       subject: subject,
       parentRole: parentRole,
       difficulty: difficulty,
+      taskKind: task.tags?.taskKind || '学习',
+      level: task.tags?.level || 'L3 三年级',
+      abilityCategory: task.tags?.abilityCategory || '学习习惯',
+      abilityPoint: task.tags?.abilityPoint || '学习专注力',
+      linkedGoal: task.tags?.linkedGoal || '不关联目标',
       totalUnits: 0,
       completedUnits: 0,
       totalPages: 0,
@@ -282,6 +308,11 @@ export default function TasksPage() {
         parentRole: parentRoleMap[formData.parentRole],
         difficulty: difficultyMap[formData.difficulty],
         scheduleRule: formData.scheduleRule,
+        taskKind: formData.taskKind,
+        level: formData.level,
+        abilityCategory: formData.abilityCategory,
+        abilityPoint: formData.abilityPoint,
+        linkedGoal: formData.linkedGoal,
       },
       appliesTo: selectedChildId ? [selectedChildId] : [],
     });
@@ -326,6 +357,11 @@ export default function TasksPage() {
           parentRole: parentRoleMap[formData.parentRole],
           difficulty: difficultyMap[formData.difficulty],
           scheduleRule: formData.scheduleRule,
+          taskKind: formData.taskKind,
+          level: formData.level,
+          abilityCategory: formData.abilityCategory,
+          abilityPoint: formData.abilityPoint,
+          linkedGoal: formData.linkedGoal,
         },
         appliesTo: selectedChildId ? [selectedChildId] : [],
       }
@@ -424,6 +460,9 @@ export default function TasksPage() {
       const parentRole = parentRoleReverseMap[task.tags.parentRole as string] || task.tags.parentRole;
       tags.push(parentRole);
     }
+    if (task.tags?.level) tags.push(task.tags.level);
+    if (task.tags?.abilityPoint) tags.push(task.tags.abilityPoint);
+    if (task.tags?.linkedGoal && task.tags.linkedGoal !== '不关联目标') tags.push(task.tags.linkedGoal);
     return tags.map(tag => {
       const config = tagConfig[tag];
       const Icon = config?.icon || BookOpen;
@@ -474,6 +513,9 @@ export default function TasksPage() {
     if (task.tags?.subject) score += 12;
     if (task.tags?.parentRole) score += 10;
     if (task.tags?.difficulty) score += 8;
+    if (task.tags?.level) score += 6;
+    if (task.tags?.abilityPoint) score += 8;
+    if (task.tags?.linkedGoal && task.tags.linkedGoal !== '不关联目标') score += 8;
     if (task.scheduleRule || task.tags?.scheduleRule) score += 10;
     if (task.trackingType && task.trackingType !== 'simple') score += 8;
     if (task.targetValue) score += 10;
@@ -521,6 +563,62 @@ export default function TasksPage() {
       tone: 'bg-rose-50 text-rose-600',
     },
   ];
+
+  const renderBusinessLinkFields = () => (
+    <div className="space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
+      <div>
+        <Label className="text-sm font-semibold text-slate-800">1.6 业务关联</Label>
+        <p className="mt-1 text-xs text-slate-500">用于承接能力模型和目标，后续会参与计划推荐、报告复盘和能力回流。</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-600">任务类型</Label>
+          <Select value={formData.taskKind} onValueChange={(value) => setFormData({ ...formData, taskKind: value })}>
+            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {taskKindOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-600">适用年级</Label>
+          <Select value={formData.level} onValueChange={(value) => setFormData({ ...formData, level: value })}>
+            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {levelOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-600">能力分类</Label>
+          <Select value={formData.abilityCategory} onValueChange={(value) => setFormData({ ...formData, abilityCategory: value })}>
+            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {abilityCategoryOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-600">能力点</Label>
+          <Select value={formData.abilityPoint} onValueChange={(value) => setFormData({ ...formData, abilityPoint: value })}>
+            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {abilityPointOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-slate-600">关联目标</Label>
+        <Select value={formData.linkedGoal} onValueChange={(value) => setFormData({ ...formData, linkedGoal: value })}>
+          <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+          <SelectContent className="rounded-xl">
+            {linkedGoalOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
 
   const trendPoints = [56, 63, 59, 68, 72, 70, Math.max(taskHealthScore, 48)];
   const trendPath = trendPoints.map((point, index) => {
@@ -1076,6 +1174,9 @@ export default function TasksPage() {
               </div>
             </div>
 
+            {/* 1.6业务关联 */}
+            {renderBusinessLinkFields()}
+
             {/* 总单元数 */}
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">总单元数</Label>
@@ -1447,6 +1548,9 @@ export default function TasksPage() {
                 </Button>
               </div>
             </div>
+
+            {/* 1.6业务关联 */}
+            {renderBusinessLinkFields()}
 
             {/* 总单元数 */}
             <div className="space-y-2">

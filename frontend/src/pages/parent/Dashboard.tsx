@@ -581,13 +581,6 @@ export default function ParentDashboard() {
         right={
           <>
           <DatePicker value={selectedDate} onChange={setSelectedDate} className="w-[190px]" />
-	          <Button
-	            onClick={() => navigate('/parent/plans')}
-		            className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 px-4 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
-	          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            安排计划
-          </Button>
           <Button onClick={handleShareToDingTalk} className="h-11 rounded-xl bg-blue-500 px-4 text-white shadow-sm hover:bg-blue-600">
             <Send className="mr-1.5 h-4 w-4" />
             钉钉

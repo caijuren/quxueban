@@ -3,6 +3,7 @@ import { prisma } from '../config/database'
 import { env } from '../config/env'
 
 export const systemRouter: Router = Router()
+const APP_VERSION = '1.6.0'
 
 // ============================================
 // System & Health Routes
@@ -14,7 +15,7 @@ export const systemRouter: Router = Router()
 systemRouter.get('/', async (_req: Request, res: Response) => {
   res.json({
     message: 'Welcome to the API',
-    version: '1.0.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString(),
     documentation: '/api/docs', // TODO: Add API documentation
   })
@@ -83,7 +84,7 @@ systemRouter.get('/health/live', async (_req: Request, res: Response) => {
  */
 systemRouter.get('/version', async (_req: Request, res: Response) => {
   res.json({
-    version: '1.0.0',
+    version: APP_VERSION,
     apiVersion: 'v1',
     nodeVersion: process.version,
     environment: process.env.NODE_ENV || 'development',
