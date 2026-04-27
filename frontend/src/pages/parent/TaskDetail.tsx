@@ -14,6 +14,7 @@ import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { EmptyPanel, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // 类型定义
 type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
@@ -295,10 +296,10 @@ export default function TaskDetail() {
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto pb-24">
-        <div className="mt-6 space-y-6">
+      <div className="mx-auto max-w-[1360px] pb-24">
+        <div className="space-y-5">
           <Skeleton className="h-10 w-48" />
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <CardContent className="p-6 space-y-4">
               <Skeleton className="h-8 w-32" />
               <Skeleton className="h-6 w-64" />
@@ -314,33 +315,40 @@ export default function TaskDetail() {
 
   if (error || !task) {
     return (
-      <div className="max-w-4xl mx-auto pb-24">
-        <div className="mt-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">任务不存在</h2>
-          <Button onClick={() => navigate('/parent/tasks')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            返回任务列表
-          </Button>
-        </div>
+      <div className="mx-auto max-w-[1360px] pb-24">
+        <EmptyPanel
+          icon={AlertTriangle}
+          title="任务不存在"
+          description="该任务可能已经删除，或当前孩子没有访问权限。"
+          action={<Button onClick={() => navigate('/parent/tasks')}><ArrowLeft className="w-4 h-4" />返回任务列表</Button>}
+        />
       </div>
     );
   }
 
   return (
-    <div className="page-container">
-      {/* Header */}
-      <div className="mt-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
+    <div className="mx-auto max-w-[1360px] space-y-5 pb-24">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={BookOpen}
+            title={task.name}
+            description="查看任务配置、执行规则、累计进度和历史记录"
+          />
+        }
+        right={
+          <>
           <Button 
             variant="outline" 
+            className="h-11 rounded-xl bg-white"
             onClick={() => navigate('/parent/tasks')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             返回任务列表
           </Button>
-          <div className="flex gap-2">
             <Button 
               variant="outline" 
+              className="h-11 rounded-xl bg-white"
               onClick={() => setIsEditingTask(!isEditingTask)}
               disabled={updateTaskMutation.isPending}
             >
@@ -351,17 +359,17 @@ export default function TaskDetail() {
               variant="outline" 
               onClick={() => pushTaskToDingtalkMutation.mutate()}
               disabled={pushTaskToDingtalkMutation.isPending}
-              className="text-green-600 border-green-200 hover:bg-green-50"
+              className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50"
             >
               <Send className="w-4 h-4 mr-2" />
               钉钉推送
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
         
         {!isEditingTask ? (
           <>
-            <h1 className="page-title">{task.name}</h1>
             <div className="flex flex-wrap gap-2">
               <span className={cn('text-sm px-3 py-1 rounded-full border font-medium', subjectColor(task.tags.subject))}>
                 {subjectReverseMap[task.tags.subject || ''] || '其他'}
@@ -379,7 +387,7 @@ export default function TaskDetail() {
             </div>
 
             <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-xs text-muted-foreground">分配规则</div>
                 <div className="mt-2 text-base font-semibold text-foreground">{ruleLabel(task.scheduleRule || task.tags?.scheduleRule)}</div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -389,19 +397,19 @@ export default function TaskDetail() {
                   {(task.scheduleRule || task.tags?.scheduleRule) === 'weekend' && '周六 / 周日安排'}
                 </p>
               </div>
-              <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-xs text-muted-foreground">单次时长</div>
                 <div className="mt-2 text-base font-semibold text-foreground">{task.timePerUnit} 分钟</div>
                 <p className="mt-1 text-xs text-muted-foreground">每次执行的建议时长</p>
               </div>
-              <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-xs text-muted-foreground">累计进度</div>
                 <div className="mt-2 text-base font-semibold text-foreground">
                   {task.totalCompleted || 0} / {task.totalTarget || 0} {task.initialUnit || '页'}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">基于当前累计记录自动计算</p>
               </div>
-              <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-xs text-muted-foreground">适用孩子</div>
                 <div className="mt-2 text-base font-semibold text-foreground">{task.appliesTo?.length || 0} 个</div>
                 <p className="mt-1 text-xs text-muted-foreground">当前任务的分配对象数量</p>
@@ -409,7 +417,7 @@ export default function TaskDetail() {
             </div>
           </>
         ) : (
-          <Card className="task-card mb-6">
+          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
             <CardHeader>
               <CardTitle>编辑任务</CardTitle>
               <p className="text-sm text-muted-foreground">修改基础信息、执行规则和进阶配置。</p>
@@ -650,12 +658,11 @@ export default function TaskDetail() {
             </CardContent>
           </Card>
         )}
-      </div>
 
       {!isEditingTask && (
         <>
           {/* Task Info */}
-          <Card className="task-card mb-6">
+          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
             <CardHeader>
               <div className='flex items-start justify-between gap-4'>
                 <div>
@@ -670,7 +677,7 @@ export default function TaskDetail() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-                <div className='flex items-center gap-3 p-4 bg-gray-50 rounded-2xl'>
+                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
                   <div className='w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center'>
                     <Clock className='w-4 h-4 text-primary' />
                   </div>
@@ -680,7 +687,7 @@ export default function TaskDetail() {
                   </div>
                 </div>
 
-                <div className='flex items-center gap-3 p-4 bg-gray-50 rounded-2xl'>
+                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
                   <div className='w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center'>
                     <Target className='w-4 h-4 text-primary' />
                   </div>
@@ -696,7 +703,7 @@ export default function TaskDetail() {
                   </div>
                 </div>
 
-                <div className='flex items-center gap-3 p-4 bg-gray-50 rounded-2xl'>
+                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
                   <div className='w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center'>
                     <BookOpen className='w-4 h-4 text-emerald-600' />
                   </div>
@@ -708,7 +715,7 @@ export default function TaskDetail() {
                   </div>
                 </div>
 
-                <div className='flex items-center gap-3 p-4 bg-gray-50 rounded-2xl'>
+                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
                   <div className='w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center'>
                     <BarChart3 className='w-4 h-4 text-blue-600' />
                   </div>
@@ -722,7 +729,7 @@ export default function TaskDetail() {
           </Card>
 
           {/* Initial Data Setting */}
-          <Card className="task-card mb-6">
+          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
             <CardHeader>
               <div className='flex items-center justify-between'>
                 <div>
@@ -802,7 +809,7 @@ export default function TaskDetail() {
           </Card>
 
           {/* Task History */}
-          <Card className="task-card mb-6">
+          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
             <CardHeader>
               <CardTitle>任务历史</CardTitle>
             </CardHeader>
@@ -819,7 +826,7 @@ export default function TaskDetail() {
           </Card>
 
           {/* Danger Zone */}
-          <Card className="task-card border-red-200 bg-red-50/50">
+          <Card className="rounded-xl border border-red-200 bg-red-50/50 shadow-sm">
             <CardHeader>
               <CardTitle className='text-red-700'>危险操作</CardTitle>
             </CardHeader>
@@ -842,7 +849,7 @@ export default function TaskDetail() {
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
+        <AlertDialogContent className="rounded-2xl border border-slate-200 shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold text-red-600 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-destructive flex items-center justify-center">

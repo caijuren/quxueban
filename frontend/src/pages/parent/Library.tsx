@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import type { ReactNode } from 'react';
+import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Import components
 import { BookCard, BookFilter, EmptyState } from '@/components/parent/library';
@@ -743,7 +744,35 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-5">
+    <div className="mx-auto max-w-[1360px] space-y-5">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={LibraryIcon}
+            title="图书馆"
+            description={`${selectedChild?.name || '当前孩子'}的书库、阅读状态和图书导入管理`}
+          />
+        }
+        right={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
+              className="h-11 rounded-xl bg-white"
+            >
+              <Upload className="mr-1.5 size-4" />
+              导入
+            </Button>
+            <Button
+              onClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')}
+              className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
+            >
+              <Plus className="mr-1.5 size-4" />
+              添加图书
+            </Button>
+          </>
+        }
+      />
       <section className="grid gap-4 xl:grid-cols-[1fr_280px]">
         <div className="grid gap-5 rounded-2xl border border-border bg-white p-5 shadow-sm md:grid-cols-4">
           <LibraryMetric

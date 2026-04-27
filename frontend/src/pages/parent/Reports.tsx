@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 type ReportType = 'weekly' | 'monthly' | 'semester' | 'subject' | 'time' | 'behavior' | 'custom';
 
@@ -654,17 +655,22 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">学习报告</h1>
-          <p className="mt-2 text-sm text-slate-500">生成多维度学习报告，沉淀学习情况，辅助成长复盘。</p>
-        </div>
-        <Button variant="outline" size="sm" className="w-fit">
-          <Sparkles className="h-4 w-4" />
-          AI 助手
-        </Button>
-      </header>
+    <div className="mx-auto max-w-[1360px] space-y-5">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={FileText}
+            title="学习报告"
+            description={`${childName}的多维度学习报告、阶段复盘和后续建议`}
+          />
+        }
+        right={
+          <Button variant="outline" className="h-11 rounded-xl bg-white">
+            <Sparkles className="h-4 w-4" />
+            AI 助手
+          </Button>
+        }
+      />
 
       <Card className="rounded-lg py-0 hover:shadow-sm">
         <CardContent className="p-5">

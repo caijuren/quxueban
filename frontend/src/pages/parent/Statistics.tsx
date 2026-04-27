@@ -30,8 +30,10 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // ============================================
 // 统一视觉规范 - Design Token
@@ -230,7 +232,7 @@ function KPICard({ title, value, subtitle, icon, color, bgColor, trend, delay = 
 export default function StatisticsPage() {
   const [timeFilter, setTimeFilter] = useState<typeof TIME_FILTERS[number]['value']>('week');
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const { selectedChildId } = useSelectedChild();
+  const { selectedChildId, selectedChild } = useSelectedChild();
   
   const currentFilter = TIME_FILTERS.find(f => f.value === timeFilter);
   
@@ -246,7 +248,7 @@ export default function StatisticsPage() {
   
   if (isLoadingStats || isLoadingTrends) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1360px] space-y-5">
         <Skeleton className="h-16 rounded-2xl" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
@@ -264,50 +266,48 @@ export default function StatisticsPage() {
   const summary = stats?.summary;
   
   return (
-    <div className="space-y-6 pb-8">
-      {/* Page Control Bar */}
-      <div className="bg-muted/40 border border-border/70 rounded-2xl p-4 mb-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Empty space for alignment */}
-          <div className="flex-1"></div>
-          
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* 全局时间筛选器 - 核心功能 */}
-            <div className="flex items-center bg-white rounded-lg p-0.5 shadow-sm">
+    <div className="mx-auto max-w-[1360px] space-y-5 pb-8">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={PieChartIcon}
+            title="统计分析"
+            description={`${selectedChild?.name || '当前孩子'}的任务完成、时间投入和阶段趋势`}
+          />
+        }
+        right={
+          <>
+            <div className="flex h-11 items-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
               {TIME_FILTERS.map(filter => (
                 <button
                   key={filter.value}
                   onClick={() => setTimeFilter(filter.value)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`h-9 rounded-lg px-4 text-sm font-semibold transition-all ${
                     timeFilter === filter.value
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-foreground hover:bg-muted/50'
+                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm'
+                      : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {filter.label}
                 </button>
               ))}
             </div>
-            
-            {/* 导出按钮 */}
             <div className="relative">
-              <button
+              <Button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted/50 transition-colors shadow-sm"
+                className="h-11 rounded-xl bg-emerald-500 px-4 text-white shadow-sm hover:bg-emerald-600"
               >
                 <Download className="w-4 h-4" />
-                <span>导出周报</span>
+                <span>导出</span>
                 <ChevronDown className="w-4 h-4" />
-              </button>
-              
+              </Button>
               <AnimatePresence>
                 {showExportMenu && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-40 bg-white border border-border rounded-lg shadow-lg overflow-hidden z-50"
+                    className="absolute right-0 z-50 mt-2 w-40 overflow-hidden rounded-lg border border-border bg-white shadow-lg"
                   >
                     <button className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50">
                       导出为 PNG
@@ -319,9 +319,9 @@ export default function StatisticsPage() {
                 )}
               </AnimatePresence>
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
       {/* ==================== 顶部 KPI 看板 ==================== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard

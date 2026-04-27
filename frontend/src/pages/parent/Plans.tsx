@@ -15,6 +15,7 @@ import { Calendar as DayPickerCalendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AdvancedExportDialog, AdvancedExportConfig, ChildOption } from '@/components/AdvancedExportDialog';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { FilterBar, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 interface TaskAllocation {
   taskId: string;
@@ -594,30 +595,17 @@ export default function PlansPage() {
   ];
 
   return (
-    <div className="space-y-4" id="weekly-plan-view">
-      {/* Page Control Bar */}
-      <div className="bg-muted/50 border border-border rounded-lg p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Category Filter Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
-            {categories.map((category) => (
-              <button
-                key={category.value}
-                onClick={() => setSelectedCategory(category.value)}
-                className={cn(
-                  'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
-                  selectedCategory === category.value
-                    ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
-                    : 'bg-white text-slate-700 hover:bg-slate-50'
-                )}
-              >
-                {category.label}
-              </button>
-            ))}
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2">
+    <div className="mx-auto max-w-[1360px] space-y-5" id="weekly-plan-view">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={CalendarDays}
+            title="学习计划"
+            description={`${selectedChild?.name || '当前孩子'}的周计划安排、任务分配和执行进度`}
+          />
+        }
+        right={
+          <>
             {/* 推送按钮 - 只在有计划数据时显示 */}
             {displayPlan && displayPlan.childId !== "0" && (
               <button
@@ -694,9 +682,26 @@ export default function PlansPage() {
               <Plus className="size-4 mr-1.5" />
               <span className="text-sm">发布计划</span>
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
+
+      <FilterBar>
+        {categories.map((category) => (
+          <button
+            key={category.value}
+            onClick={() => setSelectedCategory(category.value)}
+            className={cn(
+              'h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-all duration-200',
+              selectedCategory === category.value
+                ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+            )}
+          >
+            {category.label}
+          </button>
+        ))}
+      </FilterBar>
 
       {/* Calendar View */}
       {plansLoading ? (

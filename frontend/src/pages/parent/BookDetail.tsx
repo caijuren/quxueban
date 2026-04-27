@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { EmptyPanel } from '@/components/parent/PageToolbar';
 
 interface ReadingLog {
   id: number;
@@ -324,12 +325,12 @@ export default function BookDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="mx-auto max-w-[1360px] space-y-5">
         <Skeleton className="h-10 w-56 rounded-xl" />
-        <Skeleton className="h-72 w-full rounded-3xl" />
+        <Skeleton className="h-72 w-full rounded-xl" />
         <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
-          <Skeleton className="h-80 rounded-3xl" />
-          <Skeleton className="h-80 rounded-3xl" />
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
         </div>
       </div>
     );
@@ -337,21 +338,26 @@ export default function BookDetailPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-red-500 font-medium">加载失败</p>
-        <p className="text-gray-500 text-sm mt-2">{getErrorMessage(error)}</p>
-        <p className="text-gray-400 text-xs mt-1">书籍ID: {id}</p>
-        <Button onClick={() => navigate('/parent/library')} className="mt-4">返回图书馆</Button>
+      <div className="mx-auto max-w-[1360px]">
+        <EmptyPanel
+          icon={FileText}
+          title="书籍加载失败"
+          description={`${getErrorMessage(error)} · 书籍ID: ${id}`}
+          action={<Button onClick={() => navigate('/parent/library')}>返回图书馆</Button>}
+        />
       </div>
     );
   }
 
   if (!book) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-gray-500">书籍不存在</p>
-        <p className="text-gray-400 text-xs mt-1">书籍ID: {id}</p>
-        <Button onClick={() => navigate('/parent/library')} className="mt-4">返回图书馆</Button>
+      <div className="mx-auto max-w-[1360px]">
+        <EmptyPanel
+          icon={FileText}
+          title="书籍不存在"
+          description={`书籍ID: ${id}`}
+          action={<Button onClick={() => navigate('/parent/library')}>返回图书馆</Button>}
+        />
       </div>
     );
   }
@@ -392,7 +398,7 @@ export default function BookDetailPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1480px] space-y-4 text-slate-900">
+    <div className="mx-auto max-w-[1360px] space-y-5 text-slate-900">
       <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
         <Button variant="ghost" size="icon" onClick={() => navigate('/parent/library')} className="size-9 rounded-lg">
           <ArrowLeft className="size-5" />
@@ -401,7 +407,7 @@ export default function BookDetailPage() {
       </div>
 
       <div className="space-y-4">
-        <Card className="overflow-hidden rounded-2xl border-slate-200/80 bg-white shadow-sm">
+        <Card className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <CardContent className="p-0">
             <div className="grid gap-6 p-6 lg:grid-cols-[170px_minmax(0,1fr)_220px] md:p-8">
               <div className="h-[236px] w-[166px] overflow-hidden rounded-xl bg-gradient-to-br from-indigo-200 to-violet-500 shadow-xl">
@@ -445,8 +451,8 @@ export default function BookDetailPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <Button onClick={() => setShowAddForm(true)} className="h-11 rounded-xl bg-purple-600 text-white hover:bg-purple-700">
+              <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <Button onClick={() => setShowAddForm(true)} className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
                   <Plus className="mr-2 size-4" /> 阅读记录
                 </Button>
                 <Button variant="outline" onClick={openEditBook} className="h-11 rounded-xl bg-white">
@@ -467,7 +473,7 @@ export default function BookDetailPage() {
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <CardContent className="p-6 md:p-8">
               <h2 className="text-base font-bold text-slate-950">阅读状态</h2>
               <div className="mt-5 grid grid-cols-2 gap-3">
@@ -480,7 +486,7 @@ export default function BookDetailPage() {
                 <InfoStat label="最近阅读" value={lastReadDate ? new Date(lastReadDate).toLocaleDateString('zh-CN') : '未记录'} />
               </div>
               <div className="mt-6 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-purple-600" style={{ width: `${progress}%` }} />
+                <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
               </div>
             </CardContent>
           </Card>
@@ -563,7 +569,7 @@ export default function BookDetailPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="fixed inset-x-4 top-8 bottom-8 lg:inset-auto lg:top-1/2 lg:-translate-y-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:w-[560px] lg:max-h-[84vh] bg-white rounded-3xl shadow-2xl z-50 p-6 overflow-auto"
+            className="fixed inset-x-4 bottom-8 top-8 z-50 overflow-auto rounded-2xl bg-white p-6 shadow-2xl lg:inset-auto lg:left-1/2 lg:top-1/2 lg:max-h-[84vh] lg:w-[560px] lg:-translate-x-1/2 lg:-translate-y-1/2"
           >
             <h3 className="text-lg font-semibold text-slate-950">添加阅读记录</h3>
             <p className="mt-1 text-sm text-slate-500">记录这次阅读的时间、进度、效果和孩子表现。</p>
@@ -590,7 +596,7 @@ export default function BookDetailPage() {
               }}
               className="mt-5 space-y-5"
             >
-              <div className="rounded-2xl border border-purple-100 bg-purple-50/60 p-4">
+              <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-4">
                 <p className="mb-3 text-sm font-semibold text-purple-900">阅读时间</p>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <label className="group relative block">
@@ -695,8 +701,8 @@ export default function BookDetailPage() {
               </label>
 
               <div className="sticky bottom-0 -mx-1 flex gap-3 bg-white/95 px-1 pt-2 backdrop-blur">
-                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="h-12 flex-1 rounded-2xl border-slate-200 text-slate-700">取消</Button>
-                <Button type="submit" disabled={addMutation.isPending} className="h-12 flex-1 rounded-2xl bg-purple-600 text-white hover:bg-purple-700">保存记录</Button>
+                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="h-11 flex-1 rounded-xl border-slate-200 text-slate-700">取消</Button>
+                <Button type="submit" disabled={addMutation.isPending} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">保存记录</Button>
               </div>
             </form>
           </motion.div>
@@ -726,7 +732,7 @@ export default function BookDetailPage() {
       {/* Delete Reading Log Confirmation */}
       {logToDelete && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setLogToDelete(null)}>
-          <Card className="border-0 shadow-2xl rounded-3xl max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-sm rounded-2xl border border-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <CardContent className="p-6 text-center">
               <p className="text-gray-700 mb-4">确定删除这条阅读记录吗？</p>
               <div className="flex gap-3">
@@ -747,7 +753,7 @@ export default function BookDetailPage() {
 
       {selectedLog && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedLog(null)}>
-          <Card className="w-full max-w-lg rounded-3xl border-0 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-950">阅读记录详情</h3>
               <div className="mt-4 grid gap-3 text-sm text-slate-700">
@@ -772,7 +778,7 @@ export default function BookDetailPage() {
 
       {showChapterManager && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowChapterManager(false)}>
-          <Card className="w-full max-w-lg rounded-3xl border-0 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-950">章节目录</h3>
               <p className="mt-1 text-sm text-slate-500">每行一个章节，只作用于《{book.name}》。添加阅读记录时可直接选择。</p>
@@ -793,7 +799,7 @@ export default function BookDetailPage() {
                 >
                   整理章节
                 </Button>
-                <Button onClick={handleSaveChapters} className="h-11 flex-1 rounded-xl bg-purple-600 text-white hover:bg-purple-700">保存目录</Button>
+                <Button onClick={handleSaveChapters} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">保存目录</Button>
               </div>
             </CardContent>
           </Card>
@@ -803,7 +809,7 @@ export default function BookDetailPage() {
       {/* P1-9: 笔记编辑对话框 */}
       {showNotesForm && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowNotesForm(false)}>
-          <Card className="border-0 shadow-2xl rounded-3xl max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <FileText className="size-5 text-green-500" />
@@ -820,7 +826,7 @@ export default function BookDetailPage() {
                 <Button variant="outline" onClick={() => setShowNotesForm(false)} className="flex-1 rounded-xl">
                   取消
                 </Button>
-                <Button onClick={handleSaveNotes} className="flex-1 rounded-xl bg-green-500 hover:bg-green-600 text-white">
+                <Button onClick={handleSaveNotes} className="flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">
                   保存笔记
                 </Button>
               </div>

@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import AccountSettings from './settings/AccountSettings';
 import ChildrenManagement from './settings/ChildrenManagement';
 import FamilySettings from './settings/FamilySettings';
+import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 type UserInfo = {
   id: number;
@@ -240,32 +241,40 @@ export default function SettingsPage() {
     const DetailComponent = detailMode === 'account' ? AccountSettings : detailMode === 'family' ? FamilySettings : ChildrenManagement;
 
     return (
-      <div className="mx-auto max-w-[1280px] space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-normal">{detailTitle}</h1>
-            <p className="mt-2 text-sm text-slate-500">从设置总览进入的详细配置页面</p>
-          </div>
-          <Button variant="outline" className="rounded-lg" onClick={() => navigate('/parent/settings/account')}>
+      <div className="mx-auto max-w-[1360px] space-y-5">
+        <PageToolbar
+          left={
+            <PageToolbarTitle
+              icon={Settings}
+              title={detailTitle}
+              description="从设置总览进入的详细配置页面"
+            />
+          }
+          right={<Button variant="outline" className="h-11 rounded-xl bg-white" onClick={() => navigate('/parent/settings/account')}>
             返回总览
-          </Button>
-        </div>
+          </Button>}
+        />
         <DetailComponent />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1480px] space-y-5 text-slate-950">
-      <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-normal">设置</h1>
-          <p className="mt-2 text-sm font-medium text-slate-500">管理您的账户、家庭和个性化设置</p>
-        </div>
-        <button className="relative flex h-10 w-10 items-center justify-center self-start rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm">
-          <Bell className="h-4 w-4" />
-        </button>
-      </header>
+    <div className="mx-auto max-w-[1360px] space-y-5 text-slate-950">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={Settings}
+            title="设置"
+            description="管理您的账户、家庭和个性化设置"
+          />
+        }
+        right={
+          <Button variant="outline" size="icon" className="bg-white" aria-label="通知">
+            <Bell className="h-4 w-4" />
+          </Button>
+        }
+      />
 
       <SectionCard>
         <h2 className="text-lg font-bold">快速导航</h2>

@@ -35,6 +35,7 @@ import {
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { EmptyPanel, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Types
 interface Achievement {
@@ -188,25 +189,25 @@ export default function AchievementsPage() {
   const totalUnlocks = achievements?.reduce((sum, a) => sum + (a.unlockedChildren?.length || 0), 0) || 0;
 
   return (
-    <div className="space-y-6">
-      {/* Page Control Bar */}
-      <div className="bg-muted/50 border border-border rounded-lg p-4 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Empty space for alignment */}
-          <div className="flex-1"></div>
-          
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <Button
-              onClick={openCreateDialog}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
-            >
-              <Plus className="size-4 mr-1.5" />
-              <span className="text-sm">添加成就</span>
-            </Button>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-[1360px] space-y-5">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={Trophy}
+            title="成就管理"
+            description="管理长期激励规则，查看孩子的成就解锁情况"
+          />
+        }
+        right={
+          <Button
+            onClick={openCreateDialog}
+            className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
+          >
+            <Plus className="size-4 mr-1.5" />
+            <span className="text-sm">添加成就</span>
+          </Button>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -216,7 +217,7 @@ export default function AchievementsPage() {
           { label: '已解锁', value: totalUnlocks, gradient: 'from-amber-500 to-yellow-500' }
         ].map((stat, index) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
-            <Card className="border-0 shadow-lg shadow-gray-200/50 rounded-2xl overflow-hidden">
+            <Card className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <CardContent className="p-5 text-center relative overflow-hidden">
                 <div className={cn("absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-10 rounded-full -translate-y-8 translate-x-8", stat.gradient)} />
                 <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
@@ -231,7 +232,7 @@ export default function AchievementsPage() {
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="border-0 shadow-sm rounded-3xl">
+            <Card key={i} className="rounded-xl border border-slate-200 bg-white shadow-sm">
               <CardContent className="p-5">
                 <div className="flex gap-4">
                   <Skeleton className="size-16 rounded-2xl" />
@@ -245,7 +246,7 @@ export default function AchievementsPage() {
             </Card>
           ))}
         </div>
-      ) : (
+      ) : achievements && achievements.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {achievements?.map((achievement, index) => (
             <motion.div
@@ -254,7 +255,7 @@ export default function AchievementsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              <Card className={cn('group overflow-hidden border-0 shadow-lg shadow-gray-200/50 rounded-3xl transition-all', !achievement.isActive && 'opacity-60')}>
+              <Card className={cn('group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md', !achievement.isActive && 'opacity-60')}>
                 <div className={cn('h-1.5', achievement.isActive ? 'bg-primary' : 'bg-gray-200')} />
                 <CardContent className="p-5">
                   <div className="flex gap-4">
@@ -318,20 +319,13 @@ export default function AchievementsPage() {
             </motion.div>
           ))}
         </div>
-      )}
-
-      {/* Empty State */}
-      {!isLoading && (!achievements || achievements.length === 0) && (
-        <Card className="border-0 shadow-lg rounded-3xl">
-          <CardContent className="py-16 text-center">
-            <div className="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
-              <Trophy className="size-10 text-gray-400" />
-            </div>
-            <h3 className="font-semibold text-gray-900 text-lg">还没有创建成就</h3>
-            <p className="text-gray-500 mt-1">创建成就来激励孩子学习</p>
-            <Button onClick={openCreateDialog} className="mt-4 rounded-xl bg-primary text-primary-foreground">添加成就</Button>
-          </CardContent>
-        </Card>
+      ) : (
+        <EmptyPanel
+          icon={Trophy}
+          title="还没有创建成就"
+          description="创建成就来激励孩子学习，后续会从任务、阅读和目标中自动解锁。"
+          action={<Button onClick={openCreateDialog}><Plus className="size-4" />添加成就</Button>}
+        />
       )}
 
       {/* Add/Edit Dialog */}
@@ -339,7 +333,7 @@ export default function AchievementsPage() {
         {dialogOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={closeDialog} />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-4 lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[480px] lg:max-h-[85vh] bg-white rounded-3xl shadow-2xl z-50 overflow-hidden flex flex-col">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-4 z-50 flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl lg:inset-auto lg:left-1/2 lg:top-1/2 lg:max-h-[85vh] lg:w-[480px] lg:-translate-x-1/2 lg:-translate-y-1/2">
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-100">
                 <h2 className="text-xl font-bold text-gray-900">{editingAchievement ? '编辑成就' : '添加成就'}</h2>
@@ -382,10 +376,10 @@ export default function AchievementsPage() {
 
               {/* Footer */}
               <div className="p-6 border-t border-gray-100 space-y-3">
-                <Button type="submit" form="achievement-form" disabled={createMutation.isPending || updateMutation.isPending} className="w-full h-12 rounded-xl text-base font-semibold bg-primary text-primary-foreground shadow-sm">
+                <Button type="submit" form="achievement-form" disabled={createMutation.isPending || updateMutation.isPending} className="h-11 w-full rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-base font-semibold text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
                   {editingAchievement ? '保存修改' : '创建成就'}
                 </Button>
-                <Button type="button" variant="outline" className="w-full h-12 rounded-xl" onClick={closeDialog}>取消</Button>
+                <Button type="button" variant="outline" className="h-11 w-full rounded-xl" onClick={closeDialog}>取消</Button>
               </div>
             </motion.div>
           </>
@@ -394,7 +388,7 @@ export default function AchievementsPage() {
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
+        <AlertDialogContent className="rounded-2xl border border-slate-200 shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl">确认删除</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-500">确定要删除成就「{achievementToDelete?.name}」吗？此操作无法撤销。</AlertDialogDescription>

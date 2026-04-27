@@ -25,7 +25,7 @@ import {
   TimerReset,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PageToolbar } from '@/components/parent/PageToolbar';
+import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -411,24 +411,18 @@ export default function AbilityModel() {
     <div className="mx-auto w-full max-w-[1360px] space-y-5">
       <PageToolbar
         left={
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
-              <Brain className="size-6" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold tracking-tight text-slate-950">能力模型</h1>
-                <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">L1-L5</span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">按一年级到五年级梳理能力要求，观察掌握状态和下一步建议。</p>
-            </div>
-          </div>
+          <PageToolbarTitle
+            icon={Brain}
+            title="能力模型"
+            description="按一年级到五年级梳理能力要求，观察掌握状态和下一步建议。"
+            badge={<span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">L1-L5</span>}
+          />
         }
         right={
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-9 min-w-[132px] justify-center rounded-lg border-indigo-100 bg-white px-3 text-center text-slate-700 hover:bg-indigo-50">
+                <Button variant="outline" className="h-11 min-w-[132px] justify-center rounded-xl border-indigo-100 bg-white px-3 text-center text-slate-700 hover:bg-indigo-50">
                   <span className="text-center whitespace-nowrap">
                     {currentLevel.shortName} {currentLevel.name}
                   </span>
@@ -450,11 +444,11 @@ export default function AbilityModel() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" className="rounded-lg border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
+            <Button variant="outline" className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
               <FileText className="mr-2 size-4" />
               导出报告
             </Button>
-            <Button className="rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
+            <Button className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
               <PenLine className="mr-2 size-4" />
               编辑模型
             </Button>

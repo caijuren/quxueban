@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import {
   BookOpen,
   Clock,
+  Library,
   TrendingUp,
   Plus,
   Minus,
@@ -27,6 +28,7 @@ import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { EmptyPanel, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Types
 interface ActiveReading {
@@ -157,7 +159,7 @@ export default function ReadingPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1360px] space-y-5">
         <Skeleton className="h-[74px] rounded-lg" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -174,30 +176,25 @@ export default function ReadingPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Control Bar */}
-      <section className="bg-muted/50 border border-border rounded-lg p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
-            <span className="px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg bg-primary text-white shadow-sm">
-              阅读中心
-            </span>
-            <span className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-foreground">
-              {selectedChild?.name || '当前孩子'}
-            </span>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={() => navigate('/parent/library')}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
-            >
-              <BookOpen className="w-4 h-4 mr-1.5" />
-              <span className="text-sm">去图书馆选书</span>
-            </Button>
-          </div>
-        </div>
-      </section>
+    <div className="mx-auto max-w-[1360px] space-y-5">
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={BookOpen}
+            title="阅读中心"
+            description={`${selectedChild?.name || '当前孩子'}的在读书籍、阅读进度和阶段记录`}
+          />
+        }
+        right={
+          <Button
+            onClick={() => navigate('/parent/library')}
+            className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
+          >
+            <BookOpen className="w-4 h-4 mr-1.5" />
+            <span className="text-sm">去图书馆选书</span>
+          </Button>
+        }
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -262,19 +259,12 @@ export default function ReadingPage() {
 
       {/* Reading List */}
       {readings.length === 0 ? (
-        <div className="text-center py-16 bg-white/60 rounded-3xl border border-dashed border-gray-200">
-          <div className="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <BookOpen className="w-10 h-10 text-gray-400" />
-          </div>
-          <h3 className="font-semibold text-gray-900 text-lg">暂无在读图书</h3>
-          <p className="text-gray-500 mt-1">先去图书馆挑一本书，再回来持续记录阅读进度。</p>
-          <Button
-            onClick={() => navigate('/parent/library')}
-            className="mt-4 rounded-xl bg-primary text-primary-foreground"
-          >
-            去图书馆选书
-          </Button>
-        </div>
+        <EmptyPanel
+          icon={Library}
+          title="暂无在读图书"
+          description="先去图书馆挑一本书，再回来持续记录阅读进度。"
+          action={<Button onClick={() => navigate('/parent/library')}>去图书馆选书</Button>}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {readings.map((reading, index) => {
@@ -375,7 +365,7 @@ export default function ReadingPage() {
 
       {/* Update Progress Dialog */}
       <AlertDialog open={progressDialogOpen} onOpenChange={setProgressDialogOpen}>
-        <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
+        <AlertDialogContent className="rounded-2xl border border-slate-200 shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl">更新阅读进度</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-500">
@@ -404,7 +394,7 @@ export default function ReadingPage() {
             <AlertDialogAction
               onClick={handleSubmitProgress}
               disabled={progressMutation.isPending}
-              className="bg-purple-500 hover:bg-purple-600 rounded-xl h-11"
+              className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
             >
               {progressMutation.isPending ? '更新中...' : '确认更新'}
             </AlertDialogAction>
@@ -414,7 +404,7 @@ export default function ReadingPage() {
 
       {/* Stop Reading Dialog */}
       <AlertDialog open={stopDialogOpen} onOpenChange={setStopDialogOpen}>
-        <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
+        <AlertDialogContent className="rounded-2xl border border-slate-200 shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl">确认停止阅读？</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-500">

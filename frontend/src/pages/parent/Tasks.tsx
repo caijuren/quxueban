@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ExportDialog } from '@/components/ExportDialog';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
+import { EmptyPanel, FilterBar, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
 type TaskType = '固定' | '灵活' | '跟随学校';
@@ -710,7 +711,32 @@ export default function TasksPage() {
   );
 
 	  return (
-	    <div className="mx-auto max-w-[1360px] space-y-6" ref={pageRef}>
+	    <div className="mx-auto max-w-[1360px] space-y-5" ref={pageRef}>
+      <PageToolbar
+        left={
+          <PageToolbarTitle
+            icon={ListTodo}
+            title="任务管理"
+            description={`${selectedChild?.name || '当前孩子'}的任务池、能力关联和计划同步状态`}
+          />
+        }
+        right={
+          <>
+            <Button onClick={() => setExportDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-emerald-500 text-white shadow-sm hover:bg-emerald-600">
+              <Download className="mr-1.5 size-4" />
+              导出
+            </Button>
+            <Button onClick={() => setUpdatePlanDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-blue-500 text-white shadow-sm hover:bg-blue-600">
+              <RefreshCw className="mr-1.5 size-4" />
+              同步计划
+            </Button>
+            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+              <Plus className="mr-1.5 size-4" />
+              新建任务
+            </Button>
+          </>
+        }
+      />
 	      <section className="space-y-5">
 
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -806,40 +832,22 @@ export default function TasksPage() {
         </div>
       </section>
 
-      <div className="rounded-lg border border-violet-100 bg-gradient-to-r from-pink-50 via-violet-50 to-indigo-50 p-4 shadow-sm">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+      <FilterBar>
             {tabItems.map((item) => (
               <button
                 key={item.key}
                 onClick={() => setActiveTab(item.key)}
                 className={cn(
-                  'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
+                  'h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-all duration-200',
                   activeTab === item.key
-                    ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
-                    : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
+                    ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                 )}
               >
                 {item.label}
               </button>
             ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setExportDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-emerald-500 text-white shadow-sm hover:bg-emerald-600">
-              <Download className="mr-1.5 size-4" />
-              导出任务
-            </Button>
-            <Button onClick={() => setUpdatePlanDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-blue-500 text-white shadow-sm hover:bg-blue-600">
-              <RefreshCw className="mr-1.5 size-4" />
-              同步计划
-            </Button>
-            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
-              <Plus className="mr-1.5 size-4" />
-              新建任务
-            </Button>
-          </div>
-        </div>
-      </div>
+      </FilterBar>
 
       {/* Task Grid */}
       {isLoading ? (
@@ -851,11 +859,12 @@ export default function TasksPage() {
       ) : (
         <div>
           {tasks.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
-              <ListTodo className="mx-auto size-10 text-slate-300" />
-              <h2 className="mt-4 text-base font-semibold text-slate-900">还没有任务</h2>
-              <p className="mt-2 text-sm text-slate-500">先创建几个任务，运营看板就会开始有内容。</p>
-            </div>
+            <EmptyPanel
+              icon={ListTodo}
+              title="还没有任务"
+              description="先创建几个任务，运营看板和学习计划就会开始有内容。"
+              action={<Button onClick={() => { resetForm(); setCreateDialogOpen(true); }}><Plus className="size-4" />新建任务</Button>}
+            />
           ) : (
             <>
               {activeTab === 'all' && renderTaskCollection(tasks)}
