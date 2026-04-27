@@ -71,8 +71,10 @@ export const createApp = (): Application => {
   app.use(`${env.API_PREFIX}/ai`, aiRouter)
   app.use(`${env.API_PREFIX}/upload`, uploadRouter)
 
-  // Serve uploaded files statically
+  // Serve uploaded files statically. The /api/uploads alias works behind nginx
+  // configs that only proxy /api to the backend.
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+  app.use(`${env.API_PREFIX}/uploads`, express.static(path.join(__dirname, '../uploads')))
 
   // Internal routes for quality monitoring dashboard - 暂时禁用
   // app.use(`${env.API_PREFIX}/internal`, internalRouter)

@@ -135,6 +135,77 @@ function LineChartMock() {
   );
 }
 
+type ReadingDailyTrendPoint = {
+  date: string;
+  records: number;
+  minutes: number;
+  pages: number;
+  completionRate: number;
+};
+
+function ReadingTrendChart({ data }: { data: ReadingDailyTrendPoint[] }) {
+  const chartData = data.length > 0 ? data : [{ date: '--', records: 0, minutes: 0, pages: 0, completionRate: 0 }];
+  const width = 360;
+  const points = chartData.map((item, index) => {
+    const x = chartData.length === 1 ? width - 24 : 24 + (index * (width - 48)) / (chartData.length - 1);
+    const y = 144 - (Math.min(item.completionRate, 100) / 100) * 112;
+    return { ...item, x, y };
+  });
+  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`).join(' ');
+  const areaPath = `${linePath} L${points[points.length - 1].x} 156 L${points[0].x} 156 Z`;
+  const latest = points[points.length - 1];
+  const labelStep = Math.max(1, Math.ceil(points.length / 7));
+
+  return (
+    <svg viewBox="0 0 360 180" className="h-44 w-full overflow-visible">
+      <defs>
+        <linearGradient id="readingTrendFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.20" />
+          <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0, 1, 2, 3].map((i) => (
+        <line key={i} x1="18" x2="342" y1={34 + i * 34} y2={34 + i * 34} stroke="#edf0f6" strokeWidth="1" />
+      ))}
+      <path d={areaPath} fill="url(#readingTrendFill)" />
+      <path d={linePath} fill="none" stroke="#6366f1" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((point) => (
+        <circle key={point.date} cx={point.x} cy={point.y} r="4" fill={point.records > 0 ? '#6366f1' : '#cbd5e1'} />
+      ))}
+      {points.map((point, index) => (
+        <text key={point.date} x={point.x} y="178" textAnchor="middle" className="fill-slate-400 text-[10px]">
+          {index % labelStep === 0 ? point.date.slice(5) : ''}
+        </text>
+      ))}
+      <rect x={Math.max(0, latest.x - 28)} y={Math.max(10, latest.y - 26)} width="56" height="20" rx="10" fill="#eef2ff" />
+      <text x={Math.max(28, latest.x)} y={Math.max(24, latest.y - 12)} textAnchor="middle" className="fill-indigo-600 text-[10px] font-semibold">
+        {latest.records}次
+      </text>
+    </svg>
+  );
+}
+
+function ReadingMinutesBars({ data }: { data: ReadingDailyTrendPoint[] }) {
+  const chartData = data.length > 0 ? data : [{ date: '--', records: 0, minutes: 0, pages: 0, completionRate: 0 }];
+  const maxMinutes = Math.max(...chartData.map(item => item.minutes), 1);
+  const labelStep = Math.max(1, Math.ceil(chartData.length / 7));
+
+  return (
+    <div className="mt-5 flex h-44 items-end justify-between gap-2">
+      {chartData.map((item, index) => (
+        <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <div
+            className="w-full rounded-t-lg bg-gradient-to-t from-indigo-500 to-indigo-300"
+            style={{ height: `${Math.max(4, (item.minutes / maxMinutes) * 100)}%`, opacity: item.minutes > 0 ? 1 : 0.25 }}
+            title={`${item.date} · ${item.minutes}分钟`}
+          />
+          <span className="text-[10px] text-muted-foreground">{index % labelStep === 0 ? item.date.slice(5) : ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CompletionTrendChart({ data }: { data: CompletionTrendPoint[] }) {
   const chartData = data.length > 0 ? data : [{ date: '--', rate: 0, planned: 0, completed: 0 }];
   const width = 360;
@@ -184,10 +255,10 @@ const fallbackTimeItems: Array<[string, string, string, string]> = [
     ['其他', '20分钟', '16%', 'bg-purple-500'],
 ];
 
-function TimeDistribution({ items = fallbackTimeItems, total = '125' }: { items?: Array<[string, string, string, string]>; total?: string }) {
+function TimeDistribution({ items = fallbackTimeItems, total = '125', label = '分钟' }: { items?: Array<[string, string, string, string]>; total?: string; label?: string }) {
   return (
     <div className="flex items-center gap-5">
-      <DonutChart value={total} label="分钟" colors={['#6366f1', '#22c55e', '#f59e0b', '#a855f7']} />
+      <DonutChart value={total} label={label} colors={['#6366f1', '#22c55e', '#f59e0b', '#a855f7']} />
       <div className="flex-1 space-y-3">
         {items.map(([name, time, pct, color]) => (
           <div key={name} className="flex items-center justify-between text-sm">
@@ -238,6 +309,71 @@ function RadarChartMock() {
         return <text key={label} x={coords[0]} y={coords[1]} textAnchor="middle" className="fill-slate-500 text-[10px]">{label}</text>;
       })}
     </svg>
+  );
+}
+
+function ReadingRadarChart({ items }: { items: ReadingRadarItem[] }) {
+  const chartItems = items.length > 0 ? items : [
+    { label: '持续度', value: 0, note: '' },
+    { label: '阅读投入', value: 0, note: '' },
+    { label: '类型广度', value: 0, note: '' },
+    { label: '进度记录', value: 0, note: '' },
+    { label: '复盘质量', value: 0, note: '' },
+  ];
+  const center = { x: 120, y: 110 };
+  const maxRadius = 86;
+  const axisPoints = chartItems.map((_, index) => {
+    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / chartItems.length;
+    return {
+      x: center.x + Math.cos(angle) * maxRadius,
+      y: center.y + Math.sin(angle) * maxRadius,
+      angle,
+    };
+  });
+  const valuePoints = chartItems.map((item, index) => {
+    const radius = (Math.min(item.value, 100) / 100) * maxRadius;
+    return {
+      x: center.x + Math.cos(axisPoints[index].angle) * radius,
+      y: center.y + Math.sin(axisPoints[index].angle) * radius,
+    };
+  });
+
+  return (
+    <div>
+      <svg viewBox="0 0 240 220" className="mx-auto h-56 w-full max-w-xs">
+        <defs>
+          <linearGradient id="readingRadarFill" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.12" />
+          </linearGradient>
+        </defs>
+        {[0.35, 0.65, 1].map((ratio) => (
+          <polygon
+            key={ratio}
+            points={axisPoints.map(point => `${center.x + Math.cos(point.angle) * maxRadius * ratio},${center.y + Math.sin(point.angle) * maxRadius * ratio}`).join(' ')}
+            fill="none"
+            stroke="#e5e7eb"
+          />
+        ))}
+        {axisPoints.map((point) => (
+          <line key={`${point.x}-${point.y}`} x1={center.x} y1={center.y} x2={point.x} y2={point.y} stroke="#e5e7eb" />
+        ))}
+        <polygon points={valuePoints.map(point => `${point.x},${point.y}`).join(' ')} fill="url(#readingRadarFill)" stroke="#6366f1" strokeWidth="3" />
+        {chartItems.map((item, index) => {
+          const point = axisPoints[index];
+          const labelX = center.x + Math.cos(point.angle) * (maxRadius + 20);
+          const labelY = center.y + Math.sin(point.angle) * (maxRadius + 20);
+          return <text key={item.label} x={labelX} y={labelY} textAnchor="middle" className="fill-slate-500 text-[10px]">{item.label}</text>;
+        })}
+      </svg>
+      <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+        {chartItems.map(item => (
+          <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2">
+            <span className="font-semibold text-slate-900">{item.label} {item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -325,6 +461,45 @@ type ReadingStats = {
   weekReadCount: number;
   monthReadCount: number;
   rangeReadCount?: number;
+  libraryBookCount?: number;
+  totalMinutes?: number;
+  totalPages?: number;
+  finishedInRange?: number;
+  dailyTrend?: ReadingDailyTrendPoint[];
+  categoryDistribution?: ReadingCategoryItem[];
+  topBooks?: ReadingTopBook[];
+  radar?: ReadingRadarItem[];
+  rules?: {
+    dailyTrend: string;
+    dailyMinutes: string;
+    categoryDistribution: string;
+    topBooks: string;
+    radar: string;
+  };
+};
+
+type ReadingCategoryItem = {
+  label: string;
+  records: number;
+  minutes: number;
+  pages: number;
+  percentage: number;
+};
+
+type ReadingTopBook = {
+  id: number;
+  name: string;
+  records: number;
+  minutes: number;
+  pages: number;
+  coverUrl: string;
+  scoreLabel: string;
+};
+
+type ReadingRadarItem = {
+  label: string;
+  value: number;
+  note: string;
 };
 
 type DateRange = { startDate: string; endDate: string };
@@ -694,13 +869,24 @@ function MoodView() {
   );
 }
 
+const categoryColors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-400', 'bg-purple-500', 'bg-rose-500'];
+
 function ReadingView({ stats, readingStats }: { stats?: DashboardStats; readingStats?: ReadingStats }) {
+  const dailyTrend = readingStats?.dailyTrend || [];
+  const categoryItems: Array<[string, string, string, string]> = (readingStats?.categoryDistribution || []).map((item, index) => [
+    item.label,
+    item.minutes > 0 ? `${item.minutes}分钟` : `${item.records}次`,
+    `${item.percentage}%`,
+    categoryColors[index % categoryColors.length],
+  ]);
+  const categoryTotal = String(readingStats?.totalMinutes && readingStats.totalMinutes > 0 ? readingStats.totalMinutes : readingStats?.rangeReadCount || 0);
+  const categoryLabel = readingStats?.totalMinutes && readingStats.totalMinutes > 0 ? '分钟' : '次';
   const readingMetrics: MetricCardItem[] = [
     { label: '正在阅读', value: String(readingStats?.readingCount || 0), suffix: '本', note: '当前在读', icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: '本周记录', value: String(readingStats?.weekReadCount || 0), suffix: '次', note: '阅读打卡', icon: Clock3, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: '本月记录', value: String(readingStats?.monthReadCount || 0), suffix: '次', note: '阅读打卡', icon: CalendarDays, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: '当前范围', value: String(readingStats?.rangeReadCount ?? stats?.todayReadingCount ?? 0), suffix: '次', note: '范围记录', icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
-    { label: '在库书籍', value: String(stats?.booksRead || 0), suffix: '本', note: '累计书籍', icon: ShieldCheck, color: 'text-rose-500', bg: 'bg-rose-50' },
+    { label: '所选范围记录', value: String(readingStats?.rangeReadCount ?? stats?.todayReadingCount ?? 0), suffix: '次', note: '按上方时间范围统计', icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
+    { label: '书库总量', value: String(readingStats?.libraryBookCount ?? stats?.booksRead ?? 0), suffix: '本', note: '当前家庭已收录图书', icon: ShieldCheck, color: 'text-rose-500', bg: 'bg-rose-50' },
   ];
 
   return (
@@ -710,36 +896,47 @@ function ReadingView({ stats, readingStats }: { stats?: DashboardStats; readingS
       <div className="grid gap-5 xl:grid-cols-2">
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">每日阅读完成趋势</h2>
-          <LineChartMock />
+          <ReadingTrendChart data={dailyTrend} />
+          <p className="mt-2 text-xs text-muted-foreground">{readingStats?.rules?.dailyTrend || '每天有阅读记录记为完成。'}</p>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">每日阅读时长（分钟）</h2>
-          <div className="mt-5 flex h-44 items-end justify-between gap-3">
-            {[40, 68, 56, 44, 78, 50].map((h, index) => (
-              <div key={index} className="flex flex-1 flex-col items-center gap-2">
-                <div className="w-full rounded-t-lg bg-gradient-to-t from-indigo-500 to-indigo-300" style={{ height: `${h}%` }} />
-                <span className="text-[10px] text-muted-foreground">06.{21 + index}</span>
-              </div>
-            ))}
-          </div>
+          <ReadingMinutesBars data={dailyTrend} />
+          <p className="mt-2 text-xs text-muted-foreground">{readingStats?.rules?.dailyMinutes || '按阅读记录时长汇总。'}</p>
         </DashboardCard>
       </div>
       <div className="grid gap-5 xl:grid-cols-3">
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">阅读类型分布</h2>
-          <div className="mt-4"><TimeDistribution /></div>
+          <div className="mt-4">
+            {categoryItems.length > 0 ? (
+              <TimeDistribution items={categoryItems} total={categoryTotal} label={categoryLabel} />
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">所选范围暂无阅读记录。</div>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">总量单位：{categoryLabel}。{readingStats?.rules?.categoryDistribution}</p>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">阅读书籍 TOP5</h2>
           <div className="mt-4 space-y-3">
-            {['昆虫记', '中国历史故事', '十万个为什么', '小王子', '窗边的小豆豆'].map((book, index) => (
-              <div key={book} className="flex items-center justify-between text-sm"><span><b className="mr-2 text-primary">{index + 1}</b>{book}</span><span className="text-muted-foreground">{56 - index * 6}页</span></div>
-            ))}
+            {(readingStats?.topBooks || []).length > 0 ? (
+              readingStats!.topBooks!.map((book, index) => (
+                <div key={book.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate"><b className="mr-2 text-primary">{index + 1}</b>{book.name}</span>
+                  <span className="shrink-0 text-muted-foreground">{book.scoreLabel}</span>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">所选范围暂无阅读记录。</div>
+            )}
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">{readingStats?.rules?.topBooks || '优先按阅读时长排序。'}</p>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">阅读能力雷达</h2>
-          <RadarChartMock />
+          <ReadingRadarChart items={readingStats?.radar || []} />
+          <p className="mt-2 text-xs text-muted-foreground">{readingStats?.rules?.radar || '由阅读记录实时计算。'}</p>
         </DashboardCard>
       </div>
     </>

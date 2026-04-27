@@ -10,6 +10,7 @@ import {
   Brain,
   FileText,
   Edit3,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -84,12 +85,25 @@ async function addReadingLog(bookId: number, log: Partial<ReadingLog>): Promise<
   return data.data;
 }
 
+async function updateReadingLog(id: number, log: Partial<ReadingLog>): Promise<ReadingLog> {
+  const { data } = await apiClient.put(`/reading-logs/logs/${id}`, log);
+  return data.data;
+}
+
 async function deleteReadingLog(id: number): Promise<void> {
   await apiClient.delete(`/reading-logs/logs/${id}`);
 }
 
 async function deleteBook(bookId: number): Promise<void> {
   await apiClient.delete(`/library/${bookId}`);
+}
+
+async function markBookFinished(bookId: number, childId: number): Promise<void> {
+  await apiClient.post(`/library/${bookId}/state`, {
+    childId,
+    status: 'finished',
+    finishedAt: new Date().toISOString(),
+  });
 }
 
 async function fetchChildSemesterConfig(childId: number): Promise<ChildSemesterConfig | null> {
@@ -182,6 +196,10 @@ function buildReadingNote(chapter: string, remark: string) {
   return parts.join('\n');
 }
 
+function formatBookTitle(name: string) {
+  return name.trim().replace(/^《(.+)》$/, '$1');
+}
+
 function InfoStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -213,6 +231,7 @@ export default function BookDetailPage() {
   const [showNotesForm, setShowNotesForm] = useState(false);
   const [notesInput, setNotesInput] = useState('');
   const [selectedLog, setSelectedLog] = useState<ReadingLog | null>(null);
+  const [editingLog, setEditingLog] = useState<ReadingLog | null>(null);
   const [chapterInput, setChapterInput] = useState('');
   const [selectedChapter, setSelectedChapter] = useState('');
   const [readingDate, setReadingDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -270,8 +289,23 @@ export default function BookDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['book', id] });
       queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['growth-dashboard-reading-stats'] });
       toast.success('阅读记录添加成功');
       setSelectedChapter('');
+      setShowAddForm(false);
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ logId, log }: { logId: number; log: Partial<ReadingLog> }) => updateReadingLog(logId, log),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['book', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['growth-dashboard-reading-stats'] });
+      toast.success('阅读记录已更新');
+      setSelectedChapter('');
+      setEditingLog(null);
       setShowAddForm(false);
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -282,8 +316,20 @@ export default function BookDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['book', id] });
       queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['growth-dashboard-reading-stats'] });
       toast.success('阅读记录删除成功');
       setLogToDelete(null);
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const finishMutation = useMutation({
+    mutationFn: () => markBookFinished(Number(id), selectedChildId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['book', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['growth-dashboard-reading-stats'] });
+      toast.success('已标记为读完');
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -321,6 +367,30 @@ export default function BookDetailPage() {
     localStorage.setItem(chapterStorageKey, JSON.stringify(nextChapters));
     setShowChapterManager(false);
     toast.success(`章节目录已保存，共识别 ${nextChapters.length} 个章节`);
+  };
+
+  const openAddReadingLog = () => {
+    setEditingLog(null);
+    setSelectedChapter('');
+    setReadingDate(new Date().toISOString().split('T')[0]);
+    setShowAddForm(true);
+  };
+
+  const openEditReadingLog = (log: ReadingLog) => {
+    const parsedNote = parseReadingNote(log.note, chapters);
+    setEditingLog(log);
+    setSelectedLog(null);
+    setSelectedChapter(parsedNote.chapter);
+    setReadingDate(new Date(log.readDate).toISOString().split('T')[0]);
+    setShowAddForm(true);
+  };
+
+  const handleMarkFinished = () => {
+    if (!selectedChildId) {
+      toast.error('请选择一个孩子');
+      return;
+    }
+    finishMutation.mutate();
   };
 
   if (isLoading) {
@@ -365,6 +435,7 @@ export default function BookDetailPage() {
   const progress = calculateProgress();
   const isFinished = book.readState?.status === 'finished';
   const readingStatus = isFinished ? '已读完' : '在读';
+  const displayBookName = formatBookTitle(book.name);
   const openEditBook = () => {
     navigate('/parent/library', {
       state: {
@@ -394,7 +465,7 @@ export default function BookDetailPage() {
     ['作者', book.author || '未知'],
     ['出版社', book.publisher || '待补充'],
     ['ISBN', book.isbn || '待补充'],
-    ['页数', `${book.totalPages || 0} 页`],
+    ['页数', book.totalPages ? `${book.totalPages} 页` : '未知'],
   ];
 
   return (
@@ -412,10 +483,10 @@ export default function BookDetailPage() {
             <div className="grid gap-6 p-6 lg:grid-cols-[170px_minmax(0,1fr)_220px] md:p-8">
               <div className="h-[236px] w-[166px] overflow-hidden rounded-xl bg-gradient-to-br from-indigo-200 to-violet-500 shadow-xl">
                 {book.coverUrl ? (
-                  <img src={book.coverUrl} alt={book.name} className="h-full w-full object-cover" />
+                  <img src={book.coverUrl} alt={displayBookName} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center p-5 text-center text-3xl font-bold leading-tight text-white">
-                    《{book.name.slice(0, 5)}》
+                    {displayBookName.slice(0, 5)}
                   </div>
                 )}
               </div>
@@ -427,7 +498,7 @@ export default function BookDetailPage() {
                     <Badge key={tag} variant="outline" className="rounded-md px-2.5 py-1">{tag}</Badge>
                   ))}
                 </div>
-                <h1 className="mt-4 text-3xl font-bold tracking-normal text-slate-950">{book.name}</h1>
+                <h1 className="mt-4 text-3xl font-bold tracking-normal text-slate-950">{displayBookName}</h1>
                 <p className="mt-3 text-base font-medium text-slate-600">{book.author || book.publisher || '未知作者'} 著</p>
                 <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
                   {bookInfoItems.map(([label, value]) => (
@@ -452,9 +523,14 @@ export default function BookDetailPage() {
               </div>
 
               <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <Button onClick={() => setShowAddForm(true)} className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+                <Button onClick={openAddReadingLog} className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
                   <Plus className="mr-2 size-4" /> 阅读记录
                 </Button>
+                {!isFinished && (
+                  <Button variant="outline" onClick={handleMarkFinished} disabled={finishMutation.isPending} className="h-11 rounded-xl bg-white">
+                    <CheckCircle2 className="mr-2 size-4" /> 标记已读完
+                  </Button>
+                )}
                 <Button variant="outline" onClick={openEditBook} className="h-11 rounded-xl bg-white">
                   <Edit3 className="mr-2 size-4" /> 编辑书籍
                 </Button>
@@ -481,12 +557,12 @@ export default function BookDetailPage() {
                 <InfoStat label="当前阶段" value={defaultReadStage || latestLog?.readStage || '未配置'} />
                 <InfoStat label="读到页码" value={latestPage ? `第 ${latestPage} 页` : '未记录'} />
                 <InfoStat label="当前章节" value={latestChapter || '未记录'} />
-                <InfoStat label="阅读进度" value={`${progress}%`} />
+                <InfoStat label="阅读进度" value={book.totalPages ? `${progress}%` : (isFinished ? '已读完' : '页数未知')} />
                 <InfoStat label="阅读时长" value={`${Math.floor(book.totalReadMinutes / 60)} 小时 ${book.totalReadMinutes % 60} 分钟`} />
                 <InfoStat label="最近阅读" value={lastReadDate ? new Date(lastReadDate).toLocaleDateString('zh-CN') : '未记录'} />
               </div>
               <div className="mt-6 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+                <div className="h-full rounded-full bg-primary" style={{ width: `${book.totalPages ? progress : isFinished ? 100 : 0}%` }} />
               </div>
             </CardContent>
           </Card>
@@ -495,7 +571,7 @@ export default function BookDetailPage() {
             <CardContent className="p-6 md:p-8">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-950">阅读记录明细</h2>
-                <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="rounded-lg bg-slate-50">
+                <Button variant="outline" size="sm" onClick={openAddReadingLog} className="rounded-lg bg-slate-50">
                   <Plus className="mr-1.5 size-4" /> 添加记录
                 </Button>
               </div>
@@ -562,18 +638,19 @@ export default function BookDetailPage() {
         </div>
       </div>
 
-      {/* Add Reading Log Dialog */}
+      {/* Add / Edit Reading Log Dialog */}
       {showAddForm && (
         <>
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={() => setShowAddForm(false)} />
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={() => { setShowAddForm(false); setEditingLog(null); }} />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="fixed inset-x-4 bottom-8 top-8 z-50 overflow-auto rounded-2xl bg-white p-6 shadow-2xl lg:inset-auto lg:left-1/2 lg:top-1/2 lg:max-h-[84vh] lg:w-[560px] lg:-translate-x-1/2 lg:-translate-y-1/2"
           >
-            <h3 className="text-lg font-semibold text-slate-950">添加阅读记录</h3>
-            <p className="mt-1 text-sm text-slate-500">记录这次阅读的时间、进度、效果和孩子表现。</p>
+            <h3 className="text-lg font-semibold text-slate-950">{editingLog ? '编辑阅读记录' : '添加阅读记录'}</h3>
+            <p className="mt-1 text-sm text-slate-500">{editingLog ? '调整这次阅读的时间、进度、效果和孩子表现。' : '记录这次阅读的时间、进度、效果和孩子表现。'}</p>
             <form
+              key={editingLog?.id || 'new-reading-log'}
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!selectedChildId) {
@@ -583,16 +660,26 @@ export default function BookDetailPage() {
                 const formData = new FormData(e.currentTarget);
                 const chapter = String(formData.get('chapter') || '').trim();
                 const note = String(formData.get('note') || '').trim();
-                addMutation.mutate({
+                const currentPage = parseInt(formData.get('currentPage') as string) || 0;
+                const startPage = editingLog?.startPage || 0;
+                const payload: Partial<ReadingLog> = {
                   childId: selectedChildId,
                   readDate: formData.get('readDate') as string || new Date().toISOString(),
                   effect: formData.get('effect') as string,
                   performance: formData.get('performance') as string,
                   note: buildReadingNote(chapter, note),
                   readStage: formData.get('readStage') as string,
-                  endPage: parseInt(formData.get('currentPage') as string) || 0,
+                  startPage,
+                  endPage: currentPage,
+                  pages: currentPage > 0 ? Math.max(0, currentPage - Math.max(0, startPage - 1)) : 0,
                   minutes: parseInt(formData.get('minutes') as string) || 0,
-                });
+                };
+
+                if (editingLog) {
+                  updateMutation.mutate({ logId: editingLog.id, log: payload });
+                } else {
+                  addMutation.mutate(payload);
+                }
               }}
               className="mt-5 space-y-5"
             >
@@ -615,6 +702,7 @@ export default function BookDetailPage() {
                     name="minutes"
                       placeholder=" "
                     min="0"
+                    defaultValue={editingLog?.minutes || ''}
                       className="peer h-14 w-full rounded-2xl border border-purple-100 bg-white px-4 pb-2 pt-6 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-transparent focus:border-purple-400 focus:ring-4 focus:ring-purple-100"
                   />
                     <span className="pointer-events-none absolute left-4 top-2 text-xs font-medium text-slate-500 transition-all peer-focus:text-purple-600">阅读时长（分钟）</span>
@@ -629,7 +717,7 @@ export default function BookDetailPage() {
                     name="currentPage"
                     placeholder=" "
                     min="0"
-                    defaultValue={latestPage || ''}
+                    defaultValue={editingLog?.endPage || latestPage || ''}
                     className="peer h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pb-2 pt-6 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-transparent focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100"
                   />
                   <span className="pointer-events-none absolute left-4 top-2 text-xs font-medium text-slate-500 transition-all peer-focus:text-purple-600">读到第几页</span>
@@ -640,7 +728,7 @@ export default function BookDetailPage() {
                     type="text"
                     name="readStage"
                     placeholder=" "
-                    defaultValue={defaultReadStage}
+                    defaultValue={editingLog?.readStage || defaultReadStage}
                     className="peer h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pb-2 pt-6 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-transparent focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100"
                   />
                   <span className="pointer-events-none absolute left-4 top-2 text-xs font-medium text-slate-500 transition-all peer-focus:text-purple-600">阅读阶段</span>
@@ -652,7 +740,7 @@ export default function BookDetailPage() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   {effectOptions.map((option, index) => (
                     <label key={option.value} className="cursor-pointer">
-                      <input type="radio" name="effect" value={option.value} defaultChecked={index === 1} className="peer sr-only" />
+                      <input type="radio" name="effect" value={option.value} defaultChecked={editingLog ? editingLog.effect === option.value : index === 1} className="peer sr-only" />
                       <span className="flex h-20 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-center transition peer-checked:border-purple-500 peer-checked:bg-purple-600 peer-checked:text-white">
                         <span className="text-sm font-semibold">{option.label}</span>
                         <span className="mt-1 text-[11px] tracking-tight opacity-80">{option.stars}</span>
@@ -667,6 +755,7 @@ export default function BookDetailPage() {
                   type="text"
                   name="performance"
                   placeholder=" "
+                  defaultValue={editingLog?.performance || ''}
                   className="peer h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pb-2 pt-6 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-transparent focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100"
                 />
                 <span className="pointer-events-none absolute left-4 top-2 text-xs font-medium text-slate-500 transition-all peer-focus:text-purple-600">孩子表现</span>
@@ -695,14 +784,17 @@ export default function BookDetailPage() {
                   name="note"
                   rows={3}
                   placeholder=" "
+                  defaultValue={editingLog ? parseReadingNote(editingLog.note, chapters).remark : ''}
                   className="peer w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 pb-3 pt-7 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-transparent focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100"
                 />
                 <span className="pointer-events-none absolute left-4 top-2 text-xs font-medium text-slate-500 transition-all peer-focus:text-purple-600">备注</span>
               </label>
 
               <div className="sticky bottom-0 -mx-1 flex gap-3 bg-white/95 px-1 pt-2 backdrop-blur">
-                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="h-11 flex-1 rounded-xl border-slate-200 text-slate-700">取消</Button>
-                <Button type="submit" disabled={addMutation.isPending} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">保存记录</Button>
+                <Button type="button" variant="outline" onClick={() => { setShowAddForm(false); setEditingLog(null); }} className="h-11 flex-1 rounded-xl border-slate-200 text-slate-700">取消</Button>
+                <Button type="submit" disabled={addMutation.isPending || updateMutation.isPending} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">
+                  {editingLog ? '保存修改' : '保存记录'}
+                </Button>
               </div>
             </form>
           </motion.div>
@@ -714,7 +806,7 @@ export default function BookDetailPage() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDeleteBookConfirm(false)}>
           <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-950 mb-2">删除图书</h3>
-            <p className="text-sm text-slate-600 mb-5">确定要删除「{book.name}」吗？此操作不可恢复。</p>
+            <p className="text-sm text-slate-600 mb-5">确定要删除「{displayBookName}」吗？此操作不可恢复。</p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setShowDeleteBookConfirm(false)} className="flex-1 rounded-lg">取消</Button>
               <Button
@@ -770,7 +862,12 @@ export default function BookDetailPage() {
                 <p className="mt-4 text-xs font-semibold text-slate-500">备注</p>
                 <p className="mt-2 text-sm leading-7 text-slate-700">{parseReadingNote(selectedLog.note, chapters).remark || '未记录'}</p>
               </div>
-              <Button onClick={() => setSelectedLog(null)} className="mt-5 h-11 w-full rounded-xl">关闭</Button>
+              <div className="mt-5 flex gap-3">
+                <Button variant="outline" onClick={() => setSelectedLog(null)} className="h-11 flex-1 rounded-xl">关闭</Button>
+                <Button onClick={() => openEditReadingLog(selectedLog)} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">
+                  <Edit3 className="mr-2 size-4" /> 编辑记录
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -781,7 +878,7 @@ export default function BookDetailPage() {
           <Card className="w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-950">章节目录</h3>
-              <p className="mt-1 text-sm text-slate-500">每行一个章节，只作用于《{book.name}》。添加阅读记录时可直接选择。</p>
+              <p className="mt-1 text-sm text-slate-500">每行一个章节，只作用于《{displayBookName}》。添加阅读记录时可直接选择。</p>
               <textarea
                 value={chapterInput}
                 onChange={(e) => setChapterInput(e.target.value)}

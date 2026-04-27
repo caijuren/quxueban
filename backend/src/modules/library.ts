@@ -24,7 +24,7 @@ async function saveCoverLocally(buffer: Buffer, fileExt = 'jpg'): Promise<string
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`
   const filePath = path.join(LOCAL_COVER_DIR, fileName)
   await fs.writeFile(filePath, buffer)
-  return `/uploads/book-covers/${fileName}`
+  return `${env.API_PREFIX}/uploads/book-covers/${fileName}`
 }
 
 async function storeCoverBuffer(buffer: Buffer, fileExt: string, contentType?: string): Promise<string> {
