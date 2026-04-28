@@ -151,55 +151,64 @@ function ChildSwitcherButton({
   if (childrenList.length === 0) return null;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <div
+      className={cn(
+        'flex min-w-0 items-center rounded-full bg-slate-100/80 p-1',
+        compact ? 'max-w-[116px] gap-0.5 overflow-hidden' : 'gap-1'
+      )}
+      aria-label="选择孩子"
+    >
+      {childrenList.map((child) => {
+        const isSelected = selectedChild?.id === child.id;
+        return (
         <button
+          key={child.id}
           type="button"
+          onClick={() => selectChild(child.id)}
+          title={child.name}
+          aria-label={`切换到${child.name}`}
+          aria-pressed={isSelected}
           className={cn(
-            'flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-slate-50',
-            compact ? 'max-w-[116px]' : 'min-w-[148px] max-w-[190px]'
+            'group relative flex shrink-0 items-center justify-center rounded-full transition-all',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30',
+            compact ? 'size-8' : 'size-9',
+            isSelected
+              ? 'bg-white shadow-sm ring-2 ring-indigo-500 ring-offset-1 ring-offset-white'
+              : 'hover:bg-white/80 hover:shadow-sm'
           )}
         >
-          <Avatar className="size-7 shrink-0 ring-1 ring-white/80 shadow-sm">
-            <AvatarImage src={selectedChild?.avatar} />
-            <AvatarFallback className="bg-indigo-100 text-[11px] font-semibold text-indigo-700">
-              {selectedChild?.name?.charAt(0) || 'C'}
-            </AvatarFallback>
-          </Avatar>
-          <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold text-slate-900', compact && 'hidden sm:block')}>
-            {selectedChild?.name || '选择孩子'}
-          </span>
-          <ChevronDown className={cn('size-3.5 shrink-0 text-slate-500', compact && 'hidden sm:block')} />
+          <ChildAvatar
+            child={child}
+            className={cn(
+              compact ? 'size-7 text-sm' : 'size-8 text-base',
+              !isSelected && 'grayscale opacity-45 group-hover:opacity-70'
+            )}
+          />
+          {isSelected ? (
+            <span className="absolute -bottom-0.5 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-indigo-500" />
+          ) : null}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44 p-1">
-        {childrenList.map((child) => {
-          const isSelected = selectedChild?.id === child.id;
-          return (
-            <DropdownMenuItem
-              key={child.id}
-              onClick={() => selectChild(child.id)}
-              className={cn(
-                'flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2',
-                isSelected && 'bg-indigo-50 text-primary focus:bg-indigo-50 focus:text-primary'
-              )}
-            >
-              <Avatar className="size-6 ring-1 ring-white/80">
-                <AvatarImage src={child.avatar} />
-                <AvatarFallback className={cn(
-                  'text-[10px] font-semibold',
-                  isSelected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'
-                )}>
-                  {child.name?.charAt(0) || 'C'}
-                </AvatarFallback>
-              </Avatar>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{child.name}</span>
-              {isSelected ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        );
+      })}
+    </div>
+  );
+}
+
+function isImageAvatar(value?: string) {
+  if (!value) return false;
+  return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/') || value.startsWith('data:image/');
+}
+
+function ChildAvatar({ child, className }: { child: Child; className?: string }) {
+  const fallback = child.avatar && !isImageAvatar(child.avatar) ? child.avatar : (child.name?.charAt(0) || '孩');
+
+  return (
+    <Avatar className={cn('overflow-hidden bg-white transition-[filter,opacity]', className)}>
+      {isImageAvatar(child.avatar) ? <AvatarImage src={child.avatar} alt={child.name} /> : null}
+      <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 font-semibold text-indigo-700">
+        {fallback}
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
