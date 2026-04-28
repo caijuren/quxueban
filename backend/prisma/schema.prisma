@@ -167,7 +167,10 @@ model DailyCheckin {
   checkDate      DateTime    @map("check_date")
   createdAt      DateTime    @default(now()) @map("created_at")
   completedValue Int?        @map("completed_value")
+  focusMinutes   Int?        @map("focus_minutes")
   notes          String?     @map("notes") @db.VarChar(500)
+  metadata       Json        @default("{}")
+  evidenceUrl    String      @default("") @map("evidence_url") @db.VarChar(255)
   child          User        @relation(fields: [childId], references: [id])
   plan           WeeklyPlan? @relation(fields: [planId], references: [id])
 

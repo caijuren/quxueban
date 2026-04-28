@@ -7,6 +7,161 @@ import crypto from 'crypto'
 
 export const settingsRouter: Router = Router()
 
+type FamilySettings = Record<string, any>
+type StoredGoal = {
+  id?: string
+  source?: string
+  title: string
+  description: string
+  level: string
+  abilityCategory: string
+  abilityPoint: string
+  linkedTasks: string[]
+  linkedTaskIds: number[]
+  reviewCadence: string
+  progress: number
+  target: string
+  current: string
+  suggestion: string
+  status: 'on-track' | 'attention' | 'strong'
+  reviewNotes?: Array<{
+    id: string
+    date: string
+    summary: string
+    adjustment: string
+  }>
+}
+
+function normalizeGoalStatus(status: unknown): StoredGoal['status'] {
+  return status === 'strong' || status === 'on-track' || status === 'attention' ? status : 'attention'
+}
+
+function normalizeStoredGoal(input: any): StoredGoal | null {
+  if (!input || typeof input !== 'object') return null
+
+  const title = typeof input.title === 'string' ? input.title.trim().slice(0, 80) : ''
+  if (!title) return null
+
+  const linkedTasks = Array.isArray(input.linkedTasks)
+    ? input.linkedTasks
+        .filter((task: unknown) => typeof task === 'string')
+        .map((task: string) => task.trim().slice(0, 80))
+        .filter(Boolean)
+        .slice(0, 8)
+    : []
+  const linkedTaskIds = Array.isArray(input.linkedTaskIds)
+    ? input.linkedTaskIds
+        .map((id: unknown) => Number(id))
+        .filter((id: number) => Number.isInteger(id) && id > 0)
+        .slice(0, 50)
+    : []
+  const reviewNotes = Array.isArray(input.reviewNotes)
+    ? input.reviewNotes
+        .filter((note: unknown) => note && typeof note === 'object')
+        .map((note: any) => ({
+          id: typeof note.id === 'string' ? note.id.trim().slice(0, 80) : `review-${Date.now()}`,
+          date: typeof note.date === 'string' ? note.date.trim().slice(0, 20) : new Date().toISOString().slice(0, 10),
+          summary: typeof note.summary === 'string' ? note.summary.trim().slice(0, 500) : '',
+          adjustment: typeof note.adjustment === 'string' ? note.adjustment.trim().slice(0, 500) : '',
+        }))
+        .filter((note) => note.summary || note.adjustment)
+        .slice(0, 30)
+    : []
+
+  const progress = Number(input.progress)
+
+  return {
+    id: typeof input.id === 'string' ? input.id.trim().slice(0, 80) : undefined,
+    source: input.source === 'ability-model' ? 'ability-model' : undefined,
+    title,
+    description: typeof input.description === 'string' ? input.description.trim().slice(0, 500) : '',
+    level: typeof input.level === 'string' ? input.level.trim().slice(0, 40) : '',
+    abilityCategory: typeof input.abilityCategory === 'string' ? input.abilityCategory.trim().slice(0, 40) : '',
+    abilityPoint: typeof input.abilityPoint === 'string' ? input.abilityPoint.trim().slice(0, 80) : '',
+    linkedTasks,
+    linkedTaskIds,
+    reviewCadence: typeof input.reviewCadence === 'string' ? input.reviewCadence.trim().slice(0, 40) : '每周复盘',
+    progress: Number.isFinite(progress) ? Math.max(0, Math.min(100, Math.round(progress))) : 0,
+    target: typeof input.target === 'string' ? input.target.trim().slice(0, 80) : '',
+    current: typeof input.current === 'string' ? input.current.trim().slice(0, 80) : '尚未开始',
+    suggestion: typeof input.suggestion === 'string' ? input.suggestion.trim().slice(0, 300) : '',
+    status: normalizeGoalStatus(input.status),
+    reviewNotes,
+  }
+}
+
+function getSettingsGoals(settings: FamilySettings, childId: number): StoredGoal[] {
+  const goalsByChild = settings.goalsByChild || {}
+  const goals = goalsByChild[String(childId)]
+  return Array.isArray(goals) ? goals.map(normalizeStoredGoal).filter(Boolean) as StoredGoal[] : []
+}
+
+async function enrichGoalsWithProgress(goals: StoredGoal[], familyId: number, childId: number): Promise<StoredGoal[]> {
+  const linkedTaskIds = Array.from(new Set(goals.flatMap((goal) => goal.linkedTaskIds || [])))
+  if (linkedTaskIds.length === 0) return goals
+
+  const startDate = new Date()
+  startDate.setHours(0, 0, 0, 0)
+  startDate.setDate(startDate.getDate() - 27)
+
+  const checkins = await prisma.dailyCheckin.findMany({
+    where: {
+      familyId,
+      childId,
+      taskId: { in: linkedTaskIds },
+      checkDate: { gte: startDate },
+    },
+    select: {
+      taskId: true,
+      status: true,
+    },
+  })
+
+  const statsByTask = new Map<number, { planned: number; score: number }>()
+
+  checkins.forEach((checkin) => {
+    if (checkin.status === 'not_involved') return
+
+    const current = statsByTask.get(checkin.taskId) || { planned: 0, score: 0 }
+    current.planned += 1
+
+    if (checkin.status === 'completed' || checkin.status === 'advance' || checkin.status === 'makeup') {
+      current.score += 1
+    } else if (checkin.status === 'partial') {
+      current.score += 0.5
+    }
+
+    statsByTask.set(checkin.taskId, current)
+  })
+
+  return goals.map((goal) => {
+    const taskIds = goal.linkedTaskIds || []
+    if (taskIds.length === 0) return goal
+
+    const summary = taskIds.reduce(
+      (total, taskId) => {
+        const stats = statsByTask.get(taskId)
+        if (!stats) return total
+        return {
+          planned: total.planned + stats.planned,
+          score: total.score + stats.score,
+        }
+      },
+      { planned: 0, score: 0 }
+    )
+
+    const progress = summary.planned > 0 ? Math.round((summary.score / summary.planned) * 100) : 0
+    const completedText = Number.isInteger(summary.score) ? String(summary.score) : summary.score.toFixed(1)
+
+    return {
+      ...goal,
+      progress,
+      current: summary.planned > 0 ? `近28天完成 ${completedText}/${summary.planned} 次` : '近28天暂无打卡',
+      status: progress >= 80 ? 'strong' : progress >= 50 ? 'on-track' : 'attention',
+    }
+  })
+}
+
 /**
  * Generate DingTalk signature
  * @param timestamp - Current timestamp in milliseconds
@@ -116,6 +271,201 @@ settingsRouter.put('/', async (req: AuthRequest, res: Response) => {
     status: 'success',
     message: '设置已保存',
     data: updatedFamily,
+  })
+})
+
+/**
+ * GET /ability-model - Get family ability model
+ */
+settingsRouter.get('/ability-model', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const settings = (family.settings as any) || {}
+
+  res.json({
+    status: 'success',
+    data: settings.abilityModel || null,
+  })
+})
+
+/**
+ * PUT /ability-model - Save family ability model
+ */
+settingsRouter.put('/ability-model', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const { model } = req.body
+
+  if (!model || typeof model !== 'object' || Array.isArray(model)) {
+    throw new AppError(400, '能力模型格式不正确')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as any) || {}
+
+  await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: {
+        ...currentSettings,
+        abilityModel: model,
+      },
+    },
+  })
+
+  res.json({
+    status: 'success',
+    message: '能力模型已保存',
+    data: model,
+  })
+})
+
+/**
+ * DELETE /ability-model - Reset family ability model
+ */
+settingsRouter.delete('/ability-model', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as any) || {}
+  const { abilityModel, ...nextSettings } = currentSettings
+
+  await prisma.family.update({
+    where: { id: familyId },
+    data: { settings: nextSettings },
+  })
+
+  res.json({
+    status: 'success',
+    message: '能力模型已恢复默认',
+    data: null,
+  })
+})
+
+/**
+ * GET /goals - Get child goals stored in family settings
+ */
+settingsRouter.get('/goals', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = Number(req.query.childId)
+
+  if (!Number.isInteger(childId) || childId <= 0) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  const child = await prisma.user.findFirst({
+    where: { id: childId, familyId, role: 'child' },
+    select: { id: true },
+  })
+
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const settings = (family.settings as FamilySettings) || {}
+  const goals = getSettingsGoals(settings, childId)
+  const enrichedGoals = await enrichGoalsWithProgress(goals, familyId, childId)
+
+  res.json({
+    status: 'success',
+    data: enrichedGoals,
+  })
+})
+
+/**
+ * PUT /goals - Save child goals stored in family settings
+ */
+settingsRouter.put('/goals', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = Number(req.body.childId)
+  const { goals } = req.body
+
+  if (!Number.isInteger(childId) || childId <= 0) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  if (!Array.isArray(goals)) {
+    throw new AppError(400, '目标格式不正确')
+  }
+
+  const child = await prisma.user.findFirst({
+    where: { id: childId, familyId, role: 'child' },
+    select: { id: true },
+  })
+
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  const normalizedGoals = goals
+    .map(normalizeStoredGoal)
+    .filter(Boolean)
+    .slice(0, 50) as StoredGoal[]
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as FamilySettings) || {}
+  const goalsByChild = currentSettings.goalsByChild || {}
+
+  await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: {
+        ...currentSettings,
+        goalsByChild: {
+          ...goalsByChild,
+          [String(childId)]: normalizedGoals,
+        },
+      },
+    },
+  })
+
+  const enrichedGoals = await enrichGoalsWithProgress(normalizedGoals, familyId, childId)
+
+  res.json({
+    status: 'success',
+    message: '目标已保存',
+    data: enrichedGoals,
   })
 })
 

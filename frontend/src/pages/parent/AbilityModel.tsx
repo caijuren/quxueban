@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ElementType } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   Activity,
   ArrowRight,
@@ -29,6 +31,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -36,6 +48,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { apiClient, getErrorMessage } from '@/lib/api-client';
 
 const levels = [
   {
@@ -108,6 +121,12 @@ const categoryTabs = [
 ] as const;
 
 type CategoryId = typeof categoryTabs[number]['id'];
+const categoryLabelToId: Record<string, CategoryId> = {
+  学科能力: 'subject',
+  思维与认知: 'thinking',
+  学习习惯: 'habit',
+  体育与健康: 'health',
+};
 type Status = 'mastered' | 'progressing' | 'pending';
 
 const statusMeta: Record<Status, { label: string; className: string; dot: string }> = {
@@ -303,44 +322,6 @@ const abilityData: Record<CategoryId, AbilityRow[]> = {
   ],
 };
 
-const englishAbilityByLevel: Record<LevelId, Pick<AbilityRow, 'desc' | 'indicators' | 'tasks' | 'status' | 'mastery'>> = {
-  L1: {
-    desc: '习惯养成：建立读听习惯，听懂常用指令和分级音频，能用 5 词内简单句描述图片。',
-    indicators: ['读：能自主拼读并读完 RAZ G', '写：单词拼写正确，标点规范', '材料：OD 1 完成全册，RAZ 到 Level G，教辅为全新英语一年级听力'],
-    tasks: ['每日 RAZ 听读 15min（1新1旧）', '每周 OD 2 个单元 + 课后练习', '每日原版动画 15min（如 Bluey）'],
-    status: 'progressing',
-    mastery: 35,
-  },
-  L2: {
-    desc: '流利起步：对标 KET 预备，能听懂 1min 故事并抓取要素，连续说 3-5 句复述故事大意。',
-    indicators: ['读：蓝思值 400L+，RAZ L 级', '写：能进行简单句仿写和造句', '材料：OD 2 完成全册，RAZ 到 Level L，教辅为全新英语二年级阅读'],
-    tasks: ['每日朗读 10min 并录音回听', '每周 OD 复述练习（Retell）', '隔周完成 1 单元《培优满分》'],
-    status: 'progressing',
-    mastery: 48,
-  },
-  L3: {
-    desc: '首战告捷：目标 KET 卓越，具备初步 Note-taking 能力，能用 I think...because 表达观点。',
-    indicators: ['读：RAZ Q 级，读懂短篇科普文', '写：50 字内短文，时态基本正确', '材料：OD 3 完成全册，RAZ 到 Level Q，考试使用 KET 真题集和词汇'],
-    tasks: ['每周 1 篇 50 字看图写作', '每日 RAZ 精读 1 本并完成 Quiz', '开启 Unlock 1 强化批判思维'],
-    status: 'progressing',
-    mastery: 62,
-  },
-  L4: {
-    desc: '能力爆发：目标 PET 卓越，能听懂长篇录音并归纳逻辑，能围绕话题做 1-2min 即兴表达。',
-    indicators: ['读：蓝思值 800L+，RAZ V 级', '写：100 字左右段落，逻辑连贯', '材料：OD 4 完成全册，RAZ 到 Level V，考试使用 PET 真题集和词汇'],
-    tasks: ['每周 1 次主题演讲（演讲稿 + 背诵）', '每日精读《全新英语》中考级别', '深度学习 Unlock 2 的读写模块'],
-    status: 'pending',
-    mastery: 42,
-  },
-  L5: {
-    desc: '三公冲刺：面向 FCE/小托福，能边听边记，应对三公机考，具备思辨表达和话题辩论能力。',
-    indicators: ['读：RAZ Z+，读懂原版学术新闻', '写：150 字议论文，句式多变', '材料：OD 5 完成全册，RAZ 到 Level Z1-Z2，考前使用 FCE 核心卷/三公模拟'],
-    tasks: ['每日 1 篇学术文阅读（BBC Kids）', '每周 1 套三公/证书模拟题', '模拟面谈逻辑训练（Q&A）'],
-    status: 'pending',
-    mastery: 30,
-  },
-};
-
 const recommendedTasks = [
   { title: '番茄钟专注训练', tag: '进行中', icon: Clock3, tone: 'text-amber-600 bg-amber-50' },
   { title: '制定周学习计划', tag: '推荐', icon: CalendarCheck, tone: 'text-blue-600 bg-blue-50' },
@@ -352,8 +333,6 @@ const resources = [
   { title: '学习计划模板', type: '文档', icon: PenLine, tone: 'text-pink-600 bg-pink-50' },
   { title: '专注力训练游戏', type: '互动', icon: Sparkles, tone: 'text-amber-600 bg-amber-50' },
 ];
-
-const abilityStorageKey = 'quxueban_ability_model_v1';
 
 function serializeAbilityData(data: Record<CategoryId, AbilityRow[]>): Record<CategoryId, EditableAbilityRow[]> {
   return Object.fromEntries(
@@ -390,19 +369,6 @@ function mergeEditableAbilityData(saved: Record<CategoryId, EditableAbilityRow[]
   ) as Record<CategoryId, AbilityRow[]>;
 }
 
-function loadAbilityData(): Record<CategoryId, AbilityRow[]> {
-  try {
-    const saved = localStorage.getItem(abilityStorageKey);
-    return mergeEditableAbilityData(saved ? JSON.parse(saved) : null);
-  } catch {
-    return abilityData;
-  }
-}
-
-function saveAbilityData(data: Record<CategoryId, AbilityRow[]>) {
-  localStorage.setItem(abilityStorageKey, JSON.stringify(serializeAbilityData(data)));
-}
-
 function parseLines(value: string) {
   return value
     .split('\n')
@@ -428,7 +394,20 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-function AbilityTable({ rows, onEdit }: { rows: AbilityRow[]; onEdit?: (row: AbilityRow) => void }) {
+async function getAbilityModel(): Promise<Record<CategoryId, EditableAbilityRow[]> | null> {
+  const response = await apiClient.get('/settings/ability-model');
+  return response.data.data || null;
+}
+
+async function updateAbilityModel(model: Record<CategoryId, EditableAbilityRow[]>): Promise<void> {
+  await apiClient.put('/settings/ability-model', { model });
+}
+
+async function resetAbilityModel(): Promise<void> {
+  await apiClient.delete('/settings/ability-model');
+}
+
+function AbilityTable({ rows, onEdit, focusPoint }: { rows: AbilityRow[]; onEdit?: (row: AbilityRow) => void; focusPoint?: string }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="hidden grid-cols-[150px_1.05fr_1.25fr_1fr_170px] border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 lg:grid">
@@ -442,7 +421,13 @@ function AbilityTable({ rows, onEdit }: { rows: AbilityRow[]; onEdit?: (row: Abi
         {rows.map((row) => {
           const Icon = row.icon;
           return (
-            <div key={row.point} className="group grid gap-4 p-4 lg:grid-cols-[150px_1.05fr_1.25fr_1fr_170px] lg:gap-0 lg:p-0">
+            <div
+              key={row.point}
+              className={cn(
+                'group grid gap-4 p-4 lg:grid-cols-[150px_1.05fr_1.25fr_1fr_170px] lg:gap-0 lg:p-0',
+                focusPoint === row.point && 'bg-indigo-50/60 ring-1 ring-inset ring-indigo-100'
+              )}
+            >
               <div className="flex items-center justify-center gap-3 text-center lg:px-4 lg:py-6">
                 <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', row.iconClass)}>
                   <Icon className="size-5" />
@@ -496,42 +481,82 @@ function Donut({ value }: { value: number }) {
 }
 
 export default function AbilityModel() {
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [activeLevel, setActiveLevel] = useState<LevelId>('L1');
   const [activeCategory, setActiveCategory] = useState<CategoryId>('subject');
-  const [modelData, setModelData] = useState<Record<CategoryId, AbilityRow[]>>(() => loadAbilityData());
+  const [modelData, setModelData] = useState<Record<CategoryId, AbilityRow[]>>(abilityData);
   const [editingRow, setEditingRow] = useState<AbilityFormState | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+
+  const { data: savedAbilityModel, isLoading: isAbilityModelLoading } = useQuery({
+    queryKey: ['ability-model'],
+    queryFn: getAbilityModel,
+  });
+
+  const saveAbilityModelMutation = useMutation({
+    mutationFn: (data: Record<CategoryId, AbilityRow[]>) => updateAbilityModel(serializeAbilityData(data)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ability-model'] });
+      toast.success('能力模型已保存');
+    },
+    onError: (error) => {
+      toast.error(`保存失败：${getErrorMessage(error)}`);
+    },
+  });
+
+  const resetAbilityModelMutation = useMutation({
+    mutationFn: resetAbilityModel,
+    onSuccess: () => {
+      setModelData(abilityData);
+      queryClient.invalidateQueries({ queryKey: ['ability-model'] });
+      toast.success('已恢复默认模型');
+    },
+    onError: (error) => {
+      toast.error(`恢复失败：${getErrorMessage(error)}`);
+    },
+  });
 
   const currentLevel = levels.find((level) => level.id === activeLevel) || levels[2];
   const stats = levelStats[activeLevel];
   const activeCategoryMeta = categoryTabs.find((tab) => tab.id === activeCategory) || categoryTabs[2];
   const ActiveCategoryIcon = activeCategoryMeta.icon;
+  const focusPoint = searchParams.get('point') || '';
   const visibleRows = useMemo(() => {
     const rows = modelData[activeCategory] || [];
-    if (activeCategory !== 'subject') return rows;
-
-    return rows.map((row) => {
-      if (row.point !== '英语能力' && row.point !== '英语启蒙') return row;
-      return {
-        ...row,
-        point: '英语能力',
-        ...englishAbilityByLevel[activeLevel],
-      };
+    return rows;
+  }, [activeCategory, modelData]);
+  const sortedVisibleRows = useMemo(() => {
+    if (!focusPoint) return visibleRows;
+    return [...visibleRows].sort((a, b) => {
+      const aMatch = a.point === focusPoint ? 0 : 1;
+      const bMatch = b.point === focusPoint ? 0 : 1;
+      return aMatch - bMatch;
     });
-  }, [activeCategory, activeLevel, modelData]);
+  }, [focusPoint, visibleRows]);
 
   const statusCounts = useMemo(() => {
-    return visibleRows.reduce<Record<Status, number>>(
+    return sortedVisibleRows.reduce<Record<Status, number>>(
       (acc, row) => {
         acc[row.status] += 1;
         return acc;
       },
       { mastered: 0, progressing: 0, pending: 0 }
     );
-  }, [visibleRows]);
+  }, [sortedVisibleRows]);
 
   useEffect(() => {
-    saveAbilityData(modelData);
-  }, [modelData]);
+    if (savedAbilityModel === undefined) return;
+    setModelData(mergeEditableAbilityData(savedAbilityModel));
+  }, [savedAbilityModel]);
+
+  useEffect(() => {
+    const category = searchParams.get('category');
+    const categoryId = category ? categoryLabelToId[category] : undefined;
+    if (categoryId) {
+      setActiveCategory(categoryId);
+    }
+  }, [searchParams]);
 
   const openEditRow = (row: AbilityRow) => {
     setEditingRow({
@@ -566,48 +591,47 @@ export default function AbilityModel() {
       return;
     }
 
-    setModelData((current) => {
-      const rows = current[editingRow.categoryId];
-      const fallback = abilityData[editingRow.categoryId][0];
-      const nextRow: AbilityRow = {
-        point,
-        desc: editingRow.desc.trim(),
-        indicators: editingRow.indicators,
-        tasks: editingRow.tasks,
-        status: editingRow.status,
-        mastery: Math.max(0, Math.min(100, Number(editingRow.mastery) || 0)),
-        icon: fallback.icon,
-        iconClass: fallback.iconClass,
-      };
+    const rows = modelData[editingRow.categoryId] || [];
+    const fallback = abilityData[editingRow.categoryId][0];
+    const nextRow: AbilityRow = {
+      point,
+      desc: editingRow.desc.trim(),
+      indicators: editingRow.indicators,
+      tasks: editingRow.tasks,
+      status: editingRow.status,
+      mastery: Math.max(0, Math.min(100, Number(editingRow.mastery) || 0)),
+      icon: fallback.icon,
+      iconClass: fallback.iconClass,
+    };
 
-      const exists = editingRow.originalPoint
-        ? rows.some(row => row.point === editingRow.originalPoint)
-        : false;
-      const nextRows = exists
-        ? rows.map(row => row.point === editingRow.originalPoint ? { ...nextRow, icon: row.icon, iconClass: row.iconClass } : row)
-        : [...rows, nextRow];
+    const exists = editingRow.originalPoint
+      ? rows.some(row => row.point === editingRow.originalPoint)
+      : false;
+    const nextRows = exists
+      ? rows.map(row => row.point === editingRow.originalPoint ? { ...nextRow, icon: row.icon, iconClass: row.iconClass } : row)
+      : [...rows, nextRow];
+    const nextModelData = { ...modelData, [editingRow.categoryId]: nextRows };
 
-      return { ...current, [editingRow.categoryId]: nextRows };
-    });
+    setModelData(nextModelData);
     setEditingRow(null);
-    toast.success('能力模型已保存');
+    saveAbilityModelMutation.mutate(nextModelData);
   };
 
   const handleDeleteEditingRow = () => {
     if (!editingRow?.originalPoint) return;
-    setModelData((current) => ({
-      ...current,
-      [editingRow.categoryId]: current[editingRow.categoryId].filter(row => row.point !== editingRow.originalPoint),
-    }));
+    const nextModelData = {
+      ...modelData,
+      [editingRow.categoryId]: modelData[editingRow.categoryId].filter(row => row.point !== editingRow.originalPoint),
+    };
+    setModelData(nextModelData);
     setEditingRow(null);
-    toast.success('能力点已删除');
+    saveAbilityModelMutation.mutate(nextModelData);
   };
 
   const handleResetModel = () => {
-    if (!window.confirm('确定恢复默认能力模型吗？自定义修改会被清空。')) return;
-    localStorage.removeItem(abilityStorageKey);
-    setModelData(abilityData);
-    toast.success('已恢复默认模型');
+    resetAbilityModelMutation.mutate(undefined, {
+      onSuccess: () => setResetDialogOpen(false),
+    });
   };
 
   return (
@@ -651,11 +675,11 @@ export default function AbilityModel() {
               <FileText className="mr-2 size-4" />
               导出报告
             </Button>
-            <Button variant="outline" onClick={openNewRow} className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
+            <Button variant="outline" onClick={openNewRow} disabled={isAbilityModelLoading || saveAbilityModelMutation.isPending} className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
               <Plus className="mr-2 size-4" />
               新增能力点
             </Button>
-            <Button onClick={() => visibleRows[0] && openEditRow(visibleRows[0])} className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
+            <Button onClick={() => sortedVisibleRows[0] && openEditRow(sortedVisibleRows[0])} disabled={isAbilityModelLoading || saveAbilityModelMutation.isPending} className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
               <PenLine className="mr-2 size-4" />
               编辑模型
             </Button>
@@ -722,7 +746,7 @@ export default function AbilityModel() {
             </div>
           </section>
 
-          <AbilityTable rows={visibleRows} onEdit={openEditRow} />
+          <AbilityTable rows={sortedVisibleRows} onEdit={openEditRow} focusPoint={focusPoint} />
 
           <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -838,9 +862,9 @@ export default function AbilityModel() {
             <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
               <li className="flex gap-2"><Flag className="mt-1 size-4 shrink-0 text-blue-500" />L1-L5 当前对应一年级到五年级。</li>
               <li className="flex gap-2"><ListChecks className="mt-1 size-4 shrink-0 text-blue-500" />能力指标后续会接入任务、阅读、计划、目标和报告数据。</li>
-              <li className="flex gap-2"><ShieldCheck className="mt-1 size-4 shrink-0 text-blue-500" />当前支持本地编辑能力点，确认口径后可升级为家庭级云端配置。</li>
+              <li className="flex gap-2"><ShieldCheck className="mt-1 size-4 shrink-0 text-blue-500" />当前支持家庭级云端配置，编辑后会保存到后端。</li>
             </ol>
-            <Button variant="outline" onClick={handleResetModel} className="mt-4 w-full rounded-lg bg-white">
+            <Button variant="outline" onClick={() => setResetDialogOpen(true)} disabled={resetAbilityModelMutation.isPending} className="mt-4 w-full rounded-lg bg-white">
               恢复默认模型
             </Button>
           </section>
@@ -937,12 +961,35 @@ export default function AbilityModel() {
               </div>
               <div className="flex gap-3">
                 <Button type="button" variant="outline" onClick={() => setEditingRow(null)} className="rounded-xl bg-white">取消</Button>
-                <Button type="button" onClick={handleSaveEditingRow} className="rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white">保存</Button>
+                <Button type="button" onClick={handleSaveEditingRow} disabled={saveAbilityModelMutation.isPending} className="rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
+                  {saveAbilityModelMutation.isPending ? '保存中...' : '保存'}
+                </Button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>恢复默认能力模型</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认恢复默认能力模型？当前家庭自定义的能力点、说明和任务内容会被清空。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetModel}
+              disabled={resetAbilityModelMutation.isPending}
+              className="rounded-xl bg-red-600 text-white hover:bg-red-700"
+            >
+              {resetAbilityModelMutation.isPending ? '恢复中...' : '确认恢复'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

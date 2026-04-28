@@ -17,6 +17,8 @@ import {
   FolderHeart,
   Clock3,
   HelpCircle,
+  FileSpreadsheet,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +36,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -63,6 +73,58 @@ const bookSchema = z.object({
 
 type BookFormData = z.infer<typeof bookSchema>;
 
+type ImportPreview = {
+  fileName: string;
+  sheetName: string;
+  totalRows: number;
+  validRows: number;
+  skippedRows: number;
+  newBooks: number;
+  matchedBooks: number;
+  duplicatedInFile: number;
+  readingLogsEstimated: number;
+  readingLogsLikelyNew: number;
+  existingReadingLogs: number;
+  readStatesEstimated: number;
+  coverUrls: number;
+  columns: string[];
+  recognizedColumns: string[];
+  warnings: string[];
+  samples: Array<{
+    row: number;
+    name: string;
+    isbn: string;
+    action: 'new' | 'match' | 'skip';
+    matchedBookId?: number;
+    matchedBookName?: string;
+    matchKey?: string;
+    matchScore?: number;
+    matchNeedsReview?: boolean;
+    matchReason?: string;
+    hasReadingLog: boolean;
+    willMarkFinished: boolean;
+  }>;
+};
+
+type DataQualitySummary = {
+  books: {
+    total: number;
+    complete: number;
+    missingIsbn: number;
+    missingPageCount: number;
+    missingType: number;
+    missingCover: number;
+    duplicateIsbn: number;
+    duplicateTitle: number;
+  };
+  tasks: {
+    total: number;
+    missingAbilityPoint: number;
+  };
+};
+
+type QualityFilter = 'all' | 'missingIsbn' | 'missingPageCount' | 'missingType' | 'duplicateTitle';
+
 function normalizeBookType(type?: string): BookFormData['type'] {
   if (type === 'children' || type === 'tradition' || type === 'science' || type === 'character' || type === 'other') {
     return type;
@@ -79,6 +141,11 @@ async function fetchBooks(search?: string, type?: string, sortBy?: string, child
   if (childId) params.append('childId', String(childId));
   const { data } = await apiClient.get(`/library?${params}`);
   return data.data || [];
+}
+
+async function fetchDataQualitySummary(): Promise<DataQualitySummary> {
+  const { data } = await apiClient.get('/library/data-quality');
+  return data.data;
 }
 
 async function fetchBookByISBN(isbn: string): Promise<any> {
@@ -109,6 +176,26 @@ async function createBook(book: BookFormData): Promise<Book> {
 async function updateBook(id: number, book: Partial<BookFormData>): Promise<Book> {
   const { data } = await apiClient.put(`/library/${id}`, book);
   return data.data;
+}
+
+async function exportBooksFile(params: { format: 'xlsx' | 'json'; search?: string; type?: string; childId?: number }): Promise<Blob> {
+  const query = new URLSearchParams();
+  query.append('format', params.format);
+  if (params.search) query.append('search', params.search);
+  if (params.type && params.type !== 'all') query.append('type', params.type);
+  if (params.childId) query.append('childId', String(params.childId));
+
+  const response = await apiClient.get(`/library/export?${query.toString()}`, {
+    responseType: 'blob',
+  });
+  return response.data;
+}
+
+async function downloadImportTemplate(): Promise<Blob> {
+  const response = await apiClient.get('/library/import/template', {
+    responseType: 'blob',
+  });
+  return response.data;
 }
 
 async function deleteBook(id: number): Promise<void> {
@@ -197,6 +284,116 @@ function LibraryMetric({
   );
 }
 
+function DataQualityPanel({
+  summary,
+  activeFilter,
+  onFilterChange,
+  onOpenTasks,
+}: {
+  summary?: DataQualitySummary;
+  activeFilter: QualityFilter;
+  onFilterChange: (filter: QualityFilter) => void;
+  onOpenTasks: () => void;
+}) {
+  if (!summary) return null;
+
+  const bookIssueCount = summary.books.missingIsbn + summary.books.missingPageCount + summary.books.missingType + summary.books.duplicateTitle;
+  const completionRate = summary.books.total > 0 ? Math.round((summary.books.complete / summary.books.total) * 100) : 100;
+  const qualityItems: Array<{
+    key: QualityFilter;
+    label: string;
+    value: number;
+    impact: string;
+  }> = [
+    { key: 'missingIsbn', label: '缺 ISBN', value: summary.books.missingIsbn, impact: '影响重复识别和书籍补全' },
+    { key: 'missingPageCount', label: '缺页数', value: summary.books.missingPageCount, impact: '影响阅读量统计和后续推荐' },
+    { key: 'missingType', label: '缺分类', value: summary.books.missingType, impact: '影响类型分布和阅读偏好判断' },
+    { key: 'duplicateTitle', label: '同名疑似重复', value: summary.books.duplicateTitle, impact: '影响书库统计准确性' },
+  ];
+  const visibleQualityItems = qualityItems.filter((item) => item.value > 0 || activeFilter === item.key);
+
+  if (bookIssueCount === 0 && summary.tasks.missingAbilityPoint === 0) {
+    return (
+      <section className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-white text-emerald-600">
+              <CheckCircle2 className="size-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-emerald-900">数据质量正常</h2>
+              <p className="text-xs text-emerald-700/80">图书 {summary.books.total} 本，完整率 {completionRate}%</p>
+            </div>
+          </div>
+          {activeFilter !== 'all' && (
+            <Button variant="outline" size="sm" onClick={() => onFilterChange('all')} className="border-emerald-200 bg-white text-emerald-700">
+              清除筛选
+            </Button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className={cn('flex size-9 items-center justify-center rounded-lg', bookIssueCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600')}>
+              {bookIssueCount > 0 ? <AlertTriangle className="size-5" /> : <CheckCircle2 className="size-5" />}
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">数据质量预检</h2>
+              <p className="mt-1 text-sm text-slate-500">为 1.8 能力回流准备可计算、可解释的数据。</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm">
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-slate-700">完整率 {completionRate}%</span>
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-slate-700">图书 {summary.books.total} 本</span>
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-slate-700">任务 {summary.tasks.total} 个</span>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[560px]">
+          {visibleQualityItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onFilterChange(activeFilter === item.key ? 'all' : item.key)}
+              className={cn(
+                'rounded-xl border p-3 text-left transition-all',
+                activeFilter === item.key ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:bg-white'
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-slate-900">{item.label}</span>
+                <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', item.value > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
+                  {item.value}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{item.impact}</p>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onOpenTasks}
+            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition-all hover:bg-white sm:col-span-2"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-900">任务缺能力点</span>
+              <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', summary.tasks.missingAbilityPoint > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
+                {summary.tasks.missingAbilityPoint}
+              </span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">影响 1.8 规则掌握度和任务归因，建议优先补齐。</p>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function LibraryPage() {
   const { selectedChildId, selectedChild } = useSelectedChild();
   const storageKeys = useMemo(() => ({
@@ -209,15 +406,22 @@ export default function LibraryPage() {
   const [selectedReadStatus, setSelectedReadStatus] = useState<ReadStatus>('all');
   const [sortBy, setSortBy] = useState<string>('');
   const [searchInput, setSearchInput] = useState('');
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>('all');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [formReturnTo, setFormReturnTo] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
   const [importing, setImporting] = useState(false);
+  const [previewingImport, setPreviewingImport] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [rejectedImportMatchKeys, setRejectedImportMatchKeys] = useState<Set<string>>(new Set());
+  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [importProgress, setImportProgress] = useState<number>(0);
   const [importStats, setImportStats] = useState({ imported: 0, skipped: 0 });
+  const [exporting, setExporting] = useState(false);
 
   // Add form state
   const [addMode, setAddMode] = useState<'manual' | 'isbn' | 'search'>('manual');
@@ -275,6 +479,12 @@ export default function LibraryPage() {
     enabled: !!selectedChildId,
   });
 
+  const { data: dataQuality } = useQuery({
+    queryKey: ['libraryDataQuality'],
+    queryFn: fetchDataQualitySummary,
+    enabled: !!selectedChildId,
+  });
+
   // Filter books
   const filteredBooks = useMemo(() => {
     let result = books;
@@ -302,6 +512,25 @@ export default function LibraryPage() {
       });
     }
 
+    if (qualityFilter !== 'all') {
+      const titleCounts = new Map<string, number>();
+      books.forEach((book) => {
+        const key = book.name.trim().replace(/[《》<>]/g, '').replace(/\s+/g, '').toLowerCase();
+        if (key) titleCounts.set(key, (titleCounts.get(key) || 0) + 1);
+      });
+
+      result = result.filter((book) => {
+        if (qualityFilter === 'missingIsbn') return !book.isbn?.trim();
+        if (qualityFilter === 'missingPageCount') return !book.totalPages || book.totalPages <= 0;
+        if (qualityFilter === 'missingType') return !book.type?.trim();
+        if (qualityFilter === 'duplicateTitle') {
+          const key = book.name.trim().replace(/[《》<>]/g, '').replace(/\s+/g, '').toLowerCase();
+          return key ? (titleCounts.get(key) || 0) > 1 : false;
+        }
+        return true;
+      });
+    }
+
     return [...result].sort((a, b) => {
       if (sortBy === 'recently_finished') {
         return new Date(b.readState?.finishedAt || 0).getTime() - new Date(a.readState?.finishedAt || 0).getTime();
@@ -321,11 +550,11 @@ export default function LibraryPage() {
       const bTime = new Date(b.lastReadDate || b.readState?.finishedAt || 0).getTime();
       return bTime - aTime;
     });
-  }, [books, selectedReadStatus, searchInput, sortBy]);
+  }, [books, selectedReadStatus, searchInput, sortBy, qualityFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchInput, selectedType, selectedReadStatus, sortBy, selectedChildId, pageSize]);
+  }, [searchInput, selectedType, selectedReadStatus, sortBy, selectedChildId, pageSize, qualityFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredBooks.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -380,6 +609,13 @@ export default function LibraryPage() {
         .map(date => date.getDay())
     );
   }, [books]);
+  const qualityFilterLabelMap: Record<QualityFilter, string> = {
+    all: '',
+    missingIsbn: '缺 ISBN',
+    missingPageCount: '缺页数',
+    missingType: '缺分类',
+    duplicateTitle: '同名疑似重复',
+  };
 
   const ensureSelectedChild = (action: () => void, message = '请先在左侧选择孩子，再继续管理图书馆') => {
     if (!selectedChildId) {
@@ -395,6 +631,7 @@ export default function LibraryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['library'] });
       queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
       toast.success('图书添加成功');
       closeForm();
     },
@@ -407,6 +644,7 @@ export default function LibraryPage() {
       queryClient.invalidateQueries({ queryKey: ['library'] });
       queryClient.invalidateQueries({ queryKey: ['book', String(variables.id)] });
       queryClient.invalidateQueries({ queryKey: ['book', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
       toast.success('图书更新成功');
       closeForm();
     },
@@ -418,6 +656,7 @@ export default function LibraryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['library'] });
       queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
       toast.success('图书已删除');
       setDeleteDialogOpen(false);
       setBookToDelete(null);
@@ -590,12 +829,47 @@ export default function LibraryPage() {
     if (!file) return;
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
       toast.error('请选择Excel文件 (.xlsx, .xls 或 .csv)');
+      if (importInputRef.current) importInputRef.current.value = '';
       return;
     }
+
+    setPreviewingImport(true);
+    setPendingImportFile(file);
+    setImportPreview(null);
+    setRejectedImportMatchKeys(new Set());
+    setImportResult(null);
+    setImportProgress(0);
+    setImportStats({ imported: 0, skipped: 0 });
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (selectedChildId) {
+        formData.append('childId', selectedChildId.toString());
+      }
+      if (rejectedImportMatchKeys.size > 0) {
+        formData.append('rejectedMatchKeys', JSON.stringify(Array.from(rejectedImportMatchKeys)));
+      }
+      const { data } = await apiClient.post('/library/import/preview', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImportPreview(data.data);
+      setImportPreviewOpen(true);
+    } catch (error) {
+      setPendingImportFile(null);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setPreviewingImport(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
+  const runImportFile = async (file: File) => {
     setImporting(true);
     setImportResult(null);
     setImportProgress(0);
     setImportStats({ imported: 0, skipped: 0 });
+    setImportPreviewOpen(false);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -634,6 +908,7 @@ export default function LibraryPage() {
                 setImportResult(data.data);
                 queryClient.invalidateQueries({ queryKey: ['library'] });
                 queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+                queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
                 toast.success(data.message);
                 window.dispatchEvent(new CustomEvent('quxueban:notification', {
                   detail: {
@@ -659,22 +934,65 @@ export default function LibraryPage() {
     } finally {
       setImporting(false);
       setImportProgress(0);
-      if (importInputRef.current) importInputRef.current.value = '';
+      setPendingImportFile(null);
     }
   };
 
-  const handleExportBooks = () => {
-    const dataStr = JSON.stringify(books, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `library-export-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success('书籍数据已导出');
+  const handleConfirmImport = () => {
+    if (!pendingImportFile) return;
+    void runImportFile(pendingImportFile);
+  };
+
+  const toggleImportMatchConfirmation = (matchKey: string, confirmed: boolean) => {
+    setRejectedImportMatchKeys((prev) => {
+      const next = new Set(prev);
+      if (confirmed) next.delete(matchKey);
+      else next.add(matchKey);
+      return next;
+    });
+  };
+
+  const handleExportBooks = async () => {
+    setExporting(true);
+    try {
+      const format = 'xlsx' as const;
+      const blob = await exportBooksFile({
+        format,
+        search: searchQuery || searchInput,
+        type: selectedType,
+        childId: selectedChildId || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `library-export-${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('图书馆 Excel 已导出');
+    } catch (error) {
+      toast.error(getErrorMessage(error) || '导出失败，请重试');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDownloadImportTemplate = async () => {
+    try {
+      const blob = await downloadImportTemplate();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `library-import-template-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('导入模板已下载');
+    } catch (error) {
+      toast.error(getErrorMessage(error) || '模板下载失败，请重试');
+    }
   };
 
   if (isLoading) {
@@ -756,10 +1074,11 @@ export default function LibraryPage() {
             <Button
               variant="outline"
               onClick={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
+              disabled={importing || previewingImport}
               className="h-11 rounded-xl bg-white"
             >
-              <Upload className="mr-1.5 size-4" />
-              导入
+              {importing || previewingImport ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Upload className="mr-1.5 size-4" />}
+              {previewingImport ? '预检中' : '导入'}
             </Button>
             <Button
               onClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')}
@@ -835,6 +1154,18 @@ export default function LibraryPage() {
           </div>
         </div>
       </section>
+
+      <DataQualityPanel
+        summary={dataQuality}
+        activeFilter={qualityFilter}
+        onFilterChange={(filter) => {
+          setQualityFilter(filter);
+          setSearchInput('');
+          setSelectedType('all');
+          setSelectedReadStatus('all');
+        }}
+        onOpenTasks={() => navigate('/parent/tasks')}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">
         <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
@@ -912,6 +1243,17 @@ export default function LibraryPage() {
         </div>
       </section>
 
+      {qualityFilter !== 'all' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm">
+          <span className="font-medium text-indigo-800">
+            正在查看：{qualityFilterLabelMap[qualityFilter]}，共 {filteredBooks.length} 本
+          </span>
+          <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => setQualityFilter('all')}>
+            退出数据质量筛选
+          </Button>
+        </div>
+      )}
+
       {/* Page Control Bar */}
       <BookFilter
         searchInput={searchInput}
@@ -925,12 +1267,156 @@ export default function LibraryPage() {
         onImportClick={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
         onAddClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')}
         onExportClick={handleExportBooks}
-        importing={importing}
+        onTemplateClick={handleDownloadImportTemplate}
+        exporting={exporting}
+        importing={importing || previewingImport}
         importProgress={importProgress}
         resultCount={filteredBooks.length}
       />
 
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
+
+      <Dialog
+        open={importPreviewOpen}
+        onOpenChange={(open) => {
+          setImportPreviewOpen(open);
+          if (!open && !importing) {
+            setPendingImportFile(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="size-5 text-indigo-600" />
+              导入预检
+            </DialogTitle>
+            <DialogDescription>
+              先确认系统将如何处理这份清单，确认后才会正式写入图书和阅读数据。
+            </DialogDescription>
+          </DialogHeader>
+
+          {importPreview && (
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-900">{importPreview.fileName}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  工作表：{importPreview.sheetName || '默认'} · 识别字段 {importPreview.recognizedColumns.length}/{importPreview.columns.length}
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-4">
+                {[
+                  ['有效行', importPreview.validRows, '总行数 ' + importPreview.totalRows],
+                  ['新增书籍', importPreview.newBooks, '系统未匹配到'],
+                  ['匹配书籍', importPreview.matchedBooks, '按 ISBN/书名匹配'],
+                  ['跳过行', importPreview.skippedRows, '缺少书名'],
+                ].map(([label, value, hint]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-medium text-slate-500">{label}</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
+                    <p className="mt-1 text-xs text-slate-500">{hint}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <p className="text-xs font-medium text-blue-700">预计阅读记录</p>
+                  <p className="mt-2 text-xl font-semibold text-blue-950">{importPreview.readingLogsLikelyNew} 条</p>
+                  <p className="mt-1 text-xs text-blue-700">已扣除可能重复 {importPreview.existingReadingLogs} 条</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                  <p className="text-xs font-medium text-emerald-700">预计已读同步</p>
+                  <p className="mt-2 text-xl font-semibold text-emerald-950">{importPreview.readStatesEstimated} 本</p>
+                  <p className="mt-1 text-xs text-emerald-700">写入当前孩子阅读状态</p>
+                </div>
+                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
+                  <p className="text-xs font-medium text-violet-700">封面链接</p>
+                  <p className="mt-2 text-xl font-semibold text-violet-950">{importPreview.coverUrls} 个</p>
+                  <p className="mt-1 text-xs text-violet-700">导入时会尝试下载保存</p>
+                </div>
+              </div>
+
+              {importPreview.warnings.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+                    <AlertTriangle className="size-4" />
+                    需要注意
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {importPreview.warnings.map((warning) => (
+                      <p key={warning} className="text-sm text-amber-800">{warning}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-semibold text-slate-900">样例行</p>
+                <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
+                  <div className="grid min-w-[720px] grid-cols-[70px_1fr_160px_120px_120px] bg-slate-50 px-4 py-3 text-xs font-medium text-slate-500">
+                    <span>行号</span>
+                    <span>书名</span>
+                    <span>处理</span>
+                    <span>相似度</span>
+                    <span>阅读数据</span>
+                  </div>
+                  {importPreview.samples.map((sample) => (
+                    <div key={`${sample.row}-${sample.name || 'skip'}`} className="grid min-w-[720px] grid-cols-[70px_1fr_160px_120px_120px] items-center border-t border-slate-100 px-4 py-3 text-sm">
+                      <span className="text-slate-500">{sample.row}</span>
+                      <div className="min-w-0 pr-3">
+                        <p className="truncate font-medium text-slate-900">{sample.name || '未识别书名'}</p>
+                        {sample.matchedBookName && (
+                          <p className="mt-1 truncate text-xs text-slate-500">匹配：{sample.matchedBookName}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant="secondary" className={cn('w-fit', sample.action === 'new' ? 'bg-indigo-100 text-indigo-700' : sample.action === 'match' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+                          {sample.action === 'new' ? '新增' : sample.action === 'match' ? '匹配' : '跳过'}
+                        </Badge>
+                        {sample.matchNeedsReview && sample.matchKey && (
+                          <label className="flex items-center gap-1.5 text-xs text-amber-700">
+                            <input
+                              type="checkbox"
+                              className="size-3.5 rounded border-amber-300"
+                              checked={!rejectedImportMatchKeys.has(sample.matchKey)}
+                              onChange={(event) => toggleImportMatchConfirmation(sample.matchKey!, event.target.checked)}
+                            />
+                            确认为同一本
+                          </label>
+                        )}
+                      </div>
+                      <span className={cn('text-xs', sample.matchNeedsReview ? 'text-amber-700' : 'text-slate-600')}>
+                        {sample.matchScore ? `${sample.matchScore} 分` : '-'}
+                        {sample.matchReason ? ` · ${sample.matchReason}` : ''}
+                      </span>
+                      <span className="text-slate-600">{sample.hasReadingLog ? '有记录' : sample.willMarkFinished ? '已读状态' : '无'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImportPreviewOpen(false);
+                setPendingImportFile(null);
+              }}
+              disabled={importing}
+            >
+              取消
+            </Button>
+            <Button onClick={handleConfirmImport} disabled={!pendingImportFile || importing} className="bg-indigo-600 text-white hover:bg-indigo-700">
+              {importing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />}
+              确认导入
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Result */}
       {importResult && (

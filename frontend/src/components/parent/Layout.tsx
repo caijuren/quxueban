@@ -153,8 +153,8 @@ function ChildSwitcherButton({
   return (
     <div
       className={cn(
-        'flex min-w-0 items-center rounded-full bg-slate-100/80 p-1',
-        compact ? 'max-w-[116px] gap-0.5 overflow-hidden' : 'gap-1'
+        'flex min-w-0 items-center',
+        compact ? 'max-w-[140px] gap-2 overflow-hidden' : 'gap-3'
       )}
       aria-label="选择孩子"
     >
@@ -172,21 +172,16 @@ function ChildSwitcherButton({
             'group relative flex shrink-0 items-center justify-center rounded-full transition-all',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30',
             compact ? 'size-8' : 'size-9',
-            isSelected
-              ? 'bg-white shadow-sm ring-2 ring-indigo-500 ring-offset-1 ring-offset-white'
-              : 'hover:bg-white/80 hover:shadow-sm'
+            !isSelected && 'hover:scale-105'
           )}
         >
           <ChildAvatar
             child={child}
             className={cn(
-              compact ? 'size-7 text-sm' : 'size-8 text-base',
+              compact ? 'size-8 text-sm' : 'size-9 text-base',
               !isSelected && 'grayscale opacity-45 group-hover:opacity-70'
             )}
           />
-          {isSelected ? (
-            <span className="absolute -bottom-0.5 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-indigo-500" />
-          ) : null}
         </button>
         );
       })}
@@ -203,7 +198,7 @@ function ChildAvatar({ child, className }: { child: Child; className?: string })
   const fallback = child.avatar && !isImageAvatar(child.avatar) ? child.avatar : (child.name?.charAt(0) || '孩');
 
   return (
-    <Avatar className={cn('overflow-hidden bg-white transition-[filter,opacity]', className)}>
+    <Avatar className={cn('overflow-hidden bg-transparent transition-[filter,opacity]', className)}>
       {isImageAvatar(child.avatar) ? <AvatarImage src={child.avatar} alt={child.name} /> : null}
       <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 font-semibold text-indigo-700">
         {fallback}

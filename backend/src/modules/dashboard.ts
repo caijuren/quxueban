@@ -6,27 +6,27 @@ function getSingleQueryValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-function parseLocalDateRange(startValue: unknown, endValue: unknown) {
-  const parse = (value: unknown): Date | null => {
-    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return null
-    }
-
-    const [year, month, day] = value.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    if (
-      date.getFullYear() !== year ||
-      date.getMonth() !== month - 1 ||
-      date.getDate() !== day
-    ) {
-      return null
-    }
-
-    return date
+function parseLocalDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null
   }
 
-  const startDate = parse(startValue)
-  const endDate = parse(endValue)
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null
+  }
+
+  return date
+}
+
+function parseLocalDateRange(startValue: unknown, endValue: unknown) {
+  const startDate = parseLocalDate(startValue)
+  const endDate = parseLocalDate(endValue)
 
   if (!startDate || !endDate || startDate > endDate) {
     return null
@@ -238,7 +238,7 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   // Calculate study minutes for specified date/range or today
   const date = getSingleQueryValue(req.query.date)
   const requestedRange = parseLocalDateRange(req.query.startDate, req.query.endDate)
-  const checkDate = requestedRange?.startDate || (date ? new Date(date) : new Date())
+  const checkDate = requestedRange?.startDate || parseLocalDate(date) || new Date()
   if (!requestedRange) {
     checkDate.setHours(0, 0, 0, 0)
   }
@@ -304,16 +304,17 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
     taskTypeMinutes[bucket] += checkin.completed_value || fallbackMinutes
   })
 
-  // Calculate reading count for specified date/range or today
-  const todayReadingCount = await prisma.readingLog.count({
-    where: {
-      ...readingLogWhereClause,
-      readDate: {
-        gte: checkDate,
-        lte: checkDateEnd
-      }
-    }
-  })
+  // Calculate distinct books read for specified date/range or today.
+  const todayReadingRows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(DISTINCT book_id)::int AS count
+    FROM reading_logs
+    WHERE family_id = $1
+      ${childId ? 'AND child_id = $2' : ''}
+      AND read_date >= $${childId ? 3 : 2}
+      AND read_date <= $${childId ? 4 : 3}`,
+    ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
+  ) as any[]
+  const todayReadingCount = todayReadingRows[0]?.count || 0
 
   const weekNos = getWeekNosInRange(checkDate, checkDateEnd)
   const rangePlans = await prisma.weeklyPlan.findMany({
@@ -576,7 +577,10 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
       dc.status,
       dc.value,
       dc.completed_value,
+      dc.focus_minutes,
       dc.notes,
+      dc.metadata,
+      dc.evidence_url,
       dc.check_date,
       t.id AS resolved_task_id,
       t.name AS task_name,
@@ -602,7 +606,10 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
     status: checkin.status,
     value: checkin.value,
     completedValue: checkin.completed_value,
+    focusMinutes: checkin.focus_minutes,
     notes: checkin.notes || '',
+    metadata: checkin.metadata || {},
+    evidenceUrl: checkin.evidence_url || '',
     checkDate: checkin.check_date,
     taskName: checkin.task_name,
     taskCategory: checkin.task_category,

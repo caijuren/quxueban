@@ -7,7 +7,7 @@ import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,6 +71,8 @@ type TaskUpdatePayload = Partial<Task> & {
   childId: number | null;
 };
 
+type TaskTags = NonNullable<Task['tags']>;
+
 const tagConfig: Record<string, { icon: any; color: string }> = {
   '校内巩固': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
   '校内拔高': { icon: BookOpen, color: 'bg-blue-100 text-blue-600' },
@@ -90,8 +92,70 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
 const taskKindOptions = ['学习', '阅读', '运动', '习惯', '生活', '情绪', '社交'];
 const levelOptions = ['L1 一年级', 'L2 二年级', 'L3 三年级', 'L4 四年级', 'L5 五年级'];
 const abilityCategoryOptions = ['学科能力', '思维与认知', '学习习惯', '体育与健康'];
+const NO_ABILITY_POINT = '__none__';
 const abilityPointOptions = ['阅读理解', '数学能力', '英语能力', '问题理解', '表达输出', '学习计划制定', '时间管理', '复盘与反思', '学习专注力', '基础体能', '作息管理'];
 const linkedGoalOptions = ['不关联目标', '语文阅读理解', '数学计算稳定性', '每日固定学习时段', '错题复盘', '每周运动达标'];
+
+const normalizeTaskTags = (rawTags: unknown): TaskTags => {
+  let tags: Record<string, unknown> = {};
+
+  if (rawTags && typeof rawTags === 'object' && !Array.isArray(rawTags)) {
+    tags = rawTags as Record<string, unknown>;
+  } else if (typeof rawTags === 'string') {
+    try {
+      const parsed = JSON.parse(rawTags);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        tags = parsed as Record<string, unknown>;
+      }
+    } catch {
+      tags = {};
+    }
+  }
+
+  const legacyMetadata = tags.metadata && typeof tags.metadata === 'object' && !Array.isArray(tags.metadata)
+    ? tags.metadata as Record<string, unknown>
+    : {};
+  const merged = { ...legacyMetadata, ...tags };
+
+  const abilityPoint = typeof merged.abilityPoint === 'string' && merged.abilityPoint.trim() !== NO_ABILITY_POINT
+    ? merged.abilityPoint.trim()
+    : undefined;
+
+  return {
+    subject: typeof merged.subject === 'string' ? merged.subject : undefined,
+    difficulty: typeof merged.difficulty === 'string' ? merged.difficulty : undefined,
+    parentRole: typeof merged.parentRole === 'string' ? merged.parentRole : undefined,
+    scheduleRule: ['daily', 'school', 'weekend', 'flexible'].includes(String(merged.scheduleRule))
+      ? merged.scheduleRule as ScheduleRule
+      : undefined,
+    weeklyFrequency: Number(merged.weeklyFrequency) > 0 ? Number(merged.weeklyFrequency) : undefined,
+    taskKind: typeof merged.taskKind === 'string' ? merged.taskKind : undefined,
+    level: typeof merged.level === 'string' ? merged.level : undefined,
+    abilityCategory: typeof merged.abilityCategory === 'string' ? merged.abilityCategory : undefined,
+    abilityPoint,
+    linkedGoal: typeof merged.linkedGoal === 'string' ? merged.linkedGoal : undefined,
+  };
+};
+
+const normalizeTask = (task: Task): Task => {
+  const tags = normalizeTaskTags(task.tags);
+  return {
+    ...task,
+    tags,
+    scheduleRule: task.scheduleRule || tags.scheduleRule || 'daily',
+    weeklyFrequency: task.weeklyFrequency || tags.weeklyFrequency,
+  };
+};
+
+const toSubjectLabel = (value?: string) => {
+  if (!value) return '语文';
+  return subjectReverseMap[value] || value;
+};
+
+const toParentRoleLabel = (value?: string) => {
+  if (!value) return '独立完成';
+  return parentRoleReverseMap[value] || value;
+};
 
 async function fetchTasks(childId?: number): Promise<Task[]> {
   // 强制传递childId，确保数据隔离
@@ -100,7 +164,7 @@ async function fetchTasks(childId?: number): Promise<Task[]> {
   }
   const params = { childId };
   const r = await apiClient.get('/tasks', { params });
-  return r.data.data || [];
+  return (r.data.data || []).map(normalizeTask);
 }
 async function deleteTask(id: number, childId: number): Promise<void> {
   await apiClient.delete('/tasks/' + id, { params: { childId } });
@@ -133,7 +197,7 @@ export default function TasksPage() {
     taskKind: '学习' as string,
     level: 'L3 三年级' as string,
     abilityCategory: '学习习惯' as string,
-    abilityPoint: '学习专注力' as string,
+    abilityPoint: NO_ABILITY_POINT as string,
     linkedGoal: '不关联目标' as string,
     totalUnits: 0,
     completedUnits: 0,
@@ -191,7 +255,13 @@ export default function TasksPage() {
       const r = await apiClient.put('/tasks/' + data.id, data.updates);
       return r.data;
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      const updatedTask = response?.data ? normalizeTask(response.data) : null;
+      if (updatedTask && selectedChildId) {
+        queryClient.setQueryData<Task[]>(['tasks', selectedChildId], (current = []) =>
+          current.map((task) => task.id === updatedTask.id ? updatedTask : task)
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('更新成功');
       setEditDialogOpen(false);
@@ -221,7 +291,7 @@ export default function TasksPage() {
       taskKind: '学习',
       level: 'L3 三年级',
       abilityCategory: '学习习惯',
-      abilityPoint: '学习专注力',
+      abilityPoint: NO_ABILITY_POINT,
       linkedGoal: '不关联目标',
       totalUnits: 0,
       completedUnits: 0,
@@ -235,40 +305,42 @@ export default function TasksPage() {
   };
 
   const handleEdit = (task: Task) => {
-    setTaskToEdit(task);
+    const normalizedTask = normalizeTask(task);
+    const tags = normalizedTask.tags || {};
+    setTaskToEdit(normalizedTask);
     // 反向映射后端返回的英文值到前端显示的中文值
-    const subject = task.tags?.subject ? subjectReverseMap[task.tags.subject] || '语文' : '语文';
-    const parentRole = task.tags?.parentRole ? parentRoleReverseMap[task.tags.parentRole] || '独立完成' : '独立完成';
+    const subject = toSubjectLabel(tags.subject);
+    const parentRole = toParentRoleLabel(tags.parentRole);
     const difficultyMap: Record<string, string> = {
       'basic': '基础',
       'advanced': '提高',
       'challenge': '挑战'
     };
-    const difficulty = task.tags?.difficulty ? difficultyMap[task.tags.difficulty] || '基础' : '基础';
+    const difficulty = tags.difficulty ? difficultyMap[tags.difficulty] || tags.difficulty : '基础';
     
     setFormData({
-      name: task.name,
-      category: task.category,
-      type: task.type,
-      timePerUnit: task.timePerUnit,
-      scheduleRule: (task.scheduleRule as ScheduleRule) || 'daily',
-      weeklyFrequency: task.weeklyFrequency || 5,
+      name: normalizedTask.name,
+      category: normalizedTask.category,
+      type: normalizedTask.type,
+      timePerUnit: normalizedTask.timePerUnit,
+      scheduleRule: (normalizedTask.scheduleRule as ScheduleRule) || 'daily',
+      weeklyFrequency: normalizedTask.weeklyFrequency || 5,
       subject: subject,
       parentRole: parentRole,
       difficulty: difficulty,
-      taskKind: task.tags?.taskKind || '学习',
-      level: task.tags?.level || 'L3 三年级',
-      abilityCategory: task.tags?.abilityCategory || '学习习惯',
-      abilityPoint: task.tags?.abilityPoint || '学习专注力',
-      linkedGoal: task.tags?.linkedGoal || '不关联目标',
+      taskKind: tags.taskKind || '学习',
+      level: tags.level || 'L3 三年级',
+      abilityCategory: tags.abilityCategory || '学习习惯',
+      abilityPoint: tags.abilityPoint || NO_ABILITY_POINT,
+      linkedGoal: tags.linkedGoal || '不关联目标',
       totalUnits: 0,
       completedUnits: 0,
       totalPages: 0,
       completedPages: 0,
       // 精细化记录字段 - 从task中获取
-      trackingType: (task as any).trackingType || 'simple',
-      trackingUnit: (task as any).trackingUnit || '',
-      targetValue: (task as any).targetValue || 0,
+      trackingType: (normalizedTask as any).trackingType || 'simple',
+      trackingUnit: (normalizedTask as any).trackingUnit || '',
+      targetValue: (normalizedTask as any).targetValue || 0,
     });
     setEditDialogOpen(true);
   };
@@ -276,6 +348,10 @@ export default function TasksPage() {
   const handleCreate = () => {
     if (!formData.name.trim()) {
       toast.error('请输入任务名称');
+      return;
+    }
+    if (!formData.abilityPoint || formData.abilityPoint === NO_ABILITY_POINT) {
+      toast.error('请选择任务关联的能力点');
       return;
     }
     const subjectMap: Record<string, string> = {
@@ -312,7 +388,7 @@ export default function TasksPage() {
         taskKind: formData.taskKind,
         level: formData.level,
         abilityCategory: formData.abilityCategory,
-        abilityPoint: formData.abilityPoint,
+        abilityPoint: formData.abilityPoint.trim(),
         linkedGoal: formData.linkedGoal,
       },
       appliesTo: selectedChildId ? [selectedChildId] : [],
@@ -322,6 +398,10 @@ export default function TasksPage() {
   const handleUpdate = () => {
     if (!taskToEdit || !formData.name.trim()) {
       toast.error('请输入任务名称');
+      return;
+    }
+    if (!formData.abilityPoint || formData.abilityPoint === NO_ABILITY_POINT) {
+      toast.error('请选择任务关联的能力点');
       return;
     }
     const subjectMap: Record<string, string> = {
@@ -361,7 +441,7 @@ export default function TasksPage() {
           taskKind: formData.taskKind,
           level: formData.level,
           abilityCategory: formData.abilityCategory,
-          abilityPoint: formData.abilityPoint,
+          abilityPoint: formData.abilityPoint.trim(),
           linkedGoal: formData.linkedGoal,
         },
         appliesTo: selectedChildId ? [selectedChildId] : [],
@@ -533,6 +613,7 @@ export default function TasksPage() {
   const attentionTasks = [...tasks]
     .sort((a, b) => getOperationalScore(a) - getOperationalScore(b))
     .slice(0, Math.min(3, tasks.length));
+  const editingLegacyTaskMissingAbility = editDialogOpen && !!taskToEdit && !normalizeTaskTags(taskToEdit.tags).abilityPoint;
 
   const operationalMetrics = [
     {
@@ -566,11 +647,20 @@ export default function TasksPage() {
   ];
 
   const renderBusinessLinkFields = () => (
-    <div className="space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
+    <div className={cn(
+      'space-y-4 rounded-2xl border p-4',
+      editingLegacyTaskMissingAbility ? 'border-amber-200 bg-amber-50/70' : 'border-indigo-100 bg-indigo-50/40'
+    )}>
       <div>
-        <Label className="text-sm font-semibold text-slate-800">1.6 业务关联</Label>
-        <p className="mt-1 text-xs text-slate-500">用于承接能力模型和目标，后续会参与计划推荐、报告复盘和能力回流。</p>
+        <Label className="text-sm font-semibold text-slate-800">能力与目标关联</Label>
+        <p className="mt-1 text-xs text-slate-500">能力点为必填项，用于今日概览展示、任务归因和后续掌握度回流。</p>
       </div>
+      {editingLegacyTaskMissingAbility && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-white/80 p-3 text-xs leading-5 text-amber-700">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>这个旧任务还没有能力点。请补齐后再保存，保存后任务列表和今日概览都会同步显示。</span>
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label className="text-xs font-medium text-slate-600">任务类型</Label>
@@ -600,13 +690,15 @@ export default function TasksPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">能力点</Label>
+          <Label className="text-xs font-medium text-slate-600">能力点 <span className="text-red-500">*</span></Label>
           <Select value={formData.abilityPoint} onValueChange={(value) => setFormData({ ...formData, abilityPoint: value })}>
             <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
             <SelectContent className="rounded-xl">
+              <SelectItem value={NO_ABILITY_POINT}>请选择能力点</SelectItem>
               {abilityPointOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
+          <p className="text-[11px] leading-5 text-slate-500">1.7 起任务必须绑定能力点，用于后续掌握度和阅读任务归因。</p>
         </div>
       </div>
       <div className="space-y-2">
@@ -962,7 +1054,7 @@ export default function TasksPage() {
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
+        <DialogContent className="sm:max-w-[760px] max-h-[86vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
           <DialogHeader className="pb-4">
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
@@ -970,8 +1062,11 @@ export default function TasksPage() {
               </div>
               新建任务
             </DialogTitle>
+            <DialogDescription>
+              先定义任务怎么安排，再补齐能力点和记录方式。能力点必填，后续会用于能力分析和任务推荐。
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-2">
             {/* 任务名称 */}
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
@@ -1183,7 +1278,7 @@ export default function TasksPage() {
               </div>
             </div>
 
-            {/* 1.6业务关联 */}
+            {/* 能力与目标关联 */}
             {renderBusinessLinkFields()}
 
             {/* 总单元数 */}
@@ -1309,10 +1404,9 @@ export default function TasksPage() {
                     </div>
                   </div>
                   
-                  {/* 预览提示 */}
-                  <div className="bg-primary/5 rounded-lg p-3 text-sm text-primary">
-                    <p className="flex items-center gap-2">
-                      <span className="text-lg">💡</span>
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm text-indigo-700">
+                    <p className="flex items-start gap-2">
+                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>
                         孩子完成时将看到：
                         {formData.trackingType === 'numeric' 
@@ -1337,7 +1431,7 @@ export default function TasksPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
+        <DialogContent className="sm:max-w-[760px] max-h-[86vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
           <DialogHeader className="pb-4">
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
@@ -1345,8 +1439,11 @@ export default function TasksPage() {
               </div>
               编辑任务
             </DialogTitle>
+            <DialogDescription>
+              修改后会同步到任务列表、今日概览和后续计划计算。旧任务如缺少能力点，需要补齐后才能保存。
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-2">
             {/* 任务名称 */}
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
@@ -1558,7 +1655,7 @@ export default function TasksPage() {
               </div>
             </div>
 
-            {/* 1.6业务关联 */}
+            {/* 能力与目标关联 */}
             {renderBusinessLinkFields()}
 
             {/* 总单元数 */}
@@ -1684,10 +1781,9 @@ export default function TasksPage() {
                     </div>
                   </div>
                   
-                  {/* 预览提示 */}
-                  <div className="bg-primary/5 rounded-lg p-3 text-sm text-primary">
-                    <p className="flex items-center gap-2">
-                      <span className="text-lg">💡</span>
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm text-indigo-700">
+                    <p className="flex items-start gap-2">
+                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>
                         孩子完成时将看到：
                         {formData.trackingType === 'numeric' 

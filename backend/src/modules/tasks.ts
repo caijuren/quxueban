@@ -29,6 +29,7 @@ const VALID_PARENT_ROLES = ['independent', 'accompany', 'parent-led']
 const VALID_DIFFICULTIES = ['basic', 'advanced', 'challenge']
 const VALID_AMOUNT_UNITS = ['page', 'chapter', 'section', 'time', 'question']
 const VALID_TRACKING_TYPES = ['simple', 'numeric', 'progress']
+const OPTIONAL_TAG_KEYS = ['taskKind', 'level', 'abilityCategory', 'abilityPoint', 'linkedGoal']
 
 const SUBJECT_MAP: Record<string, string> = { chinese: '语文', math: '数学', english: '英语', sports: '体育' }
 const PARENT_ROLE_MAP: Record<string, string> = { independent: '独立完成', accompany: '家长陪伴', 'parent-led': '家长主导', parent: '家长主导' }
@@ -92,6 +93,12 @@ function parseTaskTags(value: unknown): Record<string, unknown> {
   return {}
 }
 
+function normalizeTaskTags(value: unknown): Record<string, unknown> {
+  const tags = parseTaskTags(value)
+  const metadata = parseTaskTags((tags as any).metadata)
+  return { ...metadata, ...tags }
+}
+
 function getEffectiveScheduleRule(task: { schedule_rule?: unknown; tags?: unknown; weekly_rule?: unknown }): string {
   const taskTags = parseTaskTags(task.tags)
   const weeklyRule = parseTaskTags(task.weekly_rule)
@@ -124,7 +131,7 @@ function getEffectiveScheduleRule(task: { schedule_rule?: unknown; tags?: unknow
 }
 
 function formatTaskRecord(task: any) {
-  const taskTags = parseTaskTags(task.tags)
+  const taskTags = normalizeTaskTags(task.tags)
   const scheduleRule = getEffectiveScheduleRule(task)
 
   return {
@@ -149,12 +156,38 @@ function formatTaskRecord(task: any) {
   }
 }
 
+function appendOptionalTaskTags(source: any, target: Record<string, any>) {
+  if (!source || typeof source !== 'object') return
+
+  for (const key of OPTIONAL_TAG_KEYS) {
+    if (typeof source[key] === 'string') {
+      const value = source[key].trim().slice(0, 80)
+      if (value) target[key] = value
+    }
+  }
+}
+
+function ensureAbilityPoint(tags: unknown) {
+  if (!tags || typeof tags !== 'object' || Array.isArray(tags)) {
+    throw new AppError(400, '任务必须关联至少一个能力点')
+  }
+
+  const abilityPoint = typeof (tags as any).abilityPoint === 'string'
+    ? (tags as any).abilityPoint.trim()
+    : ''
+
+  if (!abilityPoint) {
+    throw new AppError(400, '任务必须关联至少一个能力点')
+  }
+}
+
 
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId, weeklyFrequency, trackingType, trackingUnit, targetValue } = req.body
   const { familyId } = req.user!
   if (!name || !category || !type) throw new AppError(400, 'Missing required fields: name, category, type')
+  ensureAbilityPoint(tags)
 
   const mappedCategory = CATEGORY_MAP[category] || category
   if (!['school', 'extra', 'advanced', 'english', 'sports', 'chinese'].includes(mappedCategory)) throw new AppError(400, 'Invalid category')
@@ -168,6 +201,7 @@ tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
     if (tags.parentRole && VALID_PARENT_ROLES.includes(tags.parentRole)) validatedTags.parentRole = tags.parentRole
     if (tags.difficulty && VALID_DIFFICULTIES.includes(tags.difficulty)) validatedTags.difficulty = tags.difficulty
     if (tags.totalAmount?.value > 0 && VALID_AMOUNT_UNITS.includes(tags.totalAmount.unit)) validatedTags.totalAmount = tags.totalAmount
+    appendOptionalTaskTags(tags, validatedTags)
   }
 
   const scheduleRule = tags?.scheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(tags.scheduleRule) ? tags.scheduleRule : 'daily'
@@ -342,6 +376,9 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   if (!childId) {
     throw new AppError(400, 'Missing required parameter: childId. Data isolation is mandatory.')
   }
+  if (tags !== undefined) {
+    ensureAbilityPoint(tags)
+  }
 
   const mappedCategory = category ? (CATEGORY_MAP[category] || category) : undefined
   const mappedType = type ? (TYPE_MAP[type] || type) : undefined
@@ -369,6 +406,7 @@ tasksRouter.put('/:id', async (req: AuthRequest, res: Response) => {
   if (tags?.parentRole && VALID_PARENT_ROLES.includes(tags.parentRole)) validatedTags.parentRole = tags.parentRole
   if (tags?.difficulty && VALID_DIFFICULTIES.includes(tags.difficulty)) validatedTags.difficulty = tags.difficulty
   if (tags?.totalAmount?.value > 0 && tags?.totalAmount?.unit && VALID_AMOUNT_UNITS.includes(tags.totalAmount.unit)) validatedTags.totalAmount = tags.totalAmount
+  appendOptionalTaskTags(tags, validatedTags)
   const bodyScheduleRule = tags?.scheduleRule || scheduleRule
   if (bodyScheduleRule && ['daily', 'school', 'weekend', 'flexible'].includes(bodyScheduleRule)) validatedTags.scheduleRule = bodyScheduleRule
   if (Number(weeklyFrequency) > 0) validatedTags.weeklyFrequency = Number(weeklyFrequency)

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
-import { Clock, CheckCircle2, ClipboardList, BookOpen, Plus, X, Calendar, Send, Brain, Download, Loader2, Camera, Image, Mic, FileText, XCircle, AlertCircle, ArrowRight, LayoutDashboard, HeartPulse, Lightbulb } from 'lucide-react';
+import { Clock, CheckCircle2, ClipboardList, BookOpen, Plus, X, Calendar, Send, Brain, Download, Loader2, Camera, Image, Mic, FileText, XCircle, AlertCircle, ArrowRight, LayoutDashboard, HeartPulse, Lightbulb, Play, Square, Pause, RotateCcw, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageToolbar } from '@/components/parent/PageToolbar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -17,6 +17,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { ExportDialog } from '@/components/ExportDialog';
 import { toast } from 'sonner';
 import { startOfWeek } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 function ProgressRing({ value }: { value: number }) {
   const safeValue = Math.max(0, Math.min(100, value));
@@ -79,7 +80,27 @@ function TrendChart({ currentMinutes }: { currentMinutes: number }) {
   );
 }
 
-function DailyQuoteCard() {
+const dailyQuotes = [
+  { text: '千里之行，始于足下。', author: '老子' },
+  { text: '不积跬步，无以至千里。', author: '荀子' },
+  { text: '知不足而奋进，望远山而前行。', author: '佚名' },
+  { text: '日日行，不怕千万里。', author: '佚名' },
+  { text: '学而不思则罔，思而不学则殆。', author: '孔子' },
+  { text: '纸上得来终觉浅，绝知此事要躬行。', author: '陆游' },
+  { text: '博观而约取，厚积而薄发。', author: '苏轼' },
+  { text: '今日事，今日毕。', author: '佚名' },
+  { text: '温故而知新，可以为师矣。', author: '孔子' },
+  { text: '欲穷千里目，更上一层楼。', author: '王之涣' },
+];
+
+function getDailyQuote(dateString: string) {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const index = Math.abs(year * 372 + month * 31 + day) % dailyQuotes.length;
+  return dailyQuotes[index];
+}
+
+function DailyQuoteCard({ date }: { date: string }) {
+  const quote = getDailyQuote(date);
   return (
     <section className="relative min-h-[210px] overflow-hidden rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-950 via-indigo-700 to-sky-500 p-5 text-white shadow-sm">
       <div className="absolute inset-0 opacity-40">
@@ -90,8 +111,8 @@ function DailyQuoteCard() {
       </div>
       <div className="relative flex h-full flex-col items-center justify-center text-center">
         <p className="text-sm font-semibold text-indigo-100">每日一句</p>
-        <p className="mt-8 text-lg font-semibold tracking-wide">“千里之行，始于足下。”</p>
-        <p className="mt-4 text-sm text-indigo-100">—— 老子</p>
+        <p className="mt-8 text-lg font-semibold tracking-wide">“{quote.text}”</p>
+        <p className="mt-4 text-sm text-indigo-100">—— {quote.author}</p>
       </div>
     </section>
   );
@@ -130,11 +151,13 @@ function MetricTile({
 function TaskCard({ 
   task, 
   onClick, 
+  onStartFocus,
   actualTime, 
   status = 'pending' 
 }: { 
   task: Task; 
   onClick: () => void; 
+  onStartFocus?: () => void;
   actualTime?: number;
   status?: 'pending' | 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
 }) {
@@ -159,24 +182,35 @@ function TaskCard({
   const statusMeta = getStatusMeta();
 
   return (
-    <button
-      onClick={onClick}
-      className="flex min-h-20 w-full items-center rounded-lg border border-blue-100 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/40"
-    >
+    <div className="flex min-h-20 w-full items-center rounded-lg border border-blue-100 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/40">
       <div className="flex w-full items-center justify-between gap-3">
-        <div className="min-w-0">
+        <button onClick={onClick} className="min-w-0 flex-1 text-left">
           <p className={`truncate text-base font-semibold ${isCompleted ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-950'}`}>
             {task.name}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {actualTime !== undefined ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}
+            {typeof actualTime === 'number' && Number.isFinite(actualTime) ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}
           </p>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {status === 'pending' && onStartFocus && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onStartFocus}
+              className="h-8 rounded-lg border-sky-100 bg-sky-50 text-sky-700 hover:bg-sky-100"
+            >
+              <Play className="mr-1 size-3.5" />
+              开始
+            </Button>
+          )}
+          <span className={`rounded-full border px-3 py-1 text-sm font-medium ${statusMeta.className}`}>
+            {statusMeta.label}
+          </span>
         </div>
-        <span className={`shrink-0 rounded-full border px-3 py-1 text-sm font-medium ${statusMeta.className}`}>
-          {statusMeta.label}
-        </span>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -193,6 +227,10 @@ interface Task {
   id: number;
   name: string;
   category: string;
+  subject?: string;
+  taskKind?: string;
+  abilityCategory?: string;
+  abilityPoint?: string;
   scheduleRule: string;
   timePerUnit: number;
   appliesTo: number[];
@@ -203,7 +241,10 @@ interface Checkin {
   taskId: number;
   status: 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved' | 'pending';
   completedValue?: number;
+  focusMinutes?: number;
   notes?: string;
+  metadata?: Record<string, any>;
+  evidenceUrl?: string;
 }
 
 interface CheckinPayload {
@@ -212,7 +253,10 @@ interface CheckinPayload {
   status: string;
   value: number;
   completedValue: number | undefined | null;
+  focusMinutes?: number | undefined | null;
   notes: string;
+  metadata?: Record<string, any>;
+  evidenceUrl?: string;
   date: string;
 }
 
@@ -228,6 +272,19 @@ interface AIAnalysisResult {
 // 格式化学习时长
 function formatStudyTime(minutes: number): string {
   return `${minutes}分钟`;
+}
+
+function formatFocusTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function formatPomodoroTime(seconds: number): string {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 }
 
 function getGreeting(): string {
@@ -252,7 +309,63 @@ function parseLocalDateString(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function getShiftedLocalDateString(dateString: string, days: number): string {
+  const date = parseLocalDateString(dateString);
+  date.setDate(date.getDate() + days);
+  return getLocalDateString(date);
+}
+
 type CompletionStatus = 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
+
+const categoryLabelMap: Record<string, string> = {
+  chinese: '语文',
+  math: '数学',
+  english: '英语',
+  reading: '阅读',
+  exercise: '运动',
+  sport: '运动',
+  habit: '习惯',
+  life: '生活',
+  emotion: '情绪',
+  social: '社交',
+  school: '校内',
+  advanced: '培优',
+  other: '其他',
+};
+
+const qualityOptions = [
+  { value: '', label: '未记录' },
+  { value: 'good', label: '很好' },
+  { value: 'normal', label: '正常' },
+  { value: 'struggled', label: '吃力' },
+];
+
+const difficultyOptions = [
+  { value: '', label: '未记录' },
+  { value: 'easy', label: '偏简单' },
+  { value: 'fit', label: '合适' },
+  { value: 'hard', label: '偏难' },
+];
+
+const blockerOptions = [
+  { value: '', label: '请选择原因' },
+  { value: 'time', label: '时间不够' },
+  { value: 'hard', label: '太难' },
+  { value: 'interest', label: '兴趣不足' },
+  { value: 'energy', label: '状态不好' },
+  { value: 'external', label: '外部原因' },
+];
+
+function getCategoryLabel(category: string, subject?: string) {
+  return categoryLabelMap[subject || ''] || categoryLabelMap[category] || category || '未分类';
+}
+
+function formatMinuteDelta(current: number, previous?: number) {
+  if (previous === undefined || previous === null) return '暂无对比';
+  const delta = current - previous;
+  if (delta === 0) return '持平';
+  return `${delta > 0 ? '+' : ''}${delta} 分钟`;
+}
 
 function getStatusButtonClass(status: CompletionStatus, currentStatus: CompletionStatus): string {
   const isActive = status === currentStatus;
@@ -276,11 +389,27 @@ export default function ParentDashboard() {
   const [completionStatus, setCompletionStatus] = useState<CompletionStatus>('completed');
   const [completionData, setCompletionData] = useState({
     actualTime: '',
+    focusMinutes: '',
+    quality: '',
+    difficulty: '',
+    blocker: '',
+    childFeedback: '',
     notes: '',
     date: getLocalDateString(new Date()),
     evidence: null as File | null,
     evidenceUrl: '' as string
   });
+  const [focusSession, setFocusSession] = useState<{
+    task: Task;
+    startedAt: number;
+    elapsedSeconds: number;
+    running: boolean;
+  } | null>(null);
+  const [focusPickerOpen, setFocusPickerOpen] = useState(false);
+  const [pomodoroOpen, setPomodoroOpen] = useState(false);
+  const [pomodoroDuration, setPomodoroDuration] = useState(25);
+  const [pomodoroRemaining, setPomodoroRemaining] = useState(25 * 60);
+  const [pomodoroRunning, setPomodoroRunning] = useState(false);
   // 日期选择状态
   const [selectedDate, setSelectedDate] = useState(getLocalDateString(new Date()));
   // 导出对话框状态
@@ -294,6 +423,36 @@ export default function ParentDashboard() {
     }));
   }, [selectedDate]);
 
+  useEffect(() => {
+    if (!focusSession?.running) return;
+    const timer = window.setInterval(() => {
+      setFocusSession((current) => {
+        if (!current?.running) return current;
+        return {
+          ...current,
+          elapsedSeconds: Math.max(0, Math.floor((Date.now() - current.startedAt) / 1000)),
+        };
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [focusSession?.running]);
+
+  useEffect(() => {
+    if (!pomodoroRunning) return;
+    const timer = window.setInterval(() => {
+      setPomodoroRemaining((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          setPomodoroRunning(false);
+          toast.success('番茄闹钟结束，可以休息一下');
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [pomodoroRunning]);
+
   // 概览统计数据
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['dashboard-stats', selectedChildId, selectedDate],
@@ -302,6 +461,28 @@ export default function ParentDashboard() {
       return response.data.data as DashboardStats;
     },
     staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: yesterdayStats } = useQuery({
+    queryKey: ['dashboard-stats-compare', selectedChildId, getShiftedLocalDateString(selectedDate, -1)],
+    queryFn: async () => {
+      const compareDate = getShiftedLocalDateString(selectedDate, -1);
+      const response = await apiClient.get(`/dashboard/stats?date=${compareDate}&childId=${selectedChildId}`);
+      return response.data.data as DashboardStats;
+    },
+    staleTime: 2 * 60 * 1000,
+    enabled: !!selectedChildId,
+  });
+
+  const { data: lastWeekStats } = useQuery({
+    queryKey: ['dashboard-stats-compare', selectedChildId, getShiftedLocalDateString(selectedDate, -7)],
+    queryFn: async () => {
+      const compareDate = getShiftedLocalDateString(selectedDate, -7);
+      const response = await apiClient.get(`/dashboard/stats?date=${compareDate}&childId=${selectedChildId}`);
+      return response.data.data as DashboardStats;
+    },
+    staleTime: 2 * 60 * 1000,
+    enabled: !!selectedChildId,
   });
   
   // 获取周计划任务，用于构建今日待办和孩子对比
@@ -323,6 +504,10 @@ export default function ParentDashboard() {
             id: allocation.taskId,
             name: allocation.taskName,
             category: allocation.category,
+            subject: allocation.subject,
+            taskKind: allocation.taskKind,
+            abilityCategory: allocation.abilityCategory,
+            abilityPoint: allocation.abilityPoint,
             scheduleRule: allocation.scheduleRule,
             timePerUnit: allocation.timePerUnit,
             appliesTo: [selectedChildId!],
@@ -360,10 +545,16 @@ export default function ParentDashboard() {
     const checkin = todayCheckins.find((c: Checkin) => Number(c.taskId) === Number(task.id));
 
     if (checkin) {
+      const metadata = checkin.metadata || {};
       // 如果找到签到记录，填充上次的数据
       setCompletionStatus(checkin.status);
       setCompletionData({
         actualTime: checkin.completedValue ? checkin.completedValue.toString() : '',
+        focusMinutes: checkin.focusMinutes ? checkin.focusMinutes.toString() : '',
+        quality: metadata.quality || '',
+        difficulty: metadata.difficulty || '',
+        blocker: metadata.blocker || '',
+        childFeedback: metadata.childFeedback || '',
         notes: checkin.notes || '',
         date: selectedDate,
         evidence: null,
@@ -374,6 +565,11 @@ export default function ParentDashboard() {
       setCompletionStatus('completed');
       setCompletionData({
         actualTime: '',
+        focusMinutes: '',
+        quality: '',
+        difficulty: '',
+        blocker: '',
+        childFeedback: '',
         notes: '',
         date: selectedDate,
         evidence: null,
@@ -382,6 +578,64 @@ export default function ParentDashboard() {
     }
     
     setOpen(true);
+  };
+
+  const handleStartFocus = (task: Task) => {
+    setFocusPickerOpen(false);
+    setFocusSession({
+      task,
+      startedAt: Date.now(),
+      elapsedSeconds: 0,
+      running: true,
+    });
+    toast.success(`已开始专注：${task.name}`);
+  };
+
+  const handleStopFocus = () => {
+    if (!focusSession) return;
+    const elapsedSeconds = focusSession.running
+      ? Math.max(focusSession.elapsedSeconds, Math.floor((Date.now() - focusSession.startedAt) / 1000))
+      : focusSession.elapsedSeconds;
+    const focusMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    setFocusSession(null);
+    setSelectedTask(focusSession.task);
+    setCompletionStatus('completed');
+    setCompletionData({
+      actualTime: String(focusMinutes),
+      focusMinutes: String(focusMinutes),
+      quality: '',
+      difficulty: '',
+      blocker: '',
+      childFeedback: '',
+      notes: '',
+      date: selectedDate,
+      evidence: null,
+      evidenceUrl: '',
+    });
+    setOpen(true);
+  };
+
+  const handleCancelFocus = () => {
+    setFocusSession(null);
+    toast.info('已放弃本次专注计时');
+  };
+
+  const openPomodoro = () => {
+    setPomodoroOpen(true);
+    if (!pomodoroRunning && pomodoroRemaining === 0) {
+      setPomodoroRemaining(pomodoroDuration * 60);
+    }
+  };
+
+  const changePomodoroDuration = (minutes: number) => {
+    setPomodoroDuration(minutes);
+    setPomodoroRemaining(minutes * 60);
+    setPomodoroRunning(false);
+  };
+
+  const resetPomodoro = () => {
+    setPomodoroRemaining(pomodoroDuration * 60);
+    setPomodoroRunning(false);
   };
 
   // 分享到钉钉
@@ -452,7 +706,17 @@ export default function ParentDashboard() {
           status: completionStatus,
           value: 1,
           completedValue: completionData.actualTime !== '' ? parseInt(completionData.actualTime) : undefined,
+          focusMinutes: completionData.focusMinutes !== '' ? parseInt(completionData.focusMinutes) : undefined,
           notes: completionData.notes,
+          metadata: {
+            quality: completionData.quality,
+            difficulty: completionData.difficulty,
+            blocker: completionData.blocker,
+            childFeedback: completionData.childFeedback,
+            abilityCategory: selectedTask.abilityCategory || '',
+            abilityPoint: selectedTask.abilityPoint || '',
+          },
+          evidenceUrl: completionData.evidenceUrl,
           date: completionData.date
         });
 
@@ -480,6 +744,11 @@ export default function ParentDashboard() {
         // Reset completion data
         setCompletionData({
           actualTime: '',
+          focusMinutes: '',
+          quality: '',
+          difficulty: '',
+          blocker: '',
+          childFeedback: '',
           notes: '',
           date: selectedDate,
           evidence: null,
@@ -561,6 +830,9 @@ export default function ParentDashboard() {
   const displayName = selectedChild?.name || user?.name || '家长';
   const todayStudyMinutes = stats?.todayStudyMinutes || 0;
   const readingCount = stats?.todayReadingCount || 0;
+  const totalFocusMinutes = todayCheckins.reduce((sum: number, checkin: Checkin) => sum + (checkin.focusMinutes || 0), 0);
+  const yesterdayDelta = formatMinuteDelta(todayStudyMinutes, yesterdayStats?.todayStudyMinutes);
+  const lastWeekDelta = formatMinuteDelta(todayStudyMinutes, lastWeekStats?.todayStudyMinutes);
 
   return (
     <div className="mx-auto max-w-[1360px] space-y-5" ref={pageRef}>
@@ -630,11 +902,11 @@ export default function ParentDashboard() {
         <div className="grid gap-4 sm:grid-cols-2">
           <MetricTile label="待完成任务" value={remainingTasks} unit="项" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} tone="bg-emerald-50" />
           <MetricTile label="学习时长" value={todayStudyMinutes} unit="分钟" icon={<Clock className="h-5 w-5 text-indigo-600" />} tone="bg-indigo-50" />
-          <MetricTile label="阅读量" value={readingCount} unit="本" icon={<BookOpen className="h-5 w-5 text-orange-500" />} tone="bg-orange-50" />
-          <MetricTile label="专注时长" value={0} unit="分钟" icon={<Brain className="h-5 w-5 text-sky-500" />} tone="bg-sky-50" />
+          <MetricTile label="阅读本数" value={readingCount} unit="本" icon={<BookOpen className="h-5 w-5 text-orange-500" />} tone="bg-orange-50" />
+          <MetricTile label="专注时长" value={totalFocusMinutes} unit="分钟" icon={<Brain className="h-5 w-5 text-sky-500" />} tone="bg-sky-50" />
         </div>
 
-        <DailyQuoteCard />
+        <DailyQuoteCard date={selectedDate} />
       </div>
 
       <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(260px,0.78fr)]">
@@ -667,6 +939,7 @@ export default function ParentDashboard() {
                     status={task.status as any}
                     actualTime={task.actualTime}
                     onClick={() => handleTaskClick(task.task)}
+                    onStartFocus={() => handleStartFocus(task.task)}
                   />
                 ))}
               </div>
@@ -685,16 +958,47 @@ export default function ParentDashboard() {
           <div className="grid grid-cols-2 border-t border-slate-100 pt-4 text-sm">
             <div>
               <p className="text-slate-500">较上周同期</p>
-              <p className="mt-1 font-semibold text-slate-900">--</p>
+              <p className="mt-1 font-semibold text-slate-900">{lastWeekDelta}</p>
+              <p className="mt-0.5 text-xs text-slate-400">上周 {lastWeekStats?.todayStudyMinutes ?? 0} 分钟</p>
             </div>
             <div>
               <p className="text-slate-500">较昨天</p>
-              <p className="mt-1 font-semibold text-slate-900">--</p>
+              <p className="mt-1 font-semibold text-slate-900">{yesterdayDelta}</p>
+              <p className="mt-0.5 text-xs text-slate-400">昨天 {yesterdayStats?.todayStudyMinutes ?? 0} 分钟</p>
             </div>
           </div>
         </section>
 
         <aside className="flex h-[390px] min-h-0 flex-col gap-4 overflow-hidden">
+          <section className="shrink-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-950">快速操作</h2>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <Button variant="outline" onClick={openPomodoro} className="h-12 rounded-xl bg-violet-50/60">
+                <Timer className="mr-2 h-4 w-4 text-primary" />
+                番茄闹钟
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (pendingTasks.length > 0) setFocusPickerOpen(true);
+                  else toast.info('当前没有待开始的任务');
+                }}
+                className="h-12 rounded-xl bg-pink-50/60"
+              >
+                <Clock className="mr-2 h-4 w-4 text-pink-500" />
+                开始专注
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/parent/reading')} className="h-12 rounded-xl bg-indigo-50/60">
+                <BookOpen className="mr-2 h-4 w-4 text-indigo-500" />
+                阅读记录
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/parent/plans')} className="h-12 rounded-xl bg-sky-50/60">
+                <Calendar className="mr-2 h-4 w-4 text-sky-500" />
+                学习工具
+              </Button>
+            </div>
+          </section>
+
           <section className="min-h-0 flex-1 rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
             <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950">
               <Brain className="h-5 w-5 text-primary" />
@@ -710,28 +1014,6 @@ export default function ParentDashboard() {
             <Button variant="outline" onClick={handleAIAnalysis} className="mt-5 rounded-lg">
               查看分析
             </Button>
-          </section>
-
-          <section className="shrink-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-slate-950">快速操作</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <Button variant="outline" onClick={() => navigate('/parent/tasks')} className="h-12 rounded-xl bg-violet-50/60">
-                <Plus className="mr-2 h-4 w-4 text-primary" />
-                添加任务
-              </Button>
-              <Button variant="outline" onClick={() => toast.info('专注计时功能稍后接入')} className="h-12 rounded-xl bg-pink-50/60">
-                <Clock className="mr-2 h-4 w-4 text-pink-500" />
-                开始专注
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/parent/reading')} className="h-12 rounded-xl bg-indigo-50/60">
-                <BookOpen className="mr-2 h-4 w-4 text-indigo-500" />
-                阅读记录
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/parent/plans')} className="h-12 rounded-xl bg-sky-50/60">
-                <Calendar className="mr-2 h-4 w-4 text-sky-500" />
-                学习工具
-              </Button>
-            </div>
           </section>
         </aside>
       </div>
@@ -814,30 +1096,174 @@ export default function ParentDashboard() {
         </section>
       </div>
 
+      <Dialog open={pomodoroOpen} onOpenChange={setPomodoroOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl border border-violet-100 shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+              <Timer className="size-5 text-primary" />
+              番茄闹钟
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-2">
+            <div className="flex justify-center gap-2">
+              {[15, 25, 45].map((minutes) => (
+                <Button
+                  key={minutes}
+                  variant="outline"
+                  onClick={() => changePomodoroDuration(minutes)}
+                  className={cn(
+                    'h-9 rounded-lg border-violet-200',
+                    pomodoroDuration === minutes
+                      ? 'bg-violet-600 text-white hover:bg-violet-700'
+                      : 'bg-white text-violet-700 hover:bg-violet-50'
+                  )}
+                >
+                  {minutes} 分钟
+                </Button>
+              ))}
+            </div>
+
+            <div className="flex flex-col items-center rounded-2xl bg-slate-950 px-6 py-9 text-white">
+              <p className="text-xs font-medium text-violet-200">自由计时，不绑定任务</p>
+              <p className="mt-3 font-mono text-6xl font-semibold tabular-nums">
+                {formatPomodoroTime(pomodoroRemaining)}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <Button variant="outline" onClick={resetPomodoro} className="h-11 rounded-xl">
+                <RotateCcw className="mr-1.5 size-4" />
+                重置
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPomodoroRunning(false)}
+                disabled={!pomodoroRunning}
+                className="h-11 rounded-xl"
+              >
+                <Pause className="mr-1.5 size-4" />
+                暂停
+              </Button>
+              <Button
+                onClick={() => {
+                  if (pomodoroRemaining <= 0) resetPomodoro();
+                  setPomodoroRunning(true);
+                }}
+                className="h-11 rounded-xl bg-violet-600 text-white hover:bg-violet-700"
+              >
+                <Play className="mr-1.5 size-4" />
+                开始
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={focusPickerOpen} onOpenChange={setFocusPickerOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl border border-slate-200 shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+              <Play className="size-5 text-pink-500" />
+              选择专注任务
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto py-2">
+            {pendingTasks.length > 0 ? pendingTasks.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleStartFocus(item.task)}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-pink-200 hover:bg-pink-50/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-950">{item.task.name}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {getCategoryLabel(item.task.category, item.task.subject)}
+                    {item.task.abilityPoint ? ` · ${item.task.abilityPoint}` : ''}
+                    {` · 预计 ${item.task.timePerUnit} 分钟`}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-lg bg-pink-50 px-3 py-1 text-xs font-medium text-pink-600">开始</span>
+              </button>
+            )) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                当前没有待开始的任务
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(focusSession)}>
+        <DialogContent
+          className="sm:max-w-md rounded-2xl border border-sky-100 shadow-xl"
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          showCloseButton={false}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+              <Clock className="size-5 text-sky-600" />
+              专注计时
+            </DialogTitle>
+          </DialogHeader>
+          {focusSession && (
+            <div className="space-y-6 py-2">
+              <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                <p className="text-xs font-medium text-sky-700">当前任务</p>
+                <p className="mt-2 text-base font-semibold text-slate-950">{focusSession.task.name}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                  <span>{getCategoryLabel(focusSession.task.category, focusSession.task.subject)}</span>
+                  {focusSession.task.abilityPoint && <span>能力点：{focusSession.task.abilityPoint}</span>}
+                  <span>预计 {focusSession.task.timePerUnit} 分钟</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center rounded-2xl bg-slate-950 px-6 py-8 text-white">
+                <p className="text-xs font-medium text-sky-200">已专注</p>
+                <p className="mt-3 font-mono text-6xl font-semibold tabular-nums">
+                  {formatFocusTime(focusSession.elapsedSeconds)}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="outline" onClick={handleCancelFocus} className="h-11 rounded-xl">
+                  放弃计时
+                </Button>
+                <Button onClick={handleStopFocus} className="h-11 rounded-xl bg-sky-600 text-white hover:bg-sky-700">
+                  <Square className="mr-1.5 size-4" />
+                  结束并记录
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* 任务完成弹窗 */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto rounded-xl border border-slate-200 shadow-xl">
-          <DialogHeader className="pb-4">
+        <DialogContent className="max-h-[86vh] overflow-y-auto rounded-2xl border border-slate-200 shadow-xl sm:max-w-2xl">
+          <DialogHeader className="pb-2">
             <DialogTitle className="text-lg font-semibold text-slate-950 flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-primary" />
               完成任务
             </DialogTitle>
           </DialogHeader>
           {selectedTask && (
-            <div className="space-y-6 py-4">
+            <div className="space-y-4 py-2">
               {/* 任务信息 */}
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <h3 className="font-semibold text-slate-950 mb-2">{selectedTask.name}</h3>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <h3 className="font-semibold text-slate-950">{selectedTask.name}</h3>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   <Clock className="w-3.5 h-3.5" />
                   <span>{selectedTask.timePerUnit}分钟</span>
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>{selectedTask.category}</span>
+                  <span>{getCategoryLabel(selectedTask.category, selectedTask.subject)}</span>
+                  {selectedTask.abilityPoint && <span>能力点：{selectedTask.abilityPoint}</span>}
                 </div>
               </div>
 
               {/* 完成状态 */}
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3">
                 <Label className="text-sm font-medium text-slate-700">完成状态</Label>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -880,27 +1306,85 @@ export default function ParentDashboard() {
 
               {/* 实际用时 */}
               {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) && (
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-slate-700">实际用时（分钟）</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={completionData.actualTime}
-                    onChange={(e) => setCompletionData({ ...completionData, actualTime: e.target.value })}
-                    placeholder="输入实际用时"
-                    className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  />
+                <div className="grid gap-3 rounded-xl border border-slate-100 bg-white p-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">计入学习时长（分钟）</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={completionData.actualTime}
+                      onChange={(e) => setCompletionData({ ...completionData, actualTime: e.target.value })}
+                      placeholder="用于统计，可手动修正"
+                      className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">计时器记录（分钟）</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={completionData.focusMinutes}
+                      onChange={(e) => setCompletionData({ ...completionData, focusMinutes: e.target.value })}
+                      placeholder="任务专注结束后自动带入"
+                      className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!['postponed', 'not_involved'].includes(completionStatus) && (
+                <div className="grid gap-3 rounded-xl border border-slate-100 bg-white p-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">完成质量</Label>
+                    <select
+                      value={completionData.quality}
+                      onChange={(e) => setCompletionData({ ...completionData, quality: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      {qualityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">难度感受</Label>
+                    <select
+                      value={completionData.difficulty}
+                      onChange={(e) => setCompletionData({ ...completionData, difficulty: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      {difficultyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {['partial', 'not_completed', 'postponed'].includes(completionStatus) && (
+                <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3">
+                  <Label className="text-sm font-medium text-slate-700">未完成/调整原因</Label>
+                  <select
+                    value={completionData.blocker}
+                    onChange={(e) => setCompletionData({ ...completionData, blocker: e.target.value })}
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  >
+                    {blockerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
                 </div>
               )}
 
               {/* 备注 */}
-              {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) && (
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-slate-700">备注（可选）</Label>
+              {!['not_involved'].includes(completionStatus) && (
+                <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3">
+                  <Label className="text-sm font-medium text-slate-700">孩子反馈（可选）</Label>
+                  <Input
+                    value={completionData.childFeedback}
+                    onChange={(e) => setCompletionData({ ...completionData, childFeedback: e.target.value })}
+                    placeholder="例如：今天计算有点慢，但能坚持做完"
+                    className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                  <Label className="text-sm font-medium text-slate-700">家长观察（可选）</Label>
                   <Textarea
                     value={completionData.notes}
                     onChange={(e) => setCompletionData({ ...completionData, notes: e.target.value })}
-                    placeholder="添加任务完成备注..."
+                    placeholder="记录状态、卡点、需要调整的地方，后续可用于复盘分析"
                     rows={3}
                     className="w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary p-3"
                   />
@@ -920,7 +1404,7 @@ export default function ParentDashboard() {
 
               {/* 证据上传 */}
               {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) && (
-                <div className="space-y-3">
+                <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3">
                   <Label className="text-sm font-medium text-slate-700">添加证据（可选）</Label>
                   
                   {/* 已上传的证据预览 */}

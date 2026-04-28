@@ -275,6 +275,8 @@ export default function ChildrenManagement({
   const [localSettings, setLocalSettings] = useState<LocalChildSettings>(getDefaultLocalChildSettings);
   const [newCustomTag, setNewCustomTag] = useState('');
   const [newInterestTag, setNewInterestTag] = useState('');
+  const [isSavingBasicInfo, setIsSavingBasicInfo] = useState(false);
+  const [isExportingData, setIsExportingData] = useState(false);
 
   const { data: children = [], refetch, isLoading: isChildrenLoading, isError: isChildrenError } = useQuery({
     queryKey: ['children'],
@@ -424,14 +426,25 @@ export default function ChildrenManagement({
     formData.append('avatar', file);
     apiClient.post('/upload/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(({ data }) => {
+    }).then(async ({ data }) => {
       const uploadedAvatar = data?.data?.url || data?.url;
       if (!uploadedAvatar) {
         toast.error('上传成功，但没有返回头像链接');
         return;
       }
       setChildAvatar(uploadedAvatar);
-      toast.success('头像上传成功，请保存更改');
+      if (selectedChild) {
+        await updateChild(selectedChild.id, {
+          name: childName.trim() || selectedChild.name,
+          avatar: uploadedAvatar,
+        });
+        setSelectedChild({ ...selectedChild, name: childName.trim() || selectedChild.name, avatar: uploadedAvatar });
+        await refetch();
+        await refreshChildren();
+        toast.success('头像已上传并更新');
+      } else {
+        toast.success('头像上传成功');
+      }
     }).catch((error) => {
       showCopyableError(getErrorMessage(error) || '头像上传失败');
     });
@@ -530,6 +543,63 @@ export default function ChildrenManagement({
       },
     });
     saveProfileMutation.mutate({ childId: selectedChild.id, data: localSettings });
+  };
+
+  const handleSaveBasicInfo = async () => {
+    if (!selectedChild) return;
+    if (!childName.trim()) {
+      toast.error('请输入孩子姓名');
+      return;
+    }
+    if (childName.trim().length > 20) {
+      toast.error('孩子姓名请控制在 20 个字符以内');
+      return;
+    }
+
+    setIsSavingBasicInfo(true);
+    try {
+      await updateChild(selectedChild.id, {
+        name: childName.trim(),
+        avatar: childAvatar,
+      });
+      await updateChildProfile(selectedChild.id, localSettings);
+      await updateChildSemesterConfig(selectedChild.id, semesterConfig);
+      setSelectedChild({ ...selectedChild, name: childName.trim(), avatar: childAvatar });
+      await Promise.all([
+        refetch(),
+        refetchChildProfile(),
+        refetchSemesterConfig(),
+      ]);
+      await refreshChildren();
+      toast.success('基本信息已保存');
+    } catch (error) {
+      showCopyableError(`保存失败：${getErrorMessage(error)}`);
+    } finally {
+      setIsSavingBasicInfo(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setIsExportingData(true);
+    try {
+      const response = await apiClient.get('/settings/export', { responseType: 'blob' });
+      const disposition = response.headers['content-disposition'] || '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] || `quxueban-export-${new Date().toISOString().slice(0, 10)}.json`;
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('数据导出已开始下载');
+    } catch (error) {
+      toast.error(`导出失败：${getErrorMessage(error)}`);
+    } finally {
+      setIsExportingData(false);
+    }
   };
 
   const handleDelete = () => {
@@ -770,9 +840,9 @@ export default function ChildrenManagement({
             </div>
           </DialogHeader>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[178px_minmax(0,1fr)] overflow-hidden bg-[#fbfbff]">
+          <div className="grid min-h-0 flex-1 grid-cols-[190px_minmax(0,1fr)] overflow-hidden bg-[#fbfbff]">
             <aside className="h-full border-r border-border/70 bg-[#fbfbff] px-3 py-3">
-              <div className="grid auto-rows-[40px] gap-1">
+              <div className="grid auto-rows-[44px] gap-1">
                 {detailTabs.map((tab) => {
                   const Icon = tab.icon;
                   const active = activeDetailTab === tab.id;
@@ -782,13 +852,13 @@ export default function ChildrenManagement({
                       type="button"
                       onClick={() => setActiveDetailTab(tab.id)}
                       className={cn(
-                        'flex h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs font-medium transition-colors',
+                        'flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium transition-colors',
                         active && !tab.danger && 'bg-violet-50 text-violet-700',
                         !active && !tab.danger && 'text-slate-600 hover:bg-slate-50',
                         tab.danger && (active ? 'bg-red-50 text-red-600' : 'text-red-500 hover:bg-red-50')
                       )}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-4 w-4 shrink-0" />
                       {tab.label}
                     </button>
                   );
@@ -888,15 +958,15 @@ export default function ChildrenManagement({
                         <Input value={childAvatar} onChange={(e) => setChildAvatar(e.target.value)} placeholder="emoji 或图片链接" className="bg-white" />
                       </div>
                     </div>
-                    <div className="grid gap-x-4 gap-y-3 md:grid-cols-2">
+                    <div className="grid gap-x-4 gap-y-3 md:grid-cols-2 [&_button[role=combobox]]:h-11 [&_input]:h-11">
                       <div className="space-y-2">
                         <Label>姓名</Label>
-                        <Input value={childName} onChange={(e) => setChildName(e.target.value)} />
+                        <Input value={childName} onChange={(e) => setChildName(e.target.value)} className="w-full rounded-xl" />
                       </div>
                       <div className="space-y-2">
                         <Label>性别</Label>
                         <Select value={localSettings.gender} onValueChange={(value) => updateLocalSettings({ gender: value as LocalChildSettings['gender'] })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="unset">未设置</SelectItem>
                             <SelectItem value="male">男孩</SelectItem>
@@ -907,13 +977,13 @@ export default function ChildrenManagement({
                       <div className="space-y-2">
                         <Label>年级</Label>
                         <Select value={semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
                           <SelectContent>{gradeOptions.map((grade) => <SelectItem key={grade} value={grade}>{grade}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>班级</Label>
-                        <Input value={localSettings.className} onChange={(e) => updateLocalSettings({ className: e.target.value })} placeholder="例如：三年级 2 班" />
+                        <Input value={localSettings.className} onChange={(e) => updateLocalSettings({ className: e.target.value })} placeholder="例如：三年级 2 班" className="w-full rounded-xl" />
                       </div>
                     </div>
                   </div>
@@ -947,7 +1017,7 @@ export default function ChildrenManagement({
                   </div>
                   <div className="flex justify-end gap-3">
                     <Button variant="outline" onClick={() => setActiveDetailTab('overview')}>取消</Button>
-                    <Button className="bg-violet-600 hover:bg-violet-700" onClick={handleUpdate} disabled={updateMutation.isPending}>{updateMutation.isPending ? '保存中...' : '保存更改'}</Button>
+                    <Button className="bg-violet-600 hover:bg-violet-700" onClick={handleSaveBasicInfo} disabled={isSavingBasicInfo}>{isSavingBasicInfo ? '保存中...' : '保存更改'}</Button>
                   </div>
                   </div>
                 </section>
@@ -1137,8 +1207,10 @@ export default function ChildrenManagement({
                     <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
                       <Download className="h-8 w-8 rounded-lg bg-white p-2 text-blue-600 shadow-sm" />
                       <h4 className="mt-3 font-semibold text-blue-900">数据导出</h4>
-                      <p className="mt-1 text-sm leading-6 text-blue-700/80">导出学习记录、阅读记录、任务记录与成长报告。当前缺少孩子维度导出接口。</p>
-                      <Button variant="outline" disabled className="mt-3 border-blue-200 bg-white text-blue-700">待接入导出</Button>
+                      <p className="mt-1 text-sm leading-6 text-blue-700/80">导出家庭设置、孩子、任务、计划、打卡、阅读和成就数据，用于备份和迁移。</p>
+                      <Button variant="outline" onClick={handleExportData} disabled={isExportingData} className="mt-3 border-blue-200 bg-white text-blue-700">
+                        {isExportingData ? '导出中...' : '导出 JSON'}
+                      </Button>
                     </div>
                     <div className="rounded-xl border border-orange-100 bg-orange-50/50 p-4">
                       <Database className="h-8 w-8 rounded-lg bg-white p-2 text-orange-600 shadow-sm" />

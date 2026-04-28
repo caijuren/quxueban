@@ -136,6 +136,10 @@ uploadRouter.post('/evidence', evidenceUpload.single('evidence'), async (req: Au
 
       // Return uploaded evidence URL for the caller to persist on the correct model
       const fileUrl = `/api/uploads/evidence/${req.file.filename}`
+      await prisma.dailyCheckin.update({
+        where: { id: parseInt(checkinId) },
+        data: { evidenceUrl: fileUrl },
+      })
 
       res.json({
         status: 'success',

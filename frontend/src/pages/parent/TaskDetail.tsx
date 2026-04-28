@@ -348,15 +348,6 @@ export default function TaskDetail() {
           </Button>
             <Button 
               variant="outline" 
-              className="h-11 rounded-xl bg-white"
-              onClick={() => setIsEditingTask(!isEditingTask)}
-              disabled={updateTaskMutation.isPending}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              {isEditingTask ? '取消编辑' : '编辑任务'}
-            </Button>
-            <Button 
-              variant="outline" 
               onClick={() => pushTaskToDingtalkMutation.mutate()}
               disabled={pushTaskToDingtalkMutation.isPending}
               className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50"

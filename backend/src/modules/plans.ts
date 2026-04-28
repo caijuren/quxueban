@@ -368,7 +368,7 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
  * Statuses: completed, partial, postponed, not_involved, not_completed, makeup, advance
  */
 plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
-  const { taskId, planId, status, value, completedValue, notes, childId, date } = req.body
+  const { taskId, planId, status, value, completedValue, focusMinutes, notes, metadata, evidenceUrl, childId, date } = req.body
   const { userId, familyId, role } = req.user!
   const parsedTaskId = parseInt(String(taskId))
   const parsedPlanId = planId ? parseInt(String(planId)) : null
@@ -377,6 +377,13 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       ? null
       : parseInt(String(completedValue))
   const normalizedNotes = typeof notes === 'string' ? notes.trim() : ''
+  const parsedFocusMinutes =
+    focusMinutes === undefined || focusMinutes === null || focusMinutes === ''
+      ? null
+      : parseInt(String(focusMinutes))
+  const normalizedEvidenceUrl = typeof evidenceUrl === 'string' ? evidenceUrl.trim() : ''
+  const normalizedMetadata = parseJsonObject(metadata)
+  const metadataJson = JSON.stringify(normalizedMetadata)
 
   // For parents, use provided childId; for children, use their own userId
   const targetChildId = role === 'parent' ? childId : userId
@@ -423,7 +430,10 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       status: true,
       value: true,
       completedValue: true,
+      focusMinutes: true,
       notes: true,
+      metadata: true,
+      evidenceUrl: true,
       checkDate: true,
       createdAt: true,
     },
@@ -438,7 +448,10 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         value = ${value || 1},
         plan_id = ${parsedPlanId || existingCheckin.planId},
         completed_value = ${parsedCompletedValue},
-        notes = ${normalizedNotes || null}
+        focus_minutes = ${parsedFocusMinutes},
+        notes = ${normalizedNotes || null},
+        metadata = ${metadataJson}::jsonb,
+        evidence_url = ${normalizedEvidenceUrl || existingCheckin.evidenceUrl || ''}
       WHERE child_id = ${targetChildId}
         AND task_id = ${parsedTaskId}
         AND check_date = ${checkDate}
@@ -450,7 +463,10 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       value: value || 1,
       planId: parsedPlanId || existingCheckin.planId,
       completedValue: parsedCompletedValue,
+      focusMinutes: parsedFocusMinutes,
       notes: normalizedNotes,
+      metadata: normalizedMetadata,
+      evidenceUrl: normalizedEvidenceUrl || existingCheckin.evidenceUrl || '',
     }
 
     // Update weekly plan progress
@@ -477,7 +493,10 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         status,
         value,
         completed_value,
+        focus_minutes,
         notes,
+        metadata,
+        evidence_url,
         check_date,
         created_at
       )
@@ -489,17 +508,23 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
         ${status},
         ${value || 1},
         ${parsedCompletedValue},
+        ${parsedFocusMinutes},
         ${normalizedNotes || null},
+        ${metadataJson}::jsonb,
+        ${normalizedEvidenceUrl},
         ${checkDate},
         NOW()
       )
-      RETURNING id, plan_id, child_id, task_id, status, value, completed_value, notes, check_date, created_at
+      RETURNING id, plan_id, child_id, task_id, status, value, completed_value, focus_minutes, notes, metadata, evidence_url, check_date, created_at
     ` as any[]
 
     const checkin = {
       ...insertedRows[0],
       completedValue: insertedRows[0]?.completed_value ?? parsedCompletedValue,
+      focusMinutes: insertedRows[0]?.focus_minutes ?? parsedFocusMinutes,
       notes: insertedRows[0]?.notes ?? normalizedNotes,
+      metadata: insertedRows[0]?.metadata ?? normalizedMetadata,
+      evidenceUrl: insertedRows[0]?.evidence_url ?? normalizedEvidenceUrl,
     }
 
     // Update weekly plan progress
@@ -709,6 +734,9 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           assignedDays: assignedDays,
           subject:subject,
           difficulty: taskTags?.difficulty || 'basic',
+          taskKind: taskTags?.taskKind || '',
+          abilityCategory: taskTags?.abilityCategory || '',
+          abilityPoint: taskTags?.abilityPoint || '',
           scheduleRule,
           target: p.target,
           progress: p.progress,

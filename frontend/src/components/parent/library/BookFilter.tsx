@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, X, Upload, ChevronDown, Plus, Download } from 'lucide-react';
+import { Search, X, Upload, ChevronDown, Plus, Download, Loader2, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,8 @@ interface BookFilterProps {
   onImportClick: () => void;
   onAddClick?: () => void;
   onExportClick?: () => void;
+  onTemplateClick?: () => void;
+  exporting?: boolean;
   importing: boolean;
   importProgress: number;
   resultCount: number;
@@ -41,6 +43,8 @@ export function BookFilter({
   onImportClick,
   onAddClick,
   onExportClick,
+  onTemplateClick,
+  exporting = false,
   importing,
   importProgress,
   resultCount,
@@ -209,6 +213,17 @@ export function BookFilter({
             )}
           </Button>
 
+          {onTemplateClick && (
+            <Button
+              variant="outline"
+              onClick={onTemplateClick}
+              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-1.5 text-primary" />
+              <span className="text-sm">模板</span>
+            </Button>
+          )}
+
           {onAddClick && (
             <Button
               onClick={onAddClick}
@@ -223,10 +238,15 @@ export function BookFilter({
             <Button
               variant="outline"
               onClick={onExportClick}
+              disabled={exporting}
               className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
             >
-              <Download className="w-4 h-4 mr-1.5 text-primary" />
-              <span className="text-sm">导出</span>
+              {exporting ? (
+                <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-primary" />
+              ) : (
+                <Download className="w-4 h-4 mr-1.5 text-primary" />
+              )}
+              <span className="text-sm">{exporting ? '导出中' : '导出'}</span>
             </Button>
           )}
 

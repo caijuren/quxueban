@@ -101,6 +101,25 @@ function pickRowValue(row: any, keys: string[]): string {
   return ''
 }
 
+function parseTaskTags(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      return {}
+    }
+  }
+
+  return {}
+}
+
 function parseExcelDate(value: unknown): Date {
   if (!value) return new Date()
   if (value instanceof Date) return value
@@ -354,6 +373,243 @@ function shouldMarkImportedBookFinished(row: any): boolean {
     lastReadAt ||
     ['已读', '已读完', '读完', 'finished', 'done', 'complete', 'completed'].some((item) => status.includes(item))
   )
+}
+
+const IMPORT_BOOK_TYPE_MAP: Record<string, string> = {
+  '儿童故事': 'children',
+  '传统文化': 'tradition',
+  '科普': 'science',
+  '性格养成、其他': 'character',
+}
+
+const IMPORT_RECOGNIZED_COLUMNS = [
+  '书名',
+  '作者',
+  'ISBN',
+  '出版社',
+  '类型',
+  '书架分类',
+  '分类',
+  '页数',
+  '总页数',
+  '字数',
+  '阅读次数',
+  '最近一次阅读时间',
+  '最后阅读时间',
+  '阅读日期',
+  '阅读时长',
+  '开始页',
+  '结束页',
+  '阅读页数',
+  '阅读状态',
+  '封面',
+  '封面链接',
+  '图片',
+  '图片链接',
+]
+
+type ImportRow = Record<string, any>
+
+function extractImportWorkbook(buffer: Buffer) {
+  const workbook = XLSX.read(buffer, { type: 'buffer' })
+  const sheetName = workbook.SheetNames[0]
+  const sheet = workbook.Sheets[sheetName]
+  const hyperlinks: Record<string, string> = {}
+  const links = (sheet as any)['!links'] || (sheet as any)['!hyperlinks'] || (sheet as any)['!rels']?.hyperlinks
+
+  if (links && Array.isArray(links)) {
+    for (const link of links) {
+      const cellRef = link.ref || link.r || link.cell
+      const target = link.Target || link.target || link.t || link.hyperlink
+      if (cellRef && target) {
+        hyperlinks[cellRef] = target
+      }
+    }
+  }
+
+  const rows = XLSX.utils.sheet_to_json<ImportRow>(sheet)
+  const columns = rows[0] ? Object.keys(rows[0]) : []
+
+  return { sheetName, sheet, rows, hyperlinks, columns }
+}
+
+function getImportCoverUrl(row: ImportRow, hyperlinks: Record<string, string>, excelRowNumber: number): string {
+  const kCellAddress = `K${excelRowNumber}`
+  const linkedCover = hyperlinks[kCellAddress] || ''
+  if (linkedCover) return linkedCover
+
+  const possibleCoverColumns = ['封面', '封面链接', '图片', '图片链接', 'cover', 'coverUrl']
+  for (const col of possibleCoverColumns) {
+    if (row[col] && String(row[col]).trim()) {
+      const value = String(row[col]).trim()
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        return value
+      }
+    }
+  }
+
+  return ''
+}
+
+async function getExistingBookKeyMap(familyId: number) {
+  const existingBooks = await prisma.book.findMany({
+    where: { familyId },
+    select: { id: true, name: true, isbn: true, author: true, publisher: true },
+  })
+  const existingBookByKey = new Map<string, { id: number; name: string; isbn: string | null; author?: string | null; publisher?: string | null }>()
+  for (const book of existingBooks) {
+    const isbnKey = cleanIsbn(book.isbn || '')
+    if (isbnKey) existingBookByKey.set(`isbn:${isbnKey}`, book)
+    existingBookByKey.set(`name:${normalizeBookName(book.name)}`, book)
+  }
+  return existingBookByKey
+}
+
+type ImportMatchedBook = {
+  id: number;
+  name: string;
+  isbn: string | null;
+  author?: string | null;
+  publisher?: string | null;
+  matchKey: string;
+  matchScore: number;
+  matchNeedsReview: boolean;
+  matchReason: string;
+}
+
+function buildImportMatchKey(rowNumber: number, bookId: number) {
+  return `${rowNumber}:${bookId}`
+}
+
+function findMatchedImportBook(
+  row: ImportRow,
+  existingBookByKey: Map<string, { id: number; name: string; isbn: string | null; author?: string | null; publisher?: string | null }>,
+  rowNumber = 0,
+  rejectedMatchKeys = new Set<string>()
+): ImportMatchedBook | null {
+  const name = row['书名']
+  const isbn = cleanIsbn(String(row['ISBN'] || ''))
+  const normalizedName = normalizeBookName(String(name || ''))
+  const byIsbn = isbn ? existingBookByKey.get(`isbn:${isbn}`) : null
+  const byName = existingBookByKey.get(`name:${normalizedName}`)
+  const book = byIsbn || byName || null
+  if (!book) return null
+
+  const matchKey = buildImportMatchKey(rowNumber, book.id)
+  if (rejectedMatchKeys.has(matchKey)) return null
+
+  if (byIsbn) {
+    return {
+      ...book,
+      matchKey,
+      matchScore: 100,
+      matchNeedsReview: false,
+      matchReason: 'ISBN 完全一致',
+    }
+  }
+
+  const inputAuthor = normalizeText(String(row['作者'] || ''))
+  const bookAuthor = normalizeText(String(book.author || ''))
+  const inputPublisher = normalizeText(String(row['出版社'] || ''))
+  const bookPublisher = normalizeText(String(book.publisher || ''))
+  const authorMatched = Boolean(inputAuthor && bookAuthor && (inputAuthor.includes(bookAuthor) || bookAuthor.includes(inputAuthor)))
+  const publisherMatched = Boolean(inputPublisher && bookPublisher && (inputPublisher.includes(bookPublisher) || bookPublisher.includes(inputPublisher)))
+  const hasPublisherConflict = Boolean(inputPublisher && bookPublisher && !publisherMatched)
+  const hasAuthorConflict = Boolean(inputAuthor && bookAuthor && !authorMatched)
+  const matchScore = Math.max(50, 82 + (authorMatched ? 8 : 0) + (publisherMatched ? 8 : 0) - (hasPublisherConflict ? 18 : 0) - (hasAuthorConflict ? 12 : 0))
+
+  return {
+    ...book,
+    matchKey,
+    matchScore,
+    matchNeedsReview: hasPublisherConflict || hasAuthorConflict || (!inputPublisher && !inputAuthor),
+    matchReason: hasPublisherConflict ? '书名相同，出版社不同' : hasAuthorConflict ? '书名相同，作者不同' : '书名一致',
+  }
+}
+
+function buildBookExportRows(books: any[]) {
+  return books.map(book => ({
+    书名: book.name || '',
+    作者: book.author || '',
+    ISBN: book.isbn || '',
+    出版社: book.publisher || '',
+    类型: book.type || '',
+    页数: book.totalPages || 0,
+    字数: book.wordCount || '',
+    封面: book.coverUrl || '',
+    性格标签: book.characterTag || '',
+    简介: book.description || '',
+    阅读次数: book.readCount || 0,
+    阅读状态: book.readState?.status || '',
+    最近阅读日期: book.lastReadDate ? new Date(book.lastReadDate).toISOString().slice(0, 10) : '',
+    累计阅读页数: book.totalReadPages || 0,
+    累计阅读分钟: book.totalReadMinutes || 0,
+    阅读记录数: book.readLogCount || 0,
+    创建时间: book.createdAt ? new Date(book.createdAt).toISOString() : '',
+    更新时间: book.updatedAt ? new Date(book.updatedAt).toISOString() : '',
+  }))
+}
+
+function formatExportDate() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function buildImportTemplateWorkbook() {
+  const sampleRows = [
+    {
+      书名: '西游记',
+      作者: '吴承恩',
+      ISBN: '9787020008735',
+      出版社: '人民文学出版社',
+      类型: '传统文化',
+      总页数: 600,
+      字数: 720000,
+      阅读日期: '2026-04-28',
+      开始页: 1,
+      结束页: 30,
+      阅读页数: 30,
+      阅读时长: 25,
+      阅读状态: '',
+      备注: '第一回阅读',
+      孩子表现: '专注，能复述主要情节',
+      阅读效果: '理解良好',
+      阅读阶段: '精读',
+      封面链接: '',
+    },
+    {
+      书名: '西游记',
+      作者: '吴承恩',
+      ISBN: '9787020008735',
+      出版社: '人民文学出版社',
+      类型: '传统文化',
+      总页数: 600,
+      字数: 720000,
+      阅读日期: '2026-04-29',
+      开始页: 31,
+      结束页: 60,
+      阅读页数: 30,
+      阅读时长: 30,
+      阅读状态: '',
+      备注: '第二回阅读',
+      孩子表现: '',
+      阅读效果: '',
+      阅读阶段: '精读',
+      封面链接: '',
+    },
+  ]
+  const guideRows = [
+    { 字段: '书名', 是否必填: '是', 说明: '用于创建或匹配图书。' },
+    { 字段: 'ISBN', 是否必填: '否', 说明: '有 ISBN 时优先按 ISBN 匹配。' },
+    { 字段: '出版社/作者', 是否必填: '否', 说明: '用于软匹配评分，书名相同但信息不同会要求确认。' },
+    { 字段: '阅读日期', 是否必填: '阅读明细建议填写', 说明: '一行一次阅读，会生成对应日期的阅读记录。' },
+    { 字段: '开始页/结束页/阅读页数/阅读时长', 是否必填: '否', 说明: '用于统计阅读进度、页数和分钟数。' },
+    { 字段: '阅读状态', 是否必填: '否', 说明: '填写“已读完”会同步当前孩子的已读状态。' },
+    { 字段: '封面链接', 是否必填: '否', 说明: '支持 http/https 图片链接，导入时会尝试保存。' },
+  ]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sampleRows), '阅读明细模板')
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(guideRows), '字段说明')
+  return workbook
 }
 
 /**
@@ -728,6 +984,129 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
 })
 
 /**
+ * GET /export - Export library data as JSON or XLSX
+ * Query: ?format=json|xlsx&search=&type=&childId=
+ */
+libraryRouter.get('/export', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const format = String(req.query.format || 'json').toLowerCase()
+  const search = req.query.search as string | undefined
+  const type = req.query.type as string | undefined
+  let childId = req.query.childId as string | undefined
+
+  if (Array.isArray(childId)) {
+    childId = childId[0]
+  }
+
+  const parsedChildId = childId ? parseInt(childId, 10) : null
+  if (childId && Number.isNaN(parsedChildId)) {
+    throw new AppError(400, 'Invalid childId: must be a number')
+  }
+
+  const whereClause: any = {
+    familyId,
+    status: 'active',
+  }
+
+  if (search) {
+    whereClause.name = { contains: search, mode: 'insensitive' }
+  }
+
+  if (type && type !== 'all') {
+    whereClause.type = type
+  }
+
+  const books = await prisma.book.findMany({
+    where: whereClause,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      bookReadStates: {
+        where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
+        select: { status: true, finishedAt: true },
+      },
+      readingLogs: {
+        where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
+        orderBy: { readDate: 'desc' },
+        select: { pages: true, minutes: true, readDate: true },
+      },
+    },
+  })
+
+  const exportBooks = books.map(book => {
+    const totalReadPages = book.readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0)
+    const totalReadMinutes = book.readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0)
+    return {
+      ...book,
+      readState: book.bookReadStates[0] || null,
+      totalReadPages,
+      totalReadMinutes,
+      lastReadDate: book.readingLogs[0]?.readDate || null,
+      readLogCount: book.readingLogs.length,
+    }
+  })
+
+  const fileBaseName = `library-export-${formatExportDate()}`
+
+  if (format === 'json') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${fileBaseName}.json"`)
+    res.json({
+      exportedAt: new Date().toISOString(),
+      familyId,
+      childId: parsedChildId,
+      total: exportBooks.length,
+      books: exportBooks.map(book => ({
+        id: book.id,
+        name: book.name,
+        author: book.author,
+        isbn: book.isbn,
+        publisher: book.publisher,
+        type: book.type,
+        totalPages: book.totalPages,
+        wordCount: book.wordCount,
+        coverUrl: book.coverUrl,
+        characterTag: book.characterTag,
+        description: book.description,
+        readCount: book.readCount,
+        readState: book.readState,
+        totalReadPages: book.totalReadPages,
+        totalReadMinutes: book.totalReadMinutes,
+        readLogCount: book.readLogCount,
+        lastReadDate: book.lastReadDate,
+        createdAt: book.createdAt,
+        updatedAt: book.updatedAt,
+      })),
+    })
+    return
+  }
+
+  if (format === 'xlsx' || format === 'excel') {
+    const worksheet = XLSX.utils.json_to_sheet(buildBookExportRows(exportBooks))
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, '图书馆')
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${fileBaseName}.xlsx"`)
+    res.send(buffer)
+    return
+  }
+
+  throw new AppError(400, 'Unsupported export format')
+})
+
+/**
+ * GET /import/template - Download the library import template
+ */
+libraryRouter.get('/import/template', authMiddleware, requireRole('parent'), async (_req: AuthRequest, res: Response) => {
+  const workbook = buildImportTemplateWorkbook()
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="library-import-template-${formatExportDate()}.xlsx"`)
+  res.send(buffer)
+})
+
+/**
  * POST / - Create a new book in library
  * Body: { name, author, isbn, publisher, type, coverUrl, totalPages, wordCount, characterTag, description, childId }
  */
@@ -917,6 +1296,94 @@ libraryRouter.get('/stats', authMiddleware, requireRole('parent'), async (req: A
       totalBooks,
       newThisMonth,
       topBooks,
+    },
+  })
+})
+
+/**
+ * GET /data-quality - Get 1.7 library/task data quality summary
+ */
+libraryRouter.get('/data-quality', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const books = await prisma.book.findMany({
+    where: { familyId, status: 'active' },
+    select: {
+      id: true,
+      name: true,
+      isbn: true,
+      type: true,
+      totalPages: true,
+      coverUrl: true,
+    },
+  })
+
+  const tasks = await prisma.task.findMany({
+    where: { familyId, isActive: true },
+    select: {
+      id: true,
+      tags: true,
+    },
+  })
+
+  const isbnGroups = new Map<string, number[]>()
+  const titleGroups = new Map<string, number[]>()
+
+  for (const book of books) {
+    const isbnKey = cleanIsbn(book.isbn || '')
+    if (isbnKey) {
+      isbnGroups.set(isbnKey, [...(isbnGroups.get(isbnKey) || []), book.id])
+    }
+
+    const titleKey = normalizeBookName(book.name)
+    if (titleKey) {
+      titleGroups.set(titleKey, [...(titleGroups.get(titleKey) || []), book.id])
+    }
+  }
+
+  const duplicateIsbnBookIds = new Set<number>()
+  const duplicateTitleBookIds = new Set<number>()
+
+  for (const ids of isbnGroups.values()) {
+    if (ids.length > 1) ids.forEach(id => duplicateIsbnBookIds.add(id))
+  }
+  for (const ids of titleGroups.values()) {
+    if (ids.length > 1) ids.forEach(id => duplicateTitleBookIds.add(id))
+  }
+
+  const missingIsbn = books.filter(book => !cleanIsbn(book.isbn || '')).length
+  const missingPageCount = books.filter(book => !book.totalPages || book.totalPages <= 0).length
+  const missingType = books.filter(book => !String(book.type || '').trim()).length
+  const missingCover = books.filter(book => !String(book.coverUrl || '').trim()).length
+  const complete = books.filter(book =>
+    cleanIsbn(book.isbn || '') &&
+    book.totalPages > 0 &&
+    String(book.type || '').trim()
+  ).length
+
+  const missingAbilityPoint = tasks.filter(task => {
+    const tags = parseTaskTags(task.tags)
+    const abilityPoint = typeof tags.abilityPoint === 'string' ? tags.abilityPoint.trim() : ''
+    return !abilityPoint || abilityPoint === '不关联目标'
+  }).length
+
+  res.json({
+    status: 'success',
+    data: {
+      books: {
+        total: books.length,
+        complete,
+        missingIsbn,
+        missingPageCount,
+        missingType,
+        missingCover,
+        duplicateIsbn: duplicateIsbnBookIds.size,
+        duplicateTitle: duplicateTitleBookIds.size,
+      },
+      tasks: {
+        total: tasks.length,
+        missingAbilityPoint,
+      },
     },
   })
 })
@@ -1507,6 +1974,170 @@ async function downloadAndUploadCover(imageUrl: string, bookName: string): Promi
 }
 
 /**
+ * POST /import/preview - Analyze import file without writing data
+ */
+libraryRouter.post('/import/preview', authMiddleware, requireRole('parent'), upload.single('file'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { familyId } = req.user!
+    const file = req.file
+    const parsedChildId = req.body.childId ? parseInt(req.body.childId, 10) : null
+
+    if (!file) {
+      throw new AppError(400, '请上传文件')
+    }
+
+    const { sheetName, rows, hyperlinks, columns } = extractImportWorkbook(file.buffer)
+    const existingBookByKey = await getExistingBookKeyMap(familyId)
+    const seenImportKeys = new Set<string>()
+    const existingLogKeys = new Set<string>()
+
+    let validRows = 0
+    let skippedRows = 0
+    let newBooks = 0
+    let matchedBooks = 0
+    let duplicatedInFile = 0
+    let readingLogsEstimated = 0
+    let readStatesEstimated = 0
+    let coverUrls = 0
+    const warnings: string[] = []
+    const samples: Array<{
+      row: number;
+      name: string;
+      isbn: string;
+      action: 'new' | 'match' | 'skip';
+      matchedBookId?: number;
+      matchedBookName?: string;
+      matchKey?: string;
+      matchScore?: number;
+      matchNeedsReview?: boolean;
+      matchReason?: string;
+      hasReadingLog: boolean;
+      willMarkFinished: boolean;
+    }> = []
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const excelRowNumber = i + 2
+      const name = String(row['书名'] || '').trim()
+
+      if (!name) {
+        skippedRows++
+        if (samples.length < 8) {
+          samples.push({
+            row: excelRowNumber,
+            name: '',
+            isbn: '',
+            action: 'skip',
+            hasReadingLog: false,
+            willMarkFinished: false,
+          })
+        }
+        continue
+      }
+
+      validRows++
+      const isbn = cleanIsbn(String(row['ISBN'] || ''))
+      const importKey = isbn ? `isbn:${isbn}` : `name:${normalizeBookName(name)}`
+      const matchedBook = findMatchedImportBook(row, existingBookByKey, excelRowNumber)
+      const action = matchedBook ? 'match' : 'new'
+      const logData = buildReadingLogFromImportRow(row, familyId, matchedBook?.id || -(i + 1), parsedChildId)
+      const willMarkFinished = Boolean(parsedChildId && shouldMarkImportedBookFinished(row))
+      const coverUrl = getImportCoverUrl(row, hyperlinks, excelRowNumber)
+
+      if (seenImportKeys.has(importKey)) duplicatedInFile++
+      seenImportKeys.add(importKey)
+
+      if (matchedBook) matchedBooks++
+      else newBooks++
+      if (logData) {
+        readingLogsEstimated++
+        if (matchedBook) {
+          const dayStart = new Date(logData.readDate)
+          dayStart.setHours(0, 0, 0, 0)
+          existingLogKeys.add(`${matchedBook.id}:${logData.childId || 'none'}:${dayStart.toISOString().slice(0, 10)}`)
+        }
+      }
+      if (willMarkFinished) readStatesEstimated++
+      if (coverUrl) coverUrls++
+
+      if (samples.length < 8) {
+        samples.push({
+          row: excelRowNumber,
+          name,
+          isbn,
+          action,
+          matchedBookId: matchedBook?.id,
+          matchedBookName: matchedBook?.name,
+          matchKey: matchedBook?.matchKey,
+          matchScore: matchedBook?.matchScore,
+          matchNeedsReview: matchedBook?.matchNeedsReview,
+          matchReason: matchedBook?.matchReason,
+          hasReadingLog: Boolean(logData),
+          willMarkFinished,
+        })
+      }
+    }
+
+    let existingReadingLogs = 0
+    if (existingLogKeys.size > 0) {
+      const conditions = Array.from(existingLogKeys).map((key) => {
+        const [bookId, childKey, dateKey] = key.split(':')
+        const dayStart = new Date(`${dateKey}T00:00:00.000Z`)
+        const dayEnd = new Date(dayStart)
+        dayEnd.setUTCDate(dayEnd.getUTCDate() + 1)
+        return {
+          bookId: Number(bookId),
+          childId: childKey === 'none' ? null : Number(childKey),
+          readDate: { gte: dayStart, lt: dayEnd },
+        }
+      })
+      existingReadingLogs = await prisma.readingLog.count({
+        where: {
+          familyId,
+          OR: conditions,
+        },
+      })
+    }
+
+    if (!columns.includes('书名')) warnings.push('缺少“书名”列，无法识别的行会被跳过')
+    if (!columns.includes('ISBN')) warnings.push('缺少“ISBN”列，系统会主要按书名匹配，重名书可能需要人工复核')
+    if (!parsedChildId) warnings.push('当前未指定孩子，本次导入不会同步孩子的已读状态')
+    if (duplicatedInFile > 0) warnings.push(`文件内存在 ${duplicatedInFile} 条重复书籍线索，导入时会优先匹配已有书籍`)
+
+    const recognizedColumns = columns.filter((column) => IMPORT_RECOGNIZED_COLUMNS.includes(column))
+
+    res.json({
+      status: 'success',
+      data: {
+        fileName: file.originalname,
+        sheetName,
+        totalRows: rows.length,
+        validRows,
+        skippedRows,
+        newBooks,
+        matchedBooks,
+        duplicatedInFile,
+        readingLogsEstimated,
+        readingLogsLikelyNew: Math.max(0, readingLogsEstimated - existingReadingLogs),
+        existingReadingLogs,
+        readStatesEstimated,
+        coverUrls,
+        columns,
+        recognizedColumns,
+        warnings,
+        samples,
+      },
+    })
+  } catch (error: any) {
+    console.error('[IMPORT_PREVIEW] Error:', error)
+    res.status(error.statusCode || 500).json({
+      status: 'error',
+      message: `导入预检失败: ${error.message}`,
+    })
+  }
+})
+
+/**
  * POST /import - Import books from Excel file
  */
 libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.single('file'), async (req: AuthRequest, res: Response) => {
@@ -1514,6 +2145,19 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
     const { familyId, userId } = req.user!
     const file = req.file
     const { childId } = req.body
+    const rejectedMatchKeys = new Set<string>()
+    if (req.body.rejectedMatchKeys) {
+      try {
+        const parsed = JSON.parse(String(req.body.rejectedMatchKeys))
+        if (Array.isArray(parsed)) {
+          for (const key of parsed) {
+            if (typeof key === 'string') rejectedMatchKeys.add(key)
+          }
+        }
+      } catch {
+        throw new AppError(400, '匹配确认数据格式错误')
+      }
+    }
 
     console.log(`[IMPORT] Starting import for family ${familyId}, childId: ${childId || 'none'}`)
 
@@ -1523,51 +2167,14 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
 
     console.log(`[IMPORT] File received: ${file.originalname}, size: ${file.size}`)
 
-    // Parse Excel
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' })
-    const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    
-    // Get hyperlinks from the sheet
-    const hyperlinks: Record<string, string> = {}
-    console.log(`[IMPORT] Sheet keys:`, Object.keys(sheet))
-    
-    // xlsx library stores hyperlinks in sheet['!links'] or sheet['!data']
-    const links = sheet['!links'] || sheet['!hyperlinks'] || sheet['!rels']?.hyperlinks
-    if (links && Array.isArray(links)) {
-      console.log(`[IMPORT] Found ${links.length} hyperlinks, first few:`, links.slice(0, 3))
-      for (const link of links) {
-        // Different versions of xlsx use different property names
-        const cellRef = link.ref || link.r || link.cell
-        const target = link.Target || link.target || link.t || link.hyperlink
-        if (cellRef && target) {
-          hyperlinks[cellRef] = target
-          console.log(`[IMPORT] Hyperlink ${cellRef} -> ${target}`)
-        }
-      }
-      console.log(`[IMPORT] Parsed ${Object.keys(hyperlinks).length} hyperlinks`)
-    } else {
-      console.log(`[IMPORT] No hyperlinks found in sheet`)
-      // Debug: log the sheet structure
-      console.log(`[IMPORT] Sheet !links:`, sheet['!links'])
-      console.log(`[IMPORT] Sheet !hyperlinks:`, sheet['!hyperlinks'])
-    }
-    
-    const data = XLSX.utils.sheet_to_json(sheet)
+    const { rows: data, hyperlinks, columns } = extractImportWorkbook(file.buffer)
 
     console.log(`[IMPORT] Found ${data.length} rows in Excel`)
     
     // Log first row to debug column names
     if (data.length > 0) {
-      console.log(`[IMPORT] First row columns:`, Object.keys(data[0]))
+      console.log(`[IMPORT] First row columns:`, columns)
       console.log(`[IMPORT] First row data:`, data[0])
-    }
-
-    // Type mapping - 新的图书类型映射
-    const typeMap: Record<string, string> = {
-      '儿童故事': 'children',
-      '传统文化': 'tradition',
-      '科普': 'science',
-      '性格养成、其他': 'character',
     }
 
     let imported = 0
@@ -1580,16 +2187,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
     const totalRows = data.length
 
     // 先获取所有已存在的书籍名称，减少数据库查询次数
-    const existingBooks = await prisma.book.findMany({
-      where: { familyId },
-      select: { id: true, name: true, isbn: true }
-    })
-    const existingBookByKey = new Map<string, { id: number; name: string; isbn: string }>()
-    for (const book of existingBooks) {
-      const isbnKey = cleanIsbn(book.isbn || '')
-      if (isbnKey) existingBookByKey.set(`isbn:${isbnKey}`, book)
-      existingBookByKey.set(`name:${normalizeBookName(book.name)}`, book)
-    }
+    const existingBookByKey = await getExistingBookKeyMap(familyId)
     console.log(`[IMPORT] Found ${existingBookByKey.size} existing book keys`)
 
     // 启用分块响应
@@ -1607,36 +2205,16 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       }
 
       const isbn = cleanIsbn(String(row['ISBN'] || ''))
-      const bookKey = isbn ? `isbn:${isbn}` : `name:${normalizeBookName(String(name))}`
-      let targetBook = existingBookByKey.get(bookKey) || existingBookByKey.get(`name:${normalizeBookName(String(name))}`)
+      let targetBook: any = findMatchedImportBook(row, existingBookByKey, i + 2, rejectedMatchKeys)
 
       // Map type
       const excelType = row['类型'] || row['书架分类'] || row['分类'] || ''
-      const bookType = typeMap[excelType] || 'children'
+      const bookType = IMPORT_BOOK_TYPE_MAP[excelType] || 'children'
       const wordCount = firstNumber(row['字数'], row['wordCount'])
       const totalPages = firstNumber(row['页数'], row['总页数'], row['totalPages'])
       const readCount = firstNumber(row['阅读次数'], row['次数'], row['readCount'])
-      
-      // Get cover URL from K column hyperlinks
-      // Row index in Excel is i+2 (1-based, with header row)
       const excelRowNumber = i + 2
-      const kCellAddress = `K${excelRowNumber}`
-      let coverUrl = hyperlinks[kCellAddress] || ''
-      
-      // Fallback: try to get from cell value if no hyperlink
-      if (!coverUrl) {
-        const possibleCoverColumns = ['封面', '封面链接', '图片', '图片链接', 'cover', 'coverUrl']
-        for (const col of possibleCoverColumns) {
-          if (row[col] && String(row[col]).trim()) {
-            const value = String(row[col]).trim()
-            // Check if it's a URL
-            if (value.startsWith('http://') || value.startsWith('https://')) {
-              coverUrl = value
-              break
-            }
-          }
-        }
-      }
+      const coverUrl = getImportCoverUrl(row, hyperlinks, excelRowNumber)
       
       if (coverUrl) {
         console.log(`[IMPORT] Row ${excelRowNumber} cover URL: ${coverUrl}`)
@@ -1668,7 +2246,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
             wordCount: wordCount || null,
             readCount,
           },
-          select: { id: true, name: true, isbn: true },
+          select: { id: true, name: true, isbn: true, author: true, publisher: true },
         })
         targetBook = createdBook
         imported++

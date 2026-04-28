@@ -17,6 +17,65 @@ type ChildSemesterSettings = {
   readingStage?: string
 }
 
+type ChildProfileSettings = {
+  gender: 'male' | 'female' | 'unset'
+  className: string
+  customTags: string[]
+  interestTags: string[]
+  defaultAbilityLevel: string
+  defaultLearningGoal: string
+  pushEnabled: boolean
+  pushFrequency: string
+  pushTime: string
+  pushContents: string[]
+}
+
+const defaultChildProfile: ChildProfileSettings = {
+  gender: 'unset',
+  className: '',
+  customTags: [],
+  interestTags: [],
+  defaultAbilityLevel: 'L1（一年级）',
+  defaultLearningGoal: '',
+  pushEnabled: false,
+  pushFrequency: '每日一次',
+  pushTime: '18:30',
+  pushContents: ['学习日报', '任务提醒', '阅读提醒'],
+}
+
+function sanitizeStringList(value: unknown, maxItems = 20, maxLength = 30): string[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim().slice(0, maxLength))
+    .filter(Boolean)
+    .filter((item, index, array) => array.indexOf(item) === index)
+    .slice(0, maxItems)
+}
+
+function sanitizeChildProfile(input: any): ChildProfileSettings {
+  const gender = input?.gender === 'male' || input?.gender === 'female' ? input.gender : 'unset'
+  const pushFrequencyOptions = ['每日一次', '每周一次', '仅重要提醒']
+  const pushFrequency = pushFrequencyOptions.includes(input?.pushFrequency) ? input.pushFrequency : defaultChildProfile.pushFrequency
+  const pushTime = typeof input?.pushTime === 'string' && /^\d{2}:\d{2}$/.test(input.pushTime)
+    ? input.pushTime
+    : defaultChildProfile.pushTime
+
+  return {
+    gender,
+    className: typeof input?.className === 'string' ? input.className.trim().slice(0, 50) : '',
+    customTags: sanitizeStringList(input?.customTags),
+    interestTags: sanitizeStringList(input?.interestTags),
+    defaultAbilityLevel: typeof input?.defaultAbilityLevel === 'string' ? input.defaultAbilityLevel.trim().slice(0, 30) : defaultChildProfile.defaultAbilityLevel,
+    defaultLearningGoal: typeof input?.defaultLearningGoal === 'string' ? input.defaultLearningGoal.trim().slice(0, 100) : '',
+    pushEnabled: Boolean(input?.pushEnabled),
+    pushFrequency,
+    pushTime,
+    pushContents: sanitizeStringList(input?.pushContents, 10, 30),
+  }
+}
+
 function validateDateString(value: unknown, fieldName: string): string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new AppError(400, `${fieldName} 格式应为 YYYY-MM-DD`)
@@ -72,6 +131,77 @@ childrenRouter.get('/', async (req: AuthRequest, res: Response) => {
   })
   
   res.json({ status: 'success', data: children })
+})
+
+// 获取孩子扩展档案配置
+childrenRouter.get('/:childId/profile', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+
+  if (isNaN(childId)) {
+    throw new AppError(400, '无效的孩子ID')
+  }
+
+  await ensureChildInFamily(childId, familyId)
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  const settings = (family?.settings as any) || {}
+  const profile = {
+    ...defaultChildProfile,
+    ...(settings.childProfiles?.[String(childId)] || {}),
+  }
+
+  res.json({
+    status: 'success',
+    data: profile,
+  })
+})
+
+// 更新孩子扩展档案配置
+childrenRouter.put('/:childId/profile', async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = parseInt(req.params.childId as string)
+
+  if (isNaN(childId)) {
+    throw new AppError(400, '无效的孩子ID')
+  }
+
+  await ensureChildInFamily(childId, familyId)
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as any) || {}
+  const nextProfile = sanitizeChildProfile(req.body)
+
+  await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: {
+        ...currentSettings,
+        childProfiles: {
+          ...(currentSettings.childProfiles || {}),
+          [String(childId)]: nextProfile,
+        },
+      },
+    },
+  })
+
+  res.json({
+    status: 'success',
+    message: '孩子档案已保存',
+    data: nextProfile,
+  })
 })
 
 // 获取孩子的当前学期配置
