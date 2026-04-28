@@ -29,8 +29,11 @@ rm -rf \
   "$APP_DIR/frontend/package-lock.json"
 
 echo "== install =="
-corepack enable
-corepack prepare pnpm@10.32.1 --activate
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "ERROR: pnpm is not installed. Install pnpm before deploying." >&2
+  exit 1
+fi
+echo "pnpm version: $(pnpm --version)"
 pnpm install --frozen-lockfile --prod=false
 
 echo "== database =="
@@ -60,4 +63,3 @@ echo
 curl -sS http://localhost:3001/api/version
 echo
 pm2 status
-
