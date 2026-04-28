@@ -43,7 +43,7 @@ import type { ReactNode } from 'react';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Import components
-import { BookCard, BookFilter, EmptyState } from '@/components/parent/library';
+import { BatchActionBar, BookCard, BookFilter, EmptyState } from '@/components/parent/library';
 import type { Book, BookList, ReadStatus } from '@/types/library';
 import { bookTypes } from '@/types/library';
 
@@ -114,6 +114,11 @@ async function updateBook(id: number, book: Partial<BookFormData>): Promise<Book
 
 async function deleteBook(id: number): Promise<void> {
   await apiClient.delete(`/library/${id}`);
+}
+
+async function batchFinishBooks(childId: number, bookIds: number[], readStage?: string): Promise<{ updated: number }> {
+  const { data } = await apiClient.post('/library/batch/finish', { childId, bookIds, readStage });
+  return data.data;
 }
 
 const getScopedStorageKey = (key: string, childId: number | null) => `${key}_${childId ?? 'pending'}`;
@@ -231,6 +236,8 @@ export default function LibraryPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<50 | 100>(50);
+  const [selectedBookIds, setSelectedBookIds] = useState<number[]>([]);
+  const [batchReadStage, setBatchReadStage] = useState('');
 
   // Book lists
   const [bookLists, setBookLists] = useState<BookList[]>([]);
@@ -333,6 +340,11 @@ export default function LibraryPage() {
     setCurrentPage(1);
   }, [searchInput, selectedType, selectedReadStatus, sortBy, selectedChildId, pageSize]);
 
+  useEffect(() => {
+    setSelectedBookIds([]);
+    setBatchReadStage('');
+  }, [searchInput, selectedType, selectedReadStatus, sortBy, selectedChildId]);
+
   const totalPages = Math.max(1, Math.ceil(filteredBooks.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * pageSize;
@@ -386,6 +398,7 @@ export default function LibraryPage() {
         .map(date => date.getDay())
     );
   }, [books]);
+
   const ensureSelectedChild = (action: () => void, message = '请先在左侧选择孩子，再继续管理图书馆') => {
     if (!selectedChildId) {
       toast.error(message);
@@ -426,6 +439,19 @@ export default function LibraryPage() {
       toast.success('图书已删除');
       setDeleteDialogOpen(false);
       setBookToDelete(null);
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const batchFinishMutation = useMutation({
+    mutationFn: () => batchFinishBooks(selectedChildId!, selectedBookIds, batchReadStage),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+      queryClient.invalidateQueries({ queryKey: ['growth-dashboard-reading-stats'] });
+      toast.success(`已标记 ${result.updated || selectedBookIds.length} 本书为已读完`);
+      setSelectedBookIds([]);
+      setBatchReadStage('');
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -558,6 +584,82 @@ export default function LibraryPage() {
   const confirmDelete = () => {
     if (bookToDelete) {
       deleteMutation.mutate(bookToDelete.id);
+    }
+  };
+
+  const handleToggleBookSelection = (book: Book, selected: boolean) => {
+    setSelectedBookIds((current) => (
+      selected
+        ? Array.from(new Set([...current, book.id]))
+        : current.filter(id => id !== book.id)
+    ));
+  };
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredBooks.map(book => book.id);
+    const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedBookIds.includes(id));
+    setSelectedBookIds(allSelected ? [] : filteredIds);
+  };
+
+  const handleBatchFinish = () => {
+    if (!selectedChildId) {
+      toast.error('请先选择孩子');
+      return;
+    }
+    if (selectedBookIds.length === 0) {
+      toast.error('请先选择要标记的图书');
+      return;
+    }
+    batchFinishMutation.mutate();
+  };
+
+  const handleBatchTypeChange = async (type: string) => {
+    if (selectedBookIds.length === 0) {
+      toast.error('请先选择图书');
+      return;
+    }
+    try {
+      await Promise.all(selectedBookIds.map(id => updateBook(id, { type: normalizeBookType(type) })));
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      toast.success(`已修改 ${selectedBookIds.length} 本书的分类`);
+      setSelectedBookIds([]);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const handleAddSelectedToList = (listId: string) => {
+    if (selectedBookIds.length === 0) {
+      toast.error('请先选择图书');
+      return;
+    }
+    const nextLists = bookLists.map(list => (
+      list.id === listId
+        ? { ...list, bookIds: Array.from(new Set([...list.bookIds, ...selectedBookIds])) }
+        : list
+    ));
+    setBookLists(nextLists);
+    localStorage.setItem(storageKeys.bookLists, JSON.stringify(nextLists));
+    toast.success(`已加入 ${selectedBookIds.length} 本书到书单`);
+    setSelectedBookIds([]);
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedBookIds.length === 0) {
+      toast.error('请先选择图书');
+      return;
+    }
+    if (!window.confirm(`确定删除选中的 ${selectedBookIds.length} 本图书吗？此操作不可恢复。`)) {
+      return;
+    }
+    try {
+      await Promise.all(selectedBookIds.map(id => deleteBook(id)));
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+      toast.success(`已删除 ${selectedBookIds.length} 本图书`);
+      setSelectedBookIds([]);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     }
   };
 
@@ -934,6 +1036,24 @@ export default function LibraryPage() {
 
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
 
+      {filteredBooks.length > 0 && (
+        <BatchActionBar
+          selectedCount={selectedBookIds.length}
+          totalCount={filteredBooks.length}
+          onSelectAll={handleSelectAllFiltered}
+          onClearSelection={() => setSelectedBookIds([])}
+          onBatchFinish={handleBatchFinish}
+          onBatchDelete={handleBatchDelete}
+          onBatchTypeChange={handleBatchTypeChange}
+          onAddToList={handleAddSelectedToList}
+          bookLists={bookLists}
+          onCreateList={() => setShowBookListDialog(true)}
+          batchReadStage={batchReadStage}
+          onBatchReadStageChange={setBatchReadStage}
+          isProcessing={batchFinishMutation.isPending}
+        />
+      )}
+
       {/* Import Result & History */}
       {(importResult || importHistory.length > 0) && (
         <Card className="border border-border/70 rounded-2xl overflow-hidden shadow-sm">
@@ -1064,6 +1184,8 @@ export default function LibraryPage() {
                 book={book}
                 index={index}
                 onDelete={handleDelete}
+                selected={selectedBookIds.includes(book.id)}
+                onSelectChange={handleToggleBookSelection}
               />
             ))}
           </div>

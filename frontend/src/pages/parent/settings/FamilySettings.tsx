@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Home, Users, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ async function updateFamilySettings(data: { familyName: string }): Promise<void>
 }
 
 export default function FamilySettings() {
+  const queryClient = useQueryClient();
   const [familyName, setFamilyName] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -29,7 +30,11 @@ export default function FamilySettings() {
 
   const updateMutation = useMutation({
     mutationFn: updateFamilySettings,
-    onSuccess: () => toast.success('家庭名称已更新'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['family-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['settings-family'] });
+      toast.success('家庭名称已更新');
+    },
     onError: (error) => toast.error(`更新失败：${getErrorMessage(error)}`),
   });
 
@@ -39,13 +44,20 @@ export default function FamilySettings() {
     }
   }, [familyData]);
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     const code = familyData?.data?.familyCode;
-    if (code) {
-      navigator.clipboard.writeText(code);
+    if (!code) {
+      toast.error('暂无可复制的家庭码');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
       setCopied(true);
       toast.success('家庭码已复制');
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('复制失败，请手动选中家庭码复制');
     }
   };
 

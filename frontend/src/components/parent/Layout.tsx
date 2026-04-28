@@ -22,6 +22,7 @@ import {
   FileText,
   Target,
   Brain,
+  HelpCircle,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -68,6 +69,7 @@ const navGroups = [
     label: '设置与系统',
     items: [
       { path: '/parent/settings/account', label: '设置', icon: Settings },
+      { path: '/parent/help', label: '帮助中心', icon: HelpCircle },
     ],
   },
 ];
@@ -86,6 +88,7 @@ const pageTitleMap: Record<string, string> = {
   '/parent/statistics': '学习统计',
   '/parent/reports': '学习报告',
   '/parent/settings/account': '设置',
+  '/parent/help': '帮助中心',
 };
 
 function getPageTitle(pathname: string): string {

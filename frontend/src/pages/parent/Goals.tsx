@@ -16,13 +16,16 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  X,
 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageToolbar } from '@/components/parent/PageToolbar';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type GoalStatus = 'on-track' | 'attention' | 'strong';
 
@@ -47,6 +50,18 @@ type GoalSection = {
   icon: React.ElementType;
   tone: string;
   items: GoalItem[];
+};
+
+type AbilityOption = {
+  categoryId: string;
+  categoryLabel: string;
+  point: string;
+  desc: string;
+  tasks: string[];
+};
+
+type GoalDraft = GoalItem & {
+  source: 'ability-model';
 };
 
 const statusStyles: Record<GoalStatus, { label: string; className: string }> = {
@@ -78,10 +93,10 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '数学计算稳定性',
-        description: '从能力模型的“学科能力/数学理解”承接，控制基础计算错误率。',
+        description: '从能力模型的“学科能力/数学能力”承接，控制基础计算错误率。',
         level: 'L3 三年级',
         abilityCategory: '学科能力',
-        abilityPoint: '数学理解',
+        abilityPoint: '数学能力',
         linkedTasks: ['限时口算', '错因标记', '二次检查'],
         reviewCadence: '每周复盘',
         progress: 58,
@@ -92,10 +107,10 @@ const goalSections: GoalSection[] = [
       },
       {
         title: '英语自然拼读',
-        description: '从能力模型的“学科能力/英语启蒙”承接，巩固常见字母组合和短句朗读。',
+        description: '从能力模型的“学科能力/英语能力”承接，巩固常见字母组合和短句朗读。',
         level: 'L2 二年级',
         abilityCategory: '学科能力',
-        abilityPoint: '英语启蒙',
+        abilityPoint: '英语能力',
         linkedTasks: ['自然拼读卡', '绘本跟读', '短句朗读'],
         reviewCadence: '双周复盘',
         progress: 81,
@@ -229,6 +244,77 @@ const strategySuggestions: Array<{ title: string; desc: string; icon: React.Elem
   { title: '体育目标拆分到日历', desc: '把剩余运动次数拆到具体日期，减少周末集中补。', icon: Dumbbell },
   { title: '保留强项激励', desc: '英语自然拼读和学习时段表现较好，可发放阶段徽章。', icon: Award },
 ];
+
+const abilityStorageKey = 'quxueban_ability_model_v1';
+const goalDraftStorageKey = 'quxueban_goals_from_ability_v1';
+const categoryLabelMap: Record<string, string> = {
+  subject: '学科能力',
+  thinking: '思维与认知',
+  habit: '学习习惯',
+  health: '体育与健康',
+};
+
+const fallbackAbilityOptions: AbilityOption[] = goalSections.flatMap(section => (
+  section.items.map(goal => ({
+    categoryId: goal.abilityCategory,
+    categoryLabel: goal.abilityCategory,
+    point: goal.abilityPoint,
+    desc: goal.description,
+    tasks: goal.linkedTasks,
+  }))
+));
+
+function loadAbilityOptions(): AbilityOption[] {
+  try {
+    const saved = localStorage.getItem(abilityStorageKey);
+    if (!saved) return fallbackAbilityOptions;
+    const parsed = JSON.parse(saved) as Record<string, Array<{ point: string; desc?: string; tasks?: string[] }>>;
+    const options = Object.entries(parsed).flatMap(([categoryId, rows]) => (
+      rows.map(row => ({
+        categoryId,
+        categoryLabel: categoryLabelMap[categoryId] || categoryId,
+        point: row.point,
+        desc: row.desc || '',
+        tasks: Array.isArray(row.tasks) ? row.tasks : [],
+      }))
+    )).filter(option => option.point);
+    return options.length > 0 ? options : fallbackAbilityOptions;
+  } catch {
+    return fallbackAbilityOptions;
+  }
+}
+
+function loadGoalDrafts(): GoalDraft[] {
+  try {
+    const saved = localStorage.getItem(goalDraftStorageKey);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGoalDrafts(goals: GoalDraft[]) {
+  localStorage.setItem(goalDraftStorageKey, JSON.stringify(goals));
+}
+
+function buildGoalFromAbility(option: AbilityOption): GoalDraft {
+  const firstTask = option.tasks[0] || `${option.point}练习`;
+  return {
+    source: 'ability-model',
+    title: `${option.point}提升目标`,
+    description: `从能力模型的“${option.categoryLabel}/${option.point}”承接，${option.desc || '围绕该能力点建立阶段目标。'}`,
+    level: 'L3 三年级',
+    abilityCategory: option.categoryLabel,
+    abilityPoint: option.point,
+    linkedTasks: option.tasks.length > 0 ? option.tasks.slice(0, 3) : [firstTask],
+    reviewCadence: '每周复盘',
+    progress: 0,
+    target: '每周 3 次',
+    current: '尚未开始',
+    suggestion: '建议先拆成小任务，连续执行一周后再调整目标强度。',
+    status: 'attention',
+  };
+}
 
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -367,10 +453,48 @@ function TrendChart() {
 
 export default function GoalsPage() {
   const { selectedChild } = useSelectedChild();
-  const allGoals = goalSections.flatMap(section => section.items);
+  const [goalDrafts, setGoalDrafts] = useState<GoalDraft[]>(() => loadGoalDrafts());
+  const [selectedAbility, setSelectedAbility] = useState<AbilityOption | null>(null);
+  const [draftForm, setDraftForm] = useState<GoalDraft | null>(null);
+  const abilityOptions = useMemo(() => loadAbilityOptions(), []);
+  const dynamicGoalSections = useMemo<GoalSection[]>(() => (
+    goalDrafts.length > 0
+      ? [
+          ...goalSections,
+          {
+            title: '能力模型目标',
+            subtitle: '从当前能力模型能力点创建的目标草稿',
+            icon: Target,
+            tone: 'bg-blue-50 text-blue-600',
+            items: goalDrafts,
+          },
+        ]
+      : goalSections
+  ), [goalDrafts]);
+  const allGoals = dynamicGoalSections.flatMap(section => section.items);
   const averageProgress = Math.round(allGoals.reduce((sum, goal) => sum + goal.progress, 0) / allGoals.length);
   const strongCount = allGoals.filter(goal => goal.status === 'strong').length;
   const attentionCount = allGoals.filter(goal => goal.status === 'attention').length;
+
+  const openCreateGoal = (option: AbilityOption) => {
+    const nextGoal = buildGoalFromAbility(option);
+    setSelectedAbility(option);
+    setDraftForm(nextGoal);
+  };
+
+  const saveDraftGoal = () => {
+    if (!draftForm) return;
+    if (!draftForm.title.trim()) {
+      toast.error('请填写目标名称');
+      return;
+    }
+    const nextDrafts = [...goalDrafts, draftForm];
+    setGoalDrafts(nextDrafts);
+    saveGoalDrafts(nextDrafts);
+    setDraftForm(null);
+    setSelectedAbility(null);
+    toast.success('目标已从能力模型创建');
+  };
 
   return (
     <div className="mx-auto max-w-[1360px] space-y-5">
@@ -394,9 +518,12 @@ export default function GoalsPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               同步数据
             </Button>
-            <Button className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 px-4 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+            <Button
+              onClick={() => abilityOptions[0] && openCreateGoal(abilityOptions[0])}
+              className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 px-4 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
+            >
               <PencilLine className="mr-2 h-4 w-4" />
-              调整目标
+              从能力点创建
             </Button>
           </div>
         }
@@ -429,12 +556,42 @@ export default function GoalsPage() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid gap-5 xl:grid-cols-2">
-          {goalSections.map((section) => (
+          {dynamicGoalSections.map((section) => (
             <GoalSectionCard key={section.title} section={section} />
           ))}
         </div>
 
         <div className="space-y-5">
+          <Panel>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                <Brain className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-950">能力模型承接</h2>
+                <p className="mt-1 text-xs text-slate-500">从能力点生成目标，再关联任务执行</p>
+              </div>
+            </div>
+            <div className="max-h-72 space-y-2 overflow-auto pr-1">
+              {abilityOptions.slice(0, 12).map((option) => (
+                <button
+                  key={`${option.categoryLabel}-${option.point}`}
+                  type="button"
+                  onClick={() => openCreateGoal(option)}
+                  className="w-full rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left transition hover:border-violet-200 hover:bg-violet-50"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{option.point}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">{option.categoryLabel}</p>
+                    </div>
+                    <Badge variant="outline" className="rounded-full bg-white text-violet-700">创建</Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Panel>
+
           <Panel>
             <div className="flex items-center justify-between">
               <div>
@@ -499,13 +656,81 @@ export default function GoalsPage() {
               <div>
                 <h2 className="text-base font-semibold text-slate-950">后续数据集成</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  目标页面后续会承接能力模型的能力点，并接入任务完成率、阅读记录、运动记录和复盘数据。当前先固定“能力点 - 目标 - 任务 - 进度”的结构口径。
+                  目标页面现在可以读取能力模型能力点并创建目标草稿。后续还需要把目标草稿升级为后端数据，并接入任务完成率、阅读记录、运动记录和复盘数据。
                 </p>
               </div>
             </div>
           </Panel>
         </div>
       </div>
+
+      {draftForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setDraftForm(null); setSelectedAbility(null); }}>
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+          <div className="relative z-10 flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 p-5">
+              <div>
+                <p className="text-xs font-semibold text-violet-600">{selectedAbility?.categoryLabel} · {selectedAbility?.point}</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950">从能力点创建目标</h3>
+                <p className="mt-1 text-sm text-slate-500">先生成目标草稿，后续可继续关联任务和计划。</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => { setDraftForm(null); setSelectedAbility(null); }} className="rounded-full">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="flex-1 space-y-4 overflow-auto p-5">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">目标名称</span>
+                <input
+                  value={draftForm.title}
+                  onChange={(event) => setDraftForm({ ...draftForm, title: event.target.value })}
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">目标描述</span>
+                <textarea
+                  value={draftForm.description}
+                  onChange={(event) => setDraftForm({ ...draftForm, description: event.target.value })}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">阶段目标</span>
+                  <input
+                    value={draftForm.target}
+                    onChange={(event) => setDraftForm({ ...draftForm, target: event.target.value })}
+                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">复盘节奏</span>
+                  <input
+                    value={draftForm.reviewCadence}
+                    onChange={(event) => setDraftForm({ ...draftForm, reviewCadence: event.target.value })}
+                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">建议任务</span>
+                <textarea
+                  value={draftForm.linkedTasks.join('\n')}
+                  onChange={(event) => setDraftForm({ ...draftForm, linkedTasks: event.target.value.split('\n').map(item => item.trim()).filter(Boolean) })}
+                  rows={4}
+                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
+              <Button variant="outline" onClick={() => { setDraftForm(null); setSelectedAbility(null); }} className="rounded-xl bg-white">取消</Button>
+              <Button onClick={saveDraftGoal} className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">保存目标</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

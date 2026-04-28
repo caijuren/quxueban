@@ -66,19 +66,26 @@ export default function AccountSettings() {
       toast.success('头像已更新');
 
       if (data?.token) {
+        localStorage.setItem('auth_token', data.token);
         localStorage.setItem('parent_token', data.token);
       }
 
-      const storedUser = localStorage.getItem('parent_user');
+      const storedUser = localStorage.getItem('auth_user') || localStorage.getItem('parent_user');
       if (storedUser) {
         try {
           const user = JSON.parse(storedUser);
-          localStorage.setItem('parent_user', JSON.stringify({ ...user, avatar: nextAvatar }));
+          const nextUser = { ...user, avatar: nextAvatar };
+          localStorage.setItem('auth_user', JSON.stringify(nextUser));
+          localStorage.setItem('parent_user', JSON.stringify(nextUser));
+          window.dispatchEvent(new Event('auth:updated'));
           window.dispatchEvent(new Event('parent-auth:updated'));
         } catch (error) {
           console.error('Failed to sync parent avatar to local storage', error);
         }
       }
+
+      queryClient.invalidateQueries({ queryKey: ['user-info'] });
+      queryClient.invalidateQueries({ queryKey: ['settings-user-info'] });
     },
     onError: (error) => toast.error(`更新失败：${getErrorMessage(error)}`),
   });
@@ -103,24 +110,29 @@ export default function AccountSettings() {
   const usernameMutation = useMutation({
     mutationFn: ({ name, password }: { name: string; password: string }) => updateUsername(name, password),
     onSuccess: (data) => {
-      toast.success('用户名修改成功');
+      toast.success('显示名称已更新');
       
       if (data.token) {
         localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('parent_token', data.token);
       }
       
-      const storedUser = localStorage.getItem('auth_user');
+      const storedUser = localStorage.getItem('auth_user') || localStorage.getItem('parent_user');
       if (storedUser) {
         try {
           const user = JSON.parse(storedUser);
-          localStorage.setItem('auth_user', JSON.stringify({ ...user, name: data.name }));
+          const nextUser = { ...user, name: data.name };
+          localStorage.setItem('auth_user', JSON.stringify(nextUser));
+          localStorage.setItem('parent_user', JSON.stringify(nextUser));
           window.dispatchEvent(new Event('auth:updated'));
+          window.dispatchEvent(new Event('parent-auth:updated'));
         } catch (error) {
           console.error('Failed to sync username to local storage', error);
         }
       }
       
       queryClient.invalidateQueries({ queryKey: ['user-info'] });
+      queryClient.invalidateQueries({ queryKey: ['settings-user-info'] });
       setIsEditingUsername(false);
       setEditUsername('');
       setEditUsernamePassword('');
@@ -187,11 +199,11 @@ export default function AccountSettings() {
 
   const handleSubmitUsername = () => {
     if (!editUsername.trim()) {
-      toast.error('用户名不能为空');
+      toast.error('显示名称不能为空');
       return;
     }
     if (editUsername.length < 2 || editUsername.length > 20) {
-      toast.error('用户名长度应在2-20个字符之间');
+      toast.error('显示名称长度应在 2-20 个字符之间');
       return;
     }
     if (!editUsernamePassword) {
@@ -199,7 +211,7 @@ export default function AccountSettings() {
       return;
     }
     if (editUsername === userInfo?.data?.name) {
-      toast.error('新用户名不能与当前用户名相同');
+      toast.error('新显示名称不能与当前显示名称相同');
       return;
     }
     usernameMutation.mutate({ name: editUsername.trim(), password: editUsernamePassword });
@@ -299,7 +311,7 @@ export default function AccountSettings() {
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span>已设置用户名</span>
+              <span>已设置显示名称</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -351,8 +363,8 @@ export default function AccountSettings() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setAvatar('');
-                    avatarMutation.mutate('');
+                    setAvatar('👤');
+                    avatarMutation.mutate('👤');
                   }}
                   disabled={avatarMutation.isPending}
                 >
@@ -371,28 +383,28 @@ export default function AccountSettings() {
         <CardContent className="p-6">
         <div className="mb-4">
           <h3 className="text-base font-semibold text-slate-900">基本信息</h3>
-          <p className="mt-1 text-sm text-muted-foreground">管理用户名和后续可扩展的邮箱、手机号信息。</p>
+          <p className="mt-1 text-sm text-muted-foreground">管理展示给家庭成员看到的名称，登录账号规则后续单独收口。</p>
         </div>
         <div className="grid gap-4 max-w-md">
           {/* Username with inline edit */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <User className="w-4 h-4" />
-              用户名
+              显示名称
             </Label>
             {isEditingUsername ? (
               <div className="space-y-3 p-3 border rounded-lg bg-muted/50">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-username" className="text-sm">新用户名</Label>
+                  <Label htmlFor="edit-username" className="text-sm">新显示名称</Label>
                   <Input
                     id="edit-username"
                     value={editUsername}
                     onChange={(e) => setEditUsername(e.target.value)}
-                    placeholder="请输入新用户名"
+                    placeholder="请输入新显示名称"
                     maxLength={20}
                     autoFocus
                   />
-                  <p className="text-xs text-muted-foreground">用户名长度应在2-20个字符之间</p>
+                  <p className="text-xs text-muted-foreground">显示名称长度应在 2-20 个字符之间；不会改变后续登录账号规则。</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-username-password" className="text-sm">当前密码确认</Label>

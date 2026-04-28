@@ -1,6 +1,6 @@
 {
   "name": "spec-template-backend",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Backend API server for full-stack web application template",
   "main": "dist/index.js",
   "scripts": {

@@ -27,6 +27,7 @@ import ParentAchievements from "./pages/parent/Achievements";
 import ParentStatistics from "./pages/parent/Statistics";
 import ReportsPage from "./pages/parent/Reports";
 import SettingsPage from "./pages/parent/Settings";
+import HelpCenter from "./pages/parent/HelpCenter";
 // DebtTracker 已移除
 
 
@@ -85,6 +86,7 @@ function App() {
                   <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<Navigate to="/parent/settings/children" replace />} />
                   <Route path="statistics" data-genie-title="Statistics" data-genie-key="ParentStatistics" element={<PageTransition transition="slide-up"><ParentStatistics /></PageTransition>} />
                   <Route path="reports" data-genie-title="Reports" data-genie-key="ReportsPage" element={<PageTransition transition="slide-up"><ReportsPage /></PageTransition>} />
+                  <Route path="help" data-genie-title="Help Center" data-genie-key="HelpCenter" element={<PageTransition transition="slide-up"><HelpCenter /></PageTransition>} />
                   <Route path="settings/*" data-genie-title="Settings" data-genie-key="ParentSettings" element={<PageTransition transition="slide-up"><SettingsPage /></PageTransition>} />
                 </Route>
 

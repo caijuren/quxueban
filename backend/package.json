@@ -1,6 +1,6 @@
 {
   "name": "quxueban-backend",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Backend API server for quxueban education platform",
   "main": "dist/index.js",
   "scripts": {

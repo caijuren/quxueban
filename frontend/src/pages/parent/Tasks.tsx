@@ -90,7 +90,7 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
 const taskKindOptions = ['学习', '阅读', '运动', '习惯', '生活', '情绪', '社交'];
 const levelOptions = ['L1 一年级', 'L2 二年级', 'L3 三年级', 'L4 四年级', 'L5 五年级'];
 const abilityCategoryOptions = ['学科能力', '思维与认知', '学习习惯', '体育与健康'];
-const abilityPointOptions = ['阅读理解', '数学理解', '英语启蒙', '问题理解', '表达输出', '学习计划制定', '时间管理', '复盘与反思', '学习专注力', '基础体能', '作息管理'];
+const abilityPointOptions = ['阅读理解', '数学能力', '英语能力', '问题理解', '表达输出', '学习计划制定', '时间管理', '复盘与反思', '学习专注力', '基础体能', '作息管理'];
 const linkedGoalOptions = ['不关联目标', '语文阅读理解', '数学计算稳定性', '每日固定学习时段', '错题复盘', '每周运动达标'];
 
 async function fetchTasks(childId?: number): Promise<Task[]> {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ElementType } from 'react';
 import {
   Activity,
@@ -19,10 +19,12 @@ import {
   Lightbulb,
   ListChecks,
   PenLine,
+  Plus,
   ShieldCheck,
   Sparkles,
   Target,
   TimerReset,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
@@ -33,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const levels = [
   {
@@ -136,10 +139,13 @@ type AbilityRow = {
   mastery: number;
 };
 
+type EditableAbilityRow = Omit<AbilityRow, 'icon' | 'iconClass'>;
+type AbilityFormState = EditableAbilityRow & { categoryId: CategoryId; originalPoint?: string };
+
 const abilityData: Record<CategoryId, AbilityRow[]> = {
   subject: [
     {
-      point: '语文基础',
+      point: '语文能力',
       icon: BookOpen,
       iconClass: 'bg-blue-50 text-blue-600',
       desc: '能稳定完成阅读、识字、表达和基础写作任务。',
@@ -149,7 +155,7 @@ const abilityData: Record<CategoryId, AbilityRow[]> = {
       mastery: 82,
     },
     {
-      point: '数学理解',
+      point: '数学能力',
       icon: BarChart3,
       iconClass: 'bg-emerald-50 text-emerald-600',
       desc: '能理解题意，开始关注错因和解题步骤。',
@@ -159,12 +165,12 @@ const abilityData: Record<CategoryId, AbilityRow[]> = {
       mastery: 64,
     },
     {
-      point: '英语启蒙',
+      point: '英语能力',
       icon: FileText,
       iconClass: 'bg-sky-50 text-sky-600',
-      desc: '建立听读输入，保持短时高频接触。',
-      indicators: ['每周听读 3 次以上', '掌握常见主题词汇', '能完成短句跟读'],
-      tasks: ['英文绘本跟读', '主题词卡复习'],
+      desc: 'L1 习惯养成：建立读听习惯，听懂常用指令和分级音频，能用 5 词内简单句描述图片。',
+      indicators: ['读：能自主拼读并读完 RAZ G', '写：单词拼写正确，标点规范', '材料：OD 1 完成全册，RAZ 到 Level G，教辅为全新英语一年级听力'],
+      tasks: ['每日 RAZ 听读 15min（1新1旧）', '每周 OD 2 个单元 + 课后练习', '每日原版动画 15min（如 Bluey）'],
       status: 'pending',
       mastery: 20,
     },
@@ -297,6 +303,44 @@ const abilityData: Record<CategoryId, AbilityRow[]> = {
   ],
 };
 
+const englishAbilityByLevel: Record<LevelId, Pick<AbilityRow, 'desc' | 'indicators' | 'tasks' | 'status' | 'mastery'>> = {
+  L1: {
+    desc: '习惯养成：建立读听习惯，听懂常用指令和分级音频，能用 5 词内简单句描述图片。',
+    indicators: ['读：能自主拼读并读完 RAZ G', '写：单词拼写正确，标点规范', '材料：OD 1 完成全册，RAZ 到 Level G，教辅为全新英语一年级听力'],
+    tasks: ['每日 RAZ 听读 15min（1新1旧）', '每周 OD 2 个单元 + 课后练习', '每日原版动画 15min（如 Bluey）'],
+    status: 'progressing',
+    mastery: 35,
+  },
+  L2: {
+    desc: '流利起步：对标 KET 预备，能听懂 1min 故事并抓取要素，连续说 3-5 句复述故事大意。',
+    indicators: ['读：蓝思值 400L+，RAZ L 级', '写：能进行简单句仿写和造句', '材料：OD 2 完成全册，RAZ 到 Level L，教辅为全新英语二年级阅读'],
+    tasks: ['每日朗读 10min 并录音回听', '每周 OD 复述练习（Retell）', '隔周完成 1 单元《培优满分》'],
+    status: 'progressing',
+    mastery: 48,
+  },
+  L3: {
+    desc: '首战告捷：目标 KET 卓越，具备初步 Note-taking 能力，能用 I think...because 表达观点。',
+    indicators: ['读：RAZ Q 级，读懂短篇科普文', '写：50 字内短文，时态基本正确', '材料：OD 3 完成全册，RAZ 到 Level Q，考试使用 KET 真题集和词汇'],
+    tasks: ['每周 1 篇 50 字看图写作', '每日 RAZ 精读 1 本并完成 Quiz', '开启 Unlock 1 强化批判思维'],
+    status: 'progressing',
+    mastery: 62,
+  },
+  L4: {
+    desc: '能力爆发：目标 PET 卓越，能听懂长篇录音并归纳逻辑，能围绕话题做 1-2min 即兴表达。',
+    indicators: ['读：蓝思值 800L+，RAZ V 级', '写：100 字左右段落，逻辑连贯', '材料：OD 4 完成全册，RAZ 到 Level V，考试使用 PET 真题集和词汇'],
+    tasks: ['每周 1 次主题演讲（演讲稿 + 背诵）', '每日精读《全新英语》中考级别', '深度学习 Unlock 2 的读写模块'],
+    status: 'pending',
+    mastery: 42,
+  },
+  L5: {
+    desc: '三公冲刺：面向 FCE/小托福，能边听边记，应对三公机考，具备思辨表达和话题辩论能力。',
+    indicators: ['读：RAZ Z+，读懂原版学术新闻', '写：150 字议论文，句式多变', '材料：OD 5 完成全册，RAZ 到 Level Z1-Z2，考前使用 FCE 核心卷/三公模拟'],
+    tasks: ['每日 1 篇学术文阅读（BBC Kids）', '每周 1 套三公/证书模拟题', '模拟面谈逻辑训练（Q&A）'],
+    status: 'pending',
+    mastery: 30,
+  },
+};
+
 const recommendedTasks = [
   { title: '番茄钟专注训练', tag: '进行中', icon: Clock3, tone: 'text-amber-600 bg-amber-50' },
   { title: '制定周学习计划', tag: '推荐', icon: CalendarCheck, tone: 'text-blue-600 bg-blue-50' },
@@ -308,6 +352,63 @@ const resources = [
   { title: '学习计划模板', type: '文档', icon: PenLine, tone: 'text-pink-600 bg-pink-50' },
   { title: '专注力训练游戏', type: '互动', icon: Sparkles, tone: 'text-amber-600 bg-amber-50' },
 ];
+
+const abilityStorageKey = 'quxueban_ability_model_v1';
+
+function serializeAbilityData(data: Record<CategoryId, AbilityRow[]>): Record<CategoryId, EditableAbilityRow[]> {
+  return Object.fromEntries(
+    Object.entries(data).map(([categoryId, rows]) => [
+      categoryId,
+      rows.map(({ point, desc, indicators, tasks, status, mastery }) => ({ point, desc, indicators, tasks, status, mastery })),
+    ])
+  ) as Record<CategoryId, EditableAbilityRow[]>;
+}
+
+function mergeEditableAbilityData(saved: Record<CategoryId, EditableAbilityRow[]> | null): Record<CategoryId, AbilityRow[]> {
+  if (!saved) return abilityData;
+
+  return Object.fromEntries(
+    categoryTabs.map((category) => {
+      const defaultRows = abilityData[category.id];
+      const editableRows = saved[category.id] || [];
+      const rows = editableRows.length > 0
+        ? editableRows.map((row, index) => {
+            const fallback = defaultRows[index % defaultRows.length] || defaultRows[0];
+            return {
+              ...row,
+              icon: fallback.icon,
+              iconClass: fallback.iconClass,
+              indicators: Array.isArray(row.indicators) ? row.indicators : [],
+              tasks: Array.isArray(row.tasks) ? row.tasks : [],
+              status: row.status || 'pending',
+              mastery: Number.isFinite(row.mastery) ? row.mastery : 0,
+            };
+          })
+        : defaultRows;
+      return [category.id, rows];
+    })
+  ) as Record<CategoryId, AbilityRow[]>;
+}
+
+function loadAbilityData(): Record<CategoryId, AbilityRow[]> {
+  try {
+    const saved = localStorage.getItem(abilityStorageKey);
+    return mergeEditableAbilityData(saved ? JSON.parse(saved) : null);
+  } catch {
+    return abilityData;
+  }
+}
+
+function saveAbilityData(data: Record<CategoryId, AbilityRow[]>) {
+  localStorage.setItem(abilityStorageKey, JSON.stringify(serializeAbilityData(data)));
+}
+
+function parseLines(value: string) {
+  return value
+    .split('\n')
+    .map(item => item.trim().replace(/^[-•]\s*/, ''))
+    .filter(Boolean);
+}
 
 function ProgressBar({ value, className }: { value: number; className?: string }) {
   return (
@@ -327,36 +428,36 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-function AbilityTable({ rows }: { rows: AbilityRow[] }) {
+function AbilityTable({ rows, onEdit }: { rows: AbilityRow[]; onEdit?: (row: AbilityRow) => void }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="hidden grid-cols-[150px_1.05fr_1.25fr_1fr_140px] border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 lg:grid">
-        <div className="px-4 py-3">能力点</div>
-        <div className="border-l border-slate-200 px-4 py-3">能力描述</div>
-        <div className="border-l border-slate-200 px-4 py-3">具体指标</div>
-        <div className="border-l border-slate-200 px-4 py-3">推荐任务示例</div>
-        <div className="border-l border-slate-200 px-4 py-3 text-center">当前状态</div>
+      <div className="hidden grid-cols-[150px_1.05fr_1.25fr_1fr_170px] border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 lg:grid">
+        <div className="px-4 py-3 text-center">能力点</div>
+        <div className="border-l border-slate-200 px-4 py-3 text-center">能力描述</div>
+        <div className="border-l border-slate-200 px-4 py-3 text-center">具体指标</div>
+        <div className="border-l border-slate-200 px-4 py-3 text-center">任务</div>
+        <div className="border-l border-slate-200 px-4 py-3 text-center">状态与操作</div>
       </div>
       <div className="divide-y divide-slate-200">
         {rows.map((row) => {
           const Icon = row.icon;
           return (
-            <div key={row.point} className="grid gap-4 p-4 lg:grid-cols-[150px_1.05fr_1.25fr_1fr_140px] lg:gap-0 lg:p-0">
-              <div className="flex items-center gap-3 lg:px-4 lg:py-6">
+            <div key={row.point} className="group grid gap-4 p-4 lg:grid-cols-[150px_1.05fr_1.25fr_1fr_170px] lg:gap-0 lg:p-0">
+              <div className="flex items-center justify-center gap-3 text-center lg:px-4 lg:py-6">
                 <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', row.iconClass)}>
                   <Icon className="size-5" />
                 </div>
                 <p className="text-sm font-semibold text-slate-900">{row.point}</p>
               </div>
-              <div className="text-sm leading-6 text-slate-600 lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
+              <div className="text-left text-sm leading-6 text-slate-600 lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
                 {row.desc}
               </div>
-              <div className="lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
+              <div className="text-left lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
                 <ul className="space-y-1.5 text-sm leading-6 text-slate-700">
                   {row.indicators.map((item) => <li key={item}>• {item}</li>)}
                 </ul>
               </div>
-              <div className="lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
+              <div className="text-left lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
                 <ul className="space-y-1.5 text-sm leading-6 text-slate-700">
                   {row.tasks.map((item) => <li key={item}>• {item}</li>)}
                 </ul>
@@ -364,11 +465,18 @@ function AbilityTable({ rows }: { rows: AbilityRow[] }) {
               <div className="flex min-w-0 items-center justify-between gap-3 lg:flex-col lg:justify-center lg:border-l lg:border-slate-200 lg:px-4 lg:py-6">
                 <StatusBadge status={row.status} />
                 <p className="text-xs font-medium text-slate-500">掌握度 {row.mastery}%</p>
+                {onEdit ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => onEdit(row)} className="h-8 rounded-lg px-2 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-700 focus-visible:opacity-100 group-hover:opacity-100">
+                    <PenLine className="mr-1.5 size-3.5" />
+                    编辑
+                  </Button>
+                ) : null}
               </div>
             </div>
           );
         })}
       </div>
+
     </div>
   );
 }
@@ -388,14 +496,28 @@ function Donut({ value }: { value: number }) {
 }
 
 export default function AbilityModel() {
-  const [activeLevel, setActiveLevel] = useState<LevelId>('L3');
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('habit');
+  const [activeLevel, setActiveLevel] = useState<LevelId>('L1');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>('subject');
+  const [modelData, setModelData] = useState<Record<CategoryId, AbilityRow[]>>(() => loadAbilityData());
+  const [editingRow, setEditingRow] = useState<AbilityFormState | null>(null);
 
   const currentLevel = levels.find((level) => level.id === activeLevel) || levels[2];
   const stats = levelStats[activeLevel];
   const activeCategoryMeta = categoryTabs.find((tab) => tab.id === activeCategory) || categoryTabs[2];
   const ActiveCategoryIcon = activeCategoryMeta.icon;
-  const visibleRows = abilityData[activeCategory];
+  const visibleRows = useMemo(() => {
+    const rows = modelData[activeCategory] || [];
+    if (activeCategory !== 'subject') return rows;
+
+    return rows.map((row) => {
+      if (row.point !== '英语能力' && row.point !== '英语启蒙') return row;
+      return {
+        ...row,
+        point: '英语能力',
+        ...englishAbilityByLevel[activeLevel],
+      };
+    });
+  }, [activeCategory, activeLevel, modelData]);
 
   const statusCounts = useMemo(() => {
     return visibleRows.reduce<Record<Status, number>>(
@@ -406,6 +528,87 @@ export default function AbilityModel() {
       { mastered: 0, progressing: 0, pending: 0 }
     );
   }, [visibleRows]);
+
+  useEffect(() => {
+    saveAbilityData(modelData);
+  }, [modelData]);
+
+  const openEditRow = (row: AbilityRow) => {
+    setEditingRow({
+      categoryId: activeCategory,
+      originalPoint: row.point,
+      point: row.point,
+      desc: row.desc,
+      indicators: row.indicators,
+      tasks: row.tasks,
+      status: row.status,
+      mastery: row.mastery,
+    });
+  };
+
+  const openNewRow = () => {
+    setEditingRow({
+      categoryId: activeCategory,
+      point: '',
+      desc: '',
+      indicators: [],
+      tasks: [],
+      status: 'pending',
+      mastery: 0,
+    });
+  };
+
+  const handleSaveEditingRow = () => {
+    if (!editingRow) return;
+    const point = editingRow.point.trim();
+    if (!point) {
+      toast.error('请填写能力点名称');
+      return;
+    }
+
+    setModelData((current) => {
+      const rows = current[editingRow.categoryId];
+      const fallback = abilityData[editingRow.categoryId][0];
+      const nextRow: AbilityRow = {
+        point,
+        desc: editingRow.desc.trim(),
+        indicators: editingRow.indicators,
+        tasks: editingRow.tasks,
+        status: editingRow.status,
+        mastery: Math.max(0, Math.min(100, Number(editingRow.mastery) || 0)),
+        icon: fallback.icon,
+        iconClass: fallback.iconClass,
+      };
+
+      const exists = editingRow.originalPoint
+        ? rows.some(row => row.point === editingRow.originalPoint)
+        : false;
+      const nextRows = exists
+        ? rows.map(row => row.point === editingRow.originalPoint ? { ...nextRow, icon: row.icon, iconClass: row.iconClass } : row)
+        : [...rows, nextRow];
+
+      return { ...current, [editingRow.categoryId]: nextRows };
+    });
+    setEditingRow(null);
+    toast.success('能力模型已保存');
+  };
+
+  const handleDeleteEditingRow = () => {
+    if (!editingRow?.originalPoint) return;
+    setModelData((current) => ({
+      ...current,
+      [editingRow.categoryId]: current[editingRow.categoryId].filter(row => row.point !== editingRow.originalPoint),
+    }));
+    setEditingRow(null);
+    toast.success('能力点已删除');
+  };
+
+  const handleResetModel = () => {
+    if (!window.confirm('确定恢复默认能力模型吗？自定义修改会被清空。')) return;
+    localStorage.removeItem(abilityStorageKey);
+    setModelData(abilityData);
+    toast.success('已恢复默认模型');
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1360px] space-y-5">
@@ -448,7 +651,11 @@ export default function AbilityModel() {
               <FileText className="mr-2 size-4" />
               导出报告
             </Button>
-            <Button className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
+            <Button variant="outline" onClick={openNewRow} className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
+              <Plus className="mr-2 size-4" />
+              新增能力点
+            </Button>
+            <Button onClick={() => visibleRows[0] && openEditRow(visibleRows[0])} className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
               <PenLine className="mr-2 size-4" />
               编辑模型
             </Button>
@@ -515,7 +722,7 @@ export default function AbilityModel() {
             </div>
           </section>
 
-          <AbilityTable rows={visibleRows} />
+          <AbilityTable rows={visibleRows} onEdit={openEditRow} />
 
           <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -631,11 +838,111 @@ export default function AbilityModel() {
             <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
               <li className="flex gap-2"><Flag className="mt-1 size-4 shrink-0 text-blue-500" />L1-L5 当前对应一年级到五年级。</li>
               <li className="flex gap-2"><ListChecks className="mt-1 size-4 shrink-0 text-blue-500" />能力指标后续会接入任务、阅读、计划、目标和报告数据。</li>
-              <li className="flex gap-2"><ShieldCheck className="mt-1 size-4 shrink-0 text-blue-500" />静态版用于确认内容体系，编辑能力会在下一阶段补齐。</li>
+              <li className="flex gap-2"><ShieldCheck className="mt-1 size-4 shrink-0 text-blue-500" />当前支持本地编辑能力点，确认口径后可升级为家庭级云端配置。</li>
             </ol>
+            <Button variant="outline" onClick={handleResetModel} className="mt-4 w-full rounded-lg bg-white">
+              恢复默认模型
+            </Button>
           </section>
         </aside>
       </div>
+
+      {editingRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setEditingRow(null)}>
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+          <div className="relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 p-5">
+              <div>
+                <p className="text-xs font-semibold text-blue-600">{categoryTabs.find(item => item.id === editingRow.categoryId)?.label}</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950">{editingRow.originalPoint ? '编辑能力点' : '新增能力点'}</h3>
+                <p className="mt-1 text-sm text-slate-500">先维护模型内容和状态，后续再接入任务、目标和报告数据。</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setEditingRow(null)} className="rounded-full">
+                <X className="size-5" />
+              </Button>
+            </div>
+            <div className="flex-1 space-y-4 overflow-auto p-5">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">能力点名称</span>
+                <input
+                  value={editingRow.point}
+                  onChange={(event) => setEditingRow({ ...editingRow, point: event.target.value })}
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">能力描述</span>
+                <textarea
+                  value={editingRow.desc}
+                  onChange={(event) => setEditingRow({ ...editingRow, desc: event.target.value })}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">具体指标</span>
+                  <textarea
+                    value={editingRow.indicators.join('\n')}
+                    onChange={(event) => setEditingRow({ ...editingRow, indicators: parseLines(event.target.value) })}
+                    rows={5}
+                    placeholder="每行一个指标"
+                    className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">任务</span>
+                  <textarea
+                    value={editingRow.tasks.join('\n')}
+                    onChange={(event) => setEditingRow({ ...editingRow, tasks: parseLines(event.target.value) })}
+                    rows={5}
+                    placeholder="每行一个任务"
+                    className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">当前状态</span>
+                  <select
+                    value={editingRow.status}
+                    onChange={(event) => setEditingRow({ ...editingRow, status: event.target.value as Status })}
+                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  >
+                    <option value="mastered">已掌握</option>
+                    <option value="progressing">进行中</option>
+                    <option value="pending">未开始</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">掌握度：{editingRow.mastery}%</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={editingRow.mastery}
+                    onChange={(event) => setEditingRow({ ...editingRow, mastery: Number(event.target.value) })}
+                    className="mt-4 w-full accent-blue-600"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                {editingRow.originalPoint ? (
+                  <Button type="button" variant="outline" onClick={handleDeleteEditingRow} className="rounded-xl border-red-100 bg-white text-red-600 hover:bg-red-50">
+                    删除能力点
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" onClick={() => setEditingRow(null)} className="rounded-xl bg-white">取消</Button>
+                <Button type="button" onClick={handleSaveEditingRow} className="rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white">保存</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

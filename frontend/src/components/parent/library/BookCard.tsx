@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Trash2 } from 'lucide-react';
+import { BookOpen, Check, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Book } from '@/types/library';
@@ -10,6 +10,8 @@ interface BookCardProps {
   book: Book;
   index: number;
   onDelete?: (book: Book) => void;
+  selected?: boolean;
+  onSelectChange?: (book: Book, selected: boolean) => void;
 }
 
 export function formatBookName(name: string): string {
@@ -20,6 +22,8 @@ export function BookCard({
   book,
   index,
   onDelete,
+  selected = false,
+  onSelectChange,
 }: BookCardProps) {
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
@@ -71,7 +75,28 @@ export function BookCard({
       transition={{ delay: Math.min(index * 0.03, 0.3) }}
       className="group relative"
     >
-      <Card className="group/card flex h-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+      <Card className={cn(
+        'group/card flex h-full flex-col overflow-hidden rounded-xl border bg-white p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md',
+        selected ? 'border-primary ring-2 ring-primary/20' : 'border-border/70'
+      )}>
+        {onSelectChange ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectChange(book, !selected);
+            }}
+            className={cn(
+              'absolute left-5 top-5 z-20 flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-colors',
+              selected
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-white/80 bg-white/90 text-slate-400 hover:bg-primary/10 hover:text-primary'
+            )}
+            aria-label={selected ? '取消选择图书' : '选择图书'}
+          >
+            {selected ? <Check className="h-4 w-4" /> : <span className="h-3.5 w-3.5 rounded border border-current" />}
+          </button>
+        ) : null}
         <button type="button" onClick={handleClick} className="flex h-full flex-col text-left">
           <div className="relative rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50 p-4">
             <span className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-xs font-medium ${statusMeta.className}`}>

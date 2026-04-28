@@ -123,7 +123,7 @@ export function BatchActionBar({
 
             <Button
               onClick={onBatchFinish}
-              disabled={selectedCount === 0 && !batchReadStage || isProcessing}
+              disabled={selectedCount === 0 || isProcessing}
               className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-600"
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
