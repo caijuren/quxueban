@@ -46,6 +46,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
+import { showCopyableError } from '@/lib/error-toast';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
@@ -314,9 +315,7 @@ export default function ChildrenManagement({
       queryClient.invalidateQueries({ queryKey: ['settings-family'] });
       refreshChildren();
     },
-    onError: (error) => {
-      toast.error(`添加失败：${getErrorMessage(error)}`);
-    },
+    onError: (error) => showCopyableError(`添加失败：${getErrorMessage(error)}`),
   });
 
   const updateMutation = useMutation({
@@ -331,9 +330,7 @@ export default function ChildrenManagement({
       await refetch();
       refreshChildren();
     },
-    onError: (error) => {
-      toast.error(`更新失败：${getErrorMessage(error)}`);
-    },
+    onError: (error) => showCopyableError(`更新失败：${getErrorMessage(error)}`),
   });
 
   const deleteMutation = useMutation({
@@ -347,9 +344,7 @@ export default function ChildrenManagement({
       queryClient.invalidateQueries({ queryKey: ['settings-family'] });
       refreshChildren();
     },
-    onError: (error) => {
-      toast.error(`删除失败：${getErrorMessage(error)}`);
-    },
+    onError: (error) => showCopyableError(`删除失败：${getErrorMessage(error)}`),
   });
 
   const saveDingTalkMutation = useMutation({
@@ -438,7 +433,7 @@ export default function ChildrenManagement({
       setChildAvatar(uploadedAvatar);
       toast.success('头像上传成功，请保存更改');
     }).catch((error) => {
-      toast.error(getErrorMessage(error) || '头像上传失败');
+      showCopyableError(getErrorMessage(error) || '头像上传失败');
     });
   };
 

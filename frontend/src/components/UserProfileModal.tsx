@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { showCopyableError } from '@/lib/error-toast';
 
 interface UserProfileModalProps {
   open: boolean;
@@ -115,7 +116,7 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
       toast.success('保存成功');
       onOpenChange(false);
     } catch (error) {
-      toast.error((error as Error).message || '保存失败');
+      showCopyableError((error as Error).message || '保存失败');
     } finally {
       setIsLoading(false);
     }

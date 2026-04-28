@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
+import { showCopyableError } from '@/lib/error-toast';
 import { cn } from '@/lib/utils';
 import AccountSettings from './settings/AccountSettings';
 import ChildrenManagement from './settings/ChildrenManagement';
@@ -104,6 +105,19 @@ async function getChildren(): Promise<Child[]> {
 async function updateAvatar(avatar: string): Promise<{ avatar: string; token?: string }> {
   const response = await apiClient.post('/avatar', { avatar });
   return response.data.data;
+}
+
+async function uploadAvatarFile(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  const response = await apiClient.post('/upload/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  const avatarUrl = response.data?.data?.url || response.data?.url;
+  if (!avatarUrl) {
+    throw new Error('头像上传成功，但没有返回头像链接');
+  }
+  return avatarUrl;
 }
 
 async function updateDisplayName(name: string, password: string): Promise<{ name: string; token?: string }> {
@@ -434,7 +448,16 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['settings-user-info'] });
       toast.success('头像已更新');
     },
-    onError: (error) => toast.error(`更新失败：${getErrorMessage(error)}`),
+    onError: (error) => showCopyableError(`更新失败：${getErrorMessage(error)}`),
+  });
+
+  const uploadProfileAvatarMutation = useMutation({
+    mutationFn: uploadAvatarFile,
+    onSuccess: (avatarUrl) => {
+      setProfileAvatar(avatarUrl);
+      toast.success('头像上传成功，请保存');
+    },
+    onError: (error) => showCopyableError(`上传失败：${getErrorMessage(error)}`),
   });
 
   const displayNameMutation = useMutation({
@@ -546,9 +569,8 @@ export default function SettingsPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => setProfileAvatar(String(reader.result || ''));
-    reader.readAsDataURL(file);
+    uploadProfileAvatarMutation.mutate(file);
+    event.target.value = '';
   };
 
   const openProfileDialog = () => {
@@ -567,14 +589,16 @@ export default function SettingsPage() {
       toast.error('显示名称长度应在 2-20 个字符之间');
       return;
     }
-    if (profileAvatar !== (user?.avatar || '')) {
-      avatarMutation.mutate(profileAvatar || '👤');
-    }
     if (profileName.trim() !== user?.name) {
       if (!profilePassword) {
         toast.error('修改显示名称需要输入当前密码');
         return;
       }
+    }
+    if (profileAvatar !== (user?.avatar || '')) {
+      avatarMutation.mutate(profileAvatar || '👤');
+    }
+    if (profileName.trim() !== user?.name) {
       displayNameMutation.mutate({ name: profileName.trim(), password: profilePassword });
       return;
     }
@@ -969,9 +993,9 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-slate-700">头像</Label>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="relative h-8 overflow-hidden rounded-lg bg-white">
-                    上传头像
-                    <input className="absolute inset-0 cursor-pointer opacity-0" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleProfileAvatarUpload} />
+                  <Button variant="outline" size="sm" className="relative h-8 overflow-hidden rounded-lg bg-white" disabled={uploadProfileAvatarMutation.isPending}>
+                    {uploadProfileAvatarMutation.isPending ? '上传中...' : '上传头像'}
+                    <input className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleProfileAvatarUpload} disabled={uploadProfileAvatarMutation.isPending} />
                   </Button>
                   <Button type="button" variant="ghost" size="sm" className="h-8 rounded-lg" onClick={() => setProfileAvatar('👤')}>
                     恢复默认
@@ -990,7 +1014,7 @@ export default function SettingsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setProfileDialogOpen(false)}>取消</Button>
-            <Button onClick={submitProfile} disabled={avatarMutation.isPending || displayNameMutation.isPending}>
+            <Button onClick={submitProfile} disabled={avatarMutation.isPending || displayNameMutation.isPending || uploadProfileAvatarMutation.isPending}>
               {avatarMutation.isPending || displayNameMutation.isPending ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>

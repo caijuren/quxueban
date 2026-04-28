@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
+import { showCopyableError } from '@/lib/error-toast';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,19 @@ async function getUserInfo(): Promise<any> {
 async function updateAvatar(avatar: string): Promise<{ avatar: string; token?: string }> {
   const response = await apiClient.post('/avatar', { avatar });
   return response.data.data;
+}
+
+async function uploadAvatarFile(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  const response = await apiClient.post('/upload/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  const avatarUrl = response.data?.data?.url || response.data?.url;
+  if (!avatarUrl) {
+    throw new Error('头像上传成功，但没有返回头像链接');
+  }
+  return avatarUrl;
 }
 
 async function updatePassword(oldPassword: string, newPassword: string): Promise<void> {
@@ -87,7 +101,16 @@ export default function AccountSettings() {
       queryClient.invalidateQueries({ queryKey: ['user-info'] });
       queryClient.invalidateQueries({ queryKey: ['settings-user-info'] });
     },
-    onError: (error) => toast.error(`更新失败：${getErrorMessage(error)}`),
+    onError: (error) => showCopyableError(`更新失败：${getErrorMessage(error)}`),
+  });
+
+  const uploadAvatarMutation = useMutation({
+    mutationFn: uploadAvatarFile,
+    onSuccess: (avatarUrl) => {
+      setAvatar(avatarUrl);
+      avatarMutation.mutate(avatarUrl);
+    },
+    onError: (error) => showCopyableError(`上传失败：${getErrorMessage(error)}`),
   });
 
   const passwordMutation = useMutation({
@@ -174,13 +197,8 @@ export default function AccountSettings() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        setAvatar(base64);
-        avatarMutation.mutate(base64);
-      };
-      reader.readAsDataURL(file);
+      uploadAvatarMutation.mutate(file);
+      e.target.value = '';
     }
   };
 
@@ -348,15 +366,16 @@ export default function AccountSettings() {
           </div>
           <div className="space-y-2">
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="relative" disabled={avatarMutation.isPending}>
+              <Button variant="outline" size="sm" className="relative" disabled={avatarMutation.isPending || uploadAvatarMutation.isPending}>
                 <input
                   type="file"
                   accept="image/*"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   onChange={handleAvatarUpload}
+                  disabled={avatarMutation.isPending || uploadAvatarMutation.isPending}
                 />
                 <Camera className="w-4 h-4 mr-2" />
-                {avatarMutation.isPending ? '上传中...' : '更换头像'}
+                {avatarMutation.isPending || uploadAvatarMutation.isPending ? '上传中...' : '更换头像'}
               </Button>
               {avatar && (
                 <Button
@@ -366,7 +385,7 @@ export default function AccountSettings() {
                     setAvatar('👤');
                     avatarMutation.mutate('👤');
                   }}
-                  disabled={avatarMutation.isPending}
+                  disabled={avatarMutation.isPending || uploadAvatarMutation.isPending}
                 >
                   移除
                 </Button>
