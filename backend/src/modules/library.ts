@@ -312,6 +312,8 @@ function buildReadingLogFromImportRow(row: any, familyId: number, bookId: number
   const startPage = firstNumber(pickRowValue(row, ['开始页', '起始页', 'startPage']))
   const explicitEndPage = firstNumber(pickRowValue(row, ['结束页', '截止页', 'endPage']))
   const pages = firstNumber(pickRowValue(row, ['阅读页数', '页数', 'pages']))
+  const totalPages = firstNumber(pickRowValue(row, ['总页数', '图书页数', '页数']))
+  const readCount = firstNumber(pickRowValue(row, ['阅读次数', '次数', 'readCount']))
   const endPage = explicitEndPage || (startPage && pages ? startPage + pages - 1 : 0)
   const minutes = firstNumber(pickRowValue(row, ['阅读时长', '时长', '分钟', 'minutes']))
   const note = pickRowValue(row, ['备注', '心得', '内容', '阅读内容', 'note'])
@@ -319,8 +321,9 @@ function buildReadingLogFromImportRow(row: any, familyId: number, bookId: number
   const effect = pickRowValue(row, ['阅读效果', '效果', 'effect'])
   const readStage = pickRowValue(row, ['阅读阶段', '阶段', 'readStage'])
   const evidenceUrl = pickRowValue(row, ['证据链接', '照片', '图片', 'evidenceUrl'])
+  const importedReadDate = pickRowValue(row, ['最近一次阅读时间', '最后阅读时间', '阅读日期', '日期', 'readDate'])
 
-  if (!startPage && !endPage && !pages && !minutes && !note && !performance && !effect && !readStage) {
+  if (!startPage && !endPage && !pages && !minutes && !note && !performance && !effect && !readStage && !importedReadDate && !readCount) {
     return null
   }
 
@@ -328,10 +331,10 @@ function buildReadingLogFromImportRow(row: any, familyId: number, bookId: number
     familyId,
     childId: childId || null,
     bookId,
-    readDate: parseExcelDate(pickRowValue(row, ['阅读日期', '日期', 'readDate'])),
+    readDate: parseExcelDate(importedReadDate),
     startPage,
-    endPage,
-    pages: pages || (startPage && endPage && endPage >= startPage ? endPage - startPage + 1 : 0),
+    endPage: endPage || (readCount && totalPages ? totalPages : 0),
+    pages: pages || (startPage && endPage && endPage >= startPage ? endPage - startPage + 1 : 0) || (readCount && totalPages ? totalPages : 0),
     minutes,
     note,
     performance,
@@ -339,6 +342,18 @@ function buildReadingLogFromImportRow(row: any, familyId: number, bookId: number
     readStage,
     evidenceUrl,
   }
+}
+
+function shouldMarkImportedBookFinished(row: any): boolean {
+  const status = pickRowValue(row, ['阅读状态', '状态', '是否读完', 'readStatus']).toLowerCase()
+  const readCount = firstNumber(pickRowValue(row, ['阅读次数', '次数', 'readCount']))
+  const lastReadAt = pickRowValue(row, ['最近一次阅读时间', '最后阅读时间'])
+
+  return Boolean(
+    readCount > 0 ||
+    lastReadAt ||
+    ['已读', '已读完', '读完', 'finished', 'done', 'complete', 'completed'].some((item) => status.includes(item))
+  )
 }
 
 /**
@@ -1559,6 +1574,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
     let skipped = 0
     let matchedBooks = 0
     let readingLogsCreated = 0
+    let readStatesUpdated = 0
     let coverSuccess = 0
     let coverFailed = 0
     const totalRows = data.length
@@ -1595,8 +1611,11 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       let targetBook = existingBookByKey.get(bookKey) || existingBookByKey.get(`name:${normalizeBookName(String(name))}`)
 
       // Map type
-      const excelType = row['类型'] || ''
+      const excelType = row['类型'] || row['书架分类'] || row['分类'] || ''
       const bookType = typeMap[excelType] || 'children'
+      const wordCount = firstNumber(row['字数'], row['wordCount'])
+      const totalPages = firstNumber(row['页数'], row['总页数'], row['totalPages'])
+      const readCount = firstNumber(row['阅读次数'], row['次数'], row['readCount'])
       
       // Get cover URL from K column hyperlinks
       // Row index in Excel is i+2 (1-based, with header row)
@@ -1643,9 +1662,11 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
             author: String(row['作者'] || ''),
             type: bookType,
             coverUrl: finalCoverUrl,
-            totalPages: parseInt(row['页数']) || 0,
+            totalPages,
             isbn,
             publisher: String(row['出版社'] || ''),
+            wordCount: wordCount || null,
+            readCount,
           },
           select: { id: true, name: true, isbn: true },
         })
@@ -1654,13 +1675,67 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
         if (isbn) existingBookByKey.set(`isbn:${isbn}`, createdBook)
         existingBookByKey.set(`name:${normalizeBookName(String(name))}`, createdBook)
       } else {
+        const bookPatch: any = {}
+        if (wordCount) bookPatch.wordCount = wordCount
+        if (totalPages) bookPatch.totalPages = totalPages
+        if (readCount) bookPatch.readCount = readCount
+        if (childId) bookPatch.childId = parseInt(childId)
+        if (Object.keys(bookPatch).length > 0) {
+          await prisma.book.update({
+            where: { id: targetBook.id },
+            data: bookPatch,
+          })
+        }
         matchedBooks++
       }
 
       const logData = buildReadingLogFromImportRow(row, familyId, targetBook.id, childId ? parseInt(childId) : null)
       if (logData) {
-        await prisma.readingLog.create({ data: logData })
-        readingLogsCreated++
+        const dayStart = new Date(logData.readDate)
+        dayStart.setHours(0, 0, 0, 0)
+        const dayEnd = new Date(dayStart)
+        dayEnd.setDate(dayEnd.getDate() + 1)
+        const existingLog = await prisma.readingLog.findFirst({
+          where: {
+            familyId,
+            childId: logData.childId,
+            bookId: targetBook.id,
+            readDate: {
+              gte: dayStart,
+              lt: dayEnd,
+            },
+          },
+          select: { id: true },
+        })
+
+        if (!existingLog) {
+          await prisma.readingLog.create({ data: logData })
+          readingLogsCreated++
+        }
+      }
+
+      const parsedChildId = childId ? parseInt(childId) : null
+      if (parsedChildId && shouldMarkImportedBookFinished(row)) {
+        await prisma.bookReadState.upsert({
+          where: {
+            childId_bookId: {
+              childId: parsedChildId,
+              bookId: targetBook.id,
+            },
+          },
+          create: {
+            familyId,
+            childId: parsedChildId,
+            bookId: targetBook.id,
+            status: 'finished',
+            finishedAt: parseExcelDate(pickRowValue(row, ['最近一次阅读时间', '最后阅读时间', '阅读日期', '日期', 'readDate'])),
+          },
+          update: {
+            status: 'finished',
+            finishedAt: parseExcelDate(pickRowValue(row, ['最近一次阅读时间', '最后阅读时间', '阅读日期', '日期', 'readDate'])),
+          },
+        })
+        readStatesUpdated++
       }
 
       if ((i + 1) % 10 === 0 || i === data.length - 1) {
@@ -1673,6 +1748,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
             skipped,
             matchedBooks,
             readingLogsCreated,
+            readStatesUpdated,
             processed: i + 1,
             coverSuccess,
             coverFailed
@@ -1682,13 +1758,13 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       }
     }
 
-    console.log(`[IMPORT] Completed: ${imported} imported, ${matchedBooks} matched, ${readingLogsCreated} logs, ${skipped} skipped, ${coverSuccess} covers, ${coverFailed} failed`)
+    console.log(`[IMPORT] Completed: ${imported} imported, ${matchedBooks} matched, ${readingLogsCreated} logs, ${readStatesUpdated} read states, ${skipped} skipped, ${coverSuccess} covers, ${coverFailed} failed`)
 
     // 发送完成信息
     res.write(JSON.stringify({
       status: 'success',
-      message: `导入完成：新建 ${imported} 本，匹配 ${matchedBooks} 本，阅读记录 ${readingLogsCreated} 条，跳过 ${skipped} 条，封面 ${coverSuccess} 个`,
-      data: { imported, createdBooks: imported, matchedBooks, readingLogsCreated, skipped, coverSuccess, coverFailed },
+      message: `导入完成：新建 ${imported} 本，匹配 ${matchedBooks} 本，阅读记录 ${readingLogsCreated} 条，已读状态 ${readStatesUpdated} 本，跳过 ${skipped} 条，封面 ${coverSuccess} 个`,
+      data: { imported, createdBooks: imported, matchedBooks, readingLogsCreated, readStatesUpdated, skipped, coverSuccess, coverFailed },
     }) + '\n')
 
     res.end()

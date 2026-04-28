@@ -36,6 +36,7 @@ reset-*.ts
 restore-*.ts
 test-*.ts
 migration.sql
+!prisma/migrations/**/migration.sql
 test-data.sql
 check-users.sql
 scripts/*.js

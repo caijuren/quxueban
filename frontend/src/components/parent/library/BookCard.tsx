@@ -35,9 +35,12 @@ export function BookCard({
 
   const progress = book.totalPages > 0 ? Math.min(100, Math.round(((book.totalReadPages || 0) / book.totalPages) * 100)) : 0;
   const isFinished = book.readState?.status === 'finished';
+  const isReading = book.readState?.status === 'reading';
   const statusMeta = isFinished
-    ? { label: '已读完', className: 'bg-emerald-100 text-emerald-700', detail: '已读完' }
-    : { label: '在读中', className: 'bg-blue-100 text-blue-700', detail: '阅读中' };
+    ? { label: '已读完', className: 'bg-emerald-100 text-emerald-700' }
+    : isReading
+      ? { label: '在读中', className: 'bg-blue-100 text-blue-700' }
+      : { label: '未记录', className: 'bg-slate-100 text-slate-600' };
 
   const renderCover = () => (
     <div className="relative w-full h-full bg-muted">
@@ -118,7 +121,7 @@ export function BookCard({
                   <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {isFinished ? '已读完' : `阅读中 · ${progress}%`}
+                  {isFinished ? '已读完' : isReading ? `阅读中 · ${progress}%` : '暂无阅读记录'}
                 </p>
               </div>
             </div>

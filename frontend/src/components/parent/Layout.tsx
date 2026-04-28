@@ -44,35 +44,50 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const navGroups = [
   {
-    id: 'workflow',
-    label: '学习主流程',
+    id: 'daily',
+    label: '日常执行',
     items: [
-      { path: '/parent/growth-dashboard', label: '仪表盘', icon: ChartNoAxesCombined },
-      { path: '/parent/ability-model', label: '能力模型', icon: Brain },
-      { path: '/parent/goals', label: '目标', icon: Target },
       { path: '/parent', label: '今日概览', icon: LayoutDashboard },
-      { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
       { path: '/parent/plans', label: '学习计划', icon: CalendarDays },
+      { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
       { path: '/parent/library', label: '图书馆', icon: Library },
     ],
   },
   {
-    id: 'insight',
-    label: '复盘与激励',
+    id: 'growth',
+    label: '成长规划',
     items: [
+      { path: '/parent/ability-model', label: '能力模型', icon: Brain },
+      { path: '/parent/goals', label: '目标', icon: Target },
+    ],
+  },
+  {
+    id: 'review',
+    label: '复盘分析',
+    items: [
+      { path: '/parent/growth-dashboard', label: '仪表盘', icon: ChartNoAxesCombined },
       { path: '/parent/reports', label: '学习报告', icon: FileText },
       { path: '/parent/achievements', label: '成就', icon: Trophy },
     ],
   },
   {
     id: 'system',
-    label: '设置与系统',
+    label: '系统',
     items: [
       { path: '/parent/settings/account', label: '设置', icon: Settings },
       { path: '/parent/help', label: '帮助中心', icon: HelpCircle },
     ],
   },
 ];
+
+type AppNotification = {
+  id: number;
+  type: 'success' | 'info' | 'warning' | 'error';
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+};
 
 const pageTitleMap: Record<string, string> = {
   '/parent': '今日概览',
@@ -109,7 +124,7 @@ function getActiveGroupLabel(pathname: string): string {
     )
   );
 
-  return activeGroup?.label || '学习主流程';
+  return activeGroup?.label || '日常执行';
 }
 
 const sidebarVariants = {
@@ -190,7 +205,7 @@ function ChildSwitcherButton({
 
 export default function ParentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout, isAuthenticated, isInitializing } = useAuth();
   const navigate = useNavigate();
@@ -206,16 +221,38 @@ export default function ParentLayout() {
   };
 
   const markAsRead = (id: number) => {
-    setNotifications(prev => prev.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
-    setUnreadCount(prev => prev - 1);
+    setNotifications(prev => {
+      const target = prev.find(n => n.id === id);
+      if (target && !target.read) {
+        setUnreadCount(count => Math.max(0, count - 1));
+      }
+      return prev.map(n => n.id === id ? { ...n, read: true } : n);
+    });
   };
 
   const markAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     setUnreadCount(0);
   };
+
+  useEffect(() => {
+    const handleNotification = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<AppNotification>>).detail || {};
+      const notification: AppNotification = {
+        id: Date.now(),
+        type: detail.type || 'info',
+        title: detail.title || '系统通知',
+        message: detail.message || '',
+        time: '刚刚',
+        read: false,
+      };
+      setNotifications(prev => [notification, ...prev].slice(0, 20));
+      setUnreadCount(prev => prev + 1);
+    };
+
+    window.addEventListener('quxueban:notification', handleNotification);
+    return () => window.removeEventListener('quxueban:notification', handleNotification);
+  }, []);
 
   useEffect(() => {
     if (!isInitializing && isAuthenticated && user && user.role !== 'parent') {

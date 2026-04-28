@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   Bookmark,
   FolderHeart,
-  History,
   Clock3,
   HelpCircle,
 } from 'lucide-react';
@@ -43,7 +42,7 @@ import type { ReactNode } from 'react';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Import components
-import { BatchActionBar, BookCard, BookFilter, EmptyState } from '@/components/parent/library';
+import { BookCard, BookFilter, EmptyState } from '@/components/parent/library';
 import type { Book, BookList, ReadStatus } from '@/types/library';
 import { bookTypes } from '@/types/library';
 
@@ -114,11 +113,6 @@ async function updateBook(id: number, book: Partial<BookFormData>): Promise<Book
 
 async function deleteBook(id: number): Promise<void> {
   await apiClient.delete(`/library/${id}`);
-}
-
-async function batchFinishBooks(childId: number, bookIds: number[], readStage?: string): Promise<{ updated: number }> {
-  const { data } = await apiClient.post('/library/batch/finish', { childId, bookIds, readStage });
-  return data.data;
 }
 
 const getScopedStorageKey = (key: string, childId: number | null) => `${key}_${childId ?? 'pending'}`;
@@ -207,7 +201,6 @@ export default function LibraryPage() {
   const { selectedChildId, selectedChild } = useSelectedChild();
   const storageKeys = useMemo(() => ({
     bookLists: getScopedStorageKey('library_book_lists', selectedChildId),
-    importHistory: getScopedStorageKey('library_import_history', selectedChildId),
   }), [selectedChildId]);
 
   // State
@@ -236,16 +229,11 @@ export default function LibraryPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<50 | 100>(50);
-  const [selectedBookIds, setSelectedBookIds] = useState<number[]>([]);
-  const [batchReadStage, setBatchReadStage] = useState('');
 
   // Book lists
   const [bookLists, setBookLists] = useState<BookList[]>([]);
   const [showBookListDialog, setShowBookListDialog] = useState(false);
   const [newListName, setNewListName] = useState('');
-
-  // Import history
-  const [importHistory, setImportHistory] = useState<Array<{ date: string; count: number; filename: string }>>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -279,7 +267,6 @@ export default function LibraryPage() {
 
   useEffect(() => {
     setBookLists(JSON.parse(localStorage.getItem(storageKeys.bookLists) || '[]'));
-    setImportHistory(JSON.parse(localStorage.getItem(storageKeys.importHistory) || '[]'));
   }, [storageKeys]);
 
   const { data: books = [], isLoading } = useQuery({
@@ -339,11 +326,6 @@ export default function LibraryPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchInput, selectedType, selectedReadStatus, sortBy, selectedChildId, pageSize]);
-
-  useEffect(() => {
-    setSelectedBookIds([]);
-    setBatchReadStage('');
-  }, [searchInput, selectedType, selectedReadStatus, sortBy, selectedChildId]);
 
   const totalPages = Math.max(1, Math.ceil(filteredBooks.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -439,19 +421,6 @@ export default function LibraryPage() {
       toast.success('图书已删除');
       setDeleteDialogOpen(false);
       setBookToDelete(null);
-    },
-    onError: (error) => toast.error(getErrorMessage(error)),
-  });
-
-  const batchFinishMutation = useMutation({
-    mutationFn: () => batchFinishBooks(selectedChildId!, selectedBookIds, batchReadStage),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
-      queryClient.invalidateQueries({ queryKey: ['growth-dashboard-reading-stats'] });
-      toast.success(`已标记 ${result.updated || selectedBookIds.length} 本书为已读完`);
-      setSelectedBookIds([]);
-      setBatchReadStage('');
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -587,82 +556,6 @@ export default function LibraryPage() {
     }
   };
 
-  const handleToggleBookSelection = (book: Book, selected: boolean) => {
-    setSelectedBookIds((current) => (
-      selected
-        ? Array.from(new Set([...current, book.id]))
-        : current.filter(id => id !== book.id)
-    ));
-  };
-
-  const handleSelectAllFiltered = () => {
-    const filteredIds = filteredBooks.map(book => book.id);
-    const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedBookIds.includes(id));
-    setSelectedBookIds(allSelected ? [] : filteredIds);
-  };
-
-  const handleBatchFinish = () => {
-    if (!selectedChildId) {
-      toast.error('请先选择孩子');
-      return;
-    }
-    if (selectedBookIds.length === 0) {
-      toast.error('请先选择要标记的图书');
-      return;
-    }
-    batchFinishMutation.mutate();
-  };
-
-  const handleBatchTypeChange = async (type: string) => {
-    if (selectedBookIds.length === 0) {
-      toast.error('请先选择图书');
-      return;
-    }
-    try {
-      await Promise.all(selectedBookIds.map(id => updateBook(id, { type: normalizeBookType(type) })));
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      toast.success(`已修改 ${selectedBookIds.length} 本书的分类`);
-      setSelectedBookIds([]);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const handleAddSelectedToList = (listId: string) => {
-    if (selectedBookIds.length === 0) {
-      toast.error('请先选择图书');
-      return;
-    }
-    const nextLists = bookLists.map(list => (
-      list.id === listId
-        ? { ...list, bookIds: Array.from(new Set([...list.bookIds, ...selectedBookIds])) }
-        : list
-    ));
-    setBookLists(nextLists);
-    localStorage.setItem(storageKeys.bookLists, JSON.stringify(nextLists));
-    toast.success(`已加入 ${selectedBookIds.length} 本书到书单`);
-    setSelectedBookIds([]);
-  };
-
-  const handleBatchDelete = async () => {
-    if (selectedBookIds.length === 0) {
-      toast.error('请先选择图书');
-      return;
-    }
-    if (!window.confirm(`确定删除选中的 ${selectedBookIds.length} 本图书吗？此操作不可恢复。`)) {
-      return;
-    }
-    try {
-      await Promise.all(selectedBookIds.map(id => deleteBook(id)));
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
-      toast.success(`已删除 ${selectedBookIds.length} 本图书`);
-      setSelectedBookIds([]);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -742,10 +635,13 @@ export default function LibraryPage() {
                 queryClient.invalidateQueries({ queryKey: ['library'] });
                 queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
                 toast.success(data.message);
-                const newHistoryItem = { date: new Date().toISOString(), count: data.data.imported || 0, filename: file.name };
-                const newHistory = [newHistoryItem, ...importHistory].slice(0, 10);
-                setImportHistory(newHistory);
-                localStorage.setItem(storageKeys.importHistory, JSON.stringify(newHistory));
+                window.dispatchEvent(new CustomEvent('quxueban:notification', {
+                  detail: {
+                    type: 'success',
+                    title: '图书导入完成',
+                    message: `${file.name}：新建 ${data.data.imported || 0} 本，匹配 ${data.data.matchedBooks || 0} 本，已读同步 ${data.data.readStatesUpdated || 0} 本`,
+                  },
+                }));
               } else if (data.status === 'error') {
                 throw new Error(data.message);
               }
@@ -1036,30 +932,12 @@ export default function LibraryPage() {
 
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
 
-      {filteredBooks.length > 0 && (
-        <BatchActionBar
-          selectedCount={selectedBookIds.length}
-          totalCount={filteredBooks.length}
-          onSelectAll={handleSelectAllFiltered}
-          onClearSelection={() => setSelectedBookIds([])}
-          onBatchFinish={handleBatchFinish}
-          onBatchDelete={handleBatchDelete}
-          onBatchTypeChange={handleBatchTypeChange}
-          onAddToList={handleAddSelectedToList}
-          bookLists={bookLists}
-          onCreateList={() => setShowBookListDialog(true)}
-          batchReadStage={batchReadStage}
-          onBatchReadStageChange={setBatchReadStage}
-          isProcessing={batchFinishMutation.isPending}
-        />
-      )}
-
-      {/* Import Result & History */}
-      {(importResult || importHistory.length > 0) && (
+      {/* Import Result */}
+      {importResult && (
         <Card className="border border-border/70 rounded-2xl overflow-hidden shadow-sm">
           <CardContent className="p-5">
             {importResult && (
-              <div className="mb-4 pb-4 border-b border-border">
+              <div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -1074,27 +952,6 @@ export default function LibraryPage() {
                     </p>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => setImportResult(null)}>关闭</Button>
-                </div>
-              </div>
-            )}
-            {importHistory.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-foreground flex items-center gap-2">
-                    <History className="w-4 h-4 text-muted-foreground" />
-                    导入历史
-                  </h4>
-                </div>
-                <div className="space-y-2">
-                  {importHistory.slice(0, 5).map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-sm py-2 px-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{new Date(item.date).toLocaleDateString('zh-CN')}</span>
-                        <span className="text-foreground truncate max-w-[150px]">{item.filename}</span>
-                      </div>
-                      <Badge variant="secondary">+{item.count} 本</Badge>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}
@@ -1184,8 +1041,6 @@ export default function LibraryPage() {
                 book={book}
                 index={index}
                 onDelete={handleDelete}
-                selected={selectedBookIds.includes(book.id)}
-                onSelectChange={handleToggleBookSelection}
               />
             ))}
           </div>

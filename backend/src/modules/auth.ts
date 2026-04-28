@@ -499,6 +499,15 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     }
 
     if (avatar !== undefined) {
+      if (typeof avatar !== 'string') {
+        throw new AppError(400, '头像格式不正确')
+      }
+      if (avatar.startsWith('data:')) {
+        throw new AppError(400, '请先上传头像文件，再保存头像链接')
+      }
+      if (avatar.length > 500) {
+        throw new AppError(400, '头像链接过长')
+      }
       updateData.avatar = avatar
     }
 
@@ -695,8 +704,14 @@ authRouter.post('/avatar', authMiddleware, async (req: AuthRequest, res: Respons
   const { userId } = req.user!
   const { avatar } = req.body
 
-  if (!avatar) {
+  if (!avatar || typeof avatar !== 'string') {
     throw new AppError(400, '头像不能为空')
+  }
+  if (avatar.startsWith('data:')) {
+    throw new AppError(400, '请先上传头像文件，再保存头像链接')
+  }
+  if (avatar.length > 500) {
+    throw new AppError(400, '头像链接过长')
   }
 
   const updatedUser = await prisma.user.update({

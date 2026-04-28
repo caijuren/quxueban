@@ -95,7 +95,7 @@ uploadRouter.post('/avatar', avatarUpload.single('avatar'), async (req: AuthRequ
 
     // Generate the file URL
     const fileName = req.file.filename
-    const fileUrl = `/uploads/avatars/${fileName}`
+    const fileUrl = `/api/uploads/avatars/${fileName}`
 
     res.json({
       status: 'success',
@@ -135,7 +135,7 @@ uploadRouter.post('/evidence', evidenceUpload.single('evidence'), async (req: Au
       }
 
       // Return uploaded evidence URL for the caller to persist on the correct model
-      const fileUrl = `/uploads/evidence/${req.file.filename}`
+      const fileUrl = `/api/uploads/evidence/${req.file.filename}`
 
       res.json({
         status: 'success',
@@ -147,7 +147,7 @@ uploadRouter.post('/evidence', evidenceUpload.single('evidence'), async (req: Au
       })
     } else {
       // Just return the URL without linking to checkin
-      const fileUrl = `/uploads/evidence/${req.file.filename}`
+      const fileUrl = `/api/uploads/evidence/${req.file.filename}`
       res.json({
         status: 'success',
         data: {

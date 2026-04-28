@@ -19,17 +19,22 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        setAvatar(base64);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('请选择图片文件');
+      return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('头像图片请控制在 2MB 以内');
+      return;
+    }
+
+    setAvatarFile(file);
+    setAvatar(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
@@ -58,7 +63,33 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
         }
       }
 
-      // 上传头像
+      let nextAvatar = avatar;
+
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append('avatar', avatarFile);
+
+        const uploadResponse = await fetch('/api/upload/avatar', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
+          },
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => null);
+          throw new Error(errorData?.message || '头像文件上传失败');
+        }
+
+        const uploadData = await uploadResponse.json();
+        nextAvatar = uploadData?.data?.url || uploadData?.url;
+        if (!nextAvatar) {
+          throw new Error('头像上传成功，但没有返回头像链接');
+        }
+      }
+
+      // 保存头像 URL
       if (avatar !== user?.avatar) {
         const avatarResponse = await fetch('/api/avatar', {
           method: 'POST',
@@ -66,7 +97,7 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
           },
-          body: JSON.stringify({ avatar }),
+          body: JSON.stringify({ avatar: nextAvatar }),
         });
         if (!avatarResponse.ok) {
           const errorData = await avatarResponse.json();
@@ -76,9 +107,11 @@ export default function UserProfileModal({ open, onOpenChange }: UserProfileModa
 
       // 更新本地用户信息
       if (updateUser && user) {
-        updateUser({ avatar });
+        updateUser({ avatar: nextAvatar });
       }
 
+      setAvatar(nextAvatar);
+      setAvatarFile(null);
       toast.success('保存成功');
       onOpenChange(false);
     } catch (error) {
