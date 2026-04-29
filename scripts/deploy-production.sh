@@ -75,6 +75,19 @@ else
 fi
 pm2 save
 
+echo "== wait for backend =="
+for attempt in $(seq 1 30); do
+  if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$attempt" = "30" ]; then
+    echo "ERROR: backend did not become healthy after restart." >&2
+    pm2 status >&2
+    exit 1
+  fi
+  sleep 1
+done
+
 echo "== verify =="
 curl -sS http://localhost:3001/api/health
 echo
