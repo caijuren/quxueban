@@ -29,6 +29,7 @@ interface BookFilterProps {
   importing: boolean;
   importProgress: number;
   resultCount: number;
+  resultLabel?: string;
 }
 
 export function BookFilter({
@@ -48,6 +49,7 @@ export function BookFilter({
   importing,
   importProgress,
   resultCount,
+  resultLabel = '当前结果',
 }: BookFilterProps) {
   const hasActiveFilters =
     selectedType !== 'all' || selectedReadStatus !== 'all' || sortBy !== '' || !!searchInput;
@@ -191,7 +193,7 @@ export function BookFilter({
 
         <div className="flex gap-2">
           <div className="hidden items-center gap-2 text-sm text-muted-foreground lg:flex">
-            <span>当前结果</span>
+            <span>{resultLabel}</span>
             <span className="rounded-lg bg-muted px-3 py-2 font-medium text-primary">{resultCount} 本</span>
           </div>
 

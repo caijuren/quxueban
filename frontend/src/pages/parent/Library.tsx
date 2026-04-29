@@ -212,6 +212,23 @@ async function fixTaskAbilityPoints(): Promise<{ updated: number }> {
   return data.data || { updated: 0 };
 }
 
+async function fillMissingPages(): Promise<{ updated: number; skipped: number; total: number }> {
+  const { data } = await apiClient.post('/library/data-quality/fill-missing-pages');
+  return data.data || { updated: 0, skipped: 0, total: 0 };
+}
+
+async function autoFillBookMetadata(limit = 100): Promise<{
+  processed: number;
+  isbnUpdated: number;
+  coverUpdated: number;
+  pageUpdated: number;
+  skipped: number;
+  remainingMissingIsbn: number;
+}> {
+  const { data } = await apiClient.post('/library/data-quality/autofill-metadata', { limit });
+  return data.data || { processed: 0, isbnUpdated: 0, coverUpdated: 0, pageUpdated: 0, skipped: 0, remainingMissingIsbn: 0 };
+}
+
 async function fetchBookLists(childId: number): Promise<BookList[]> {
   const { data } = await apiClient.get(`/library/book-lists?childId=${childId}`);
   return data.data || [];
@@ -320,9 +337,11 @@ function DataQualityPanel({
   onFilterChange,
   onOpenTasks,
   onFixTaskAbility,
+  onFillMissingPages,
   onMergeDuplicates,
   onAutoCompleteIsbn,
   isFixingTaskAbility,
+  isFillingMissingPages,
   isMergingDuplicates,
   isAutoCompletingIsbn,
 }: {
@@ -331,9 +350,11 @@ function DataQualityPanel({
   onFilterChange: (filter: QualityFilter) => void;
   onOpenTasks: () => void;
   onFixTaskAbility: () => void;
+  onFillMissingPages: () => void;
   onMergeDuplicates: () => void;
   onAutoCompleteIsbn: () => void;
   isFixingTaskAbility: boolean;
+  isFillingMissingPages: boolean;
   isMergingDuplicates: boolean;
   isAutoCompletingIsbn: boolean;
 }) {
@@ -351,7 +372,7 @@ function DataQualityPanel({
     onAction: () => void;
     isPending?: boolean;
   }> = [
-    { key: 'missingPageCount', label: '缺页数', value: summary.books.missingPageCount, impact: '影响阅读量统计和后续推荐', priority: '优先级 1', action: '查看并批量补页数', onAction: () => onFilterChange('missingPageCount') },
+    { key: 'missingPageCount', label: '缺页数', value: summary.books.missingPageCount, impact: '影响阅读量统计和后续推荐', priority: '优先级 1', action: '自动补可推断页数', onAction: onFillMissingPages, isPending: isFillingMissingPages },
     { key: 'duplicateTitle', label: '同名疑似重复', value: summary.books.duplicateTitle, impact: '影响书库统计准确性', priority: '优先级 3', action: '合并重复书', onAction: onMergeDuplicates, isPending: isMergingDuplicates },
     { key: 'missingType', label: '缺分类', value: summary.books.missingType, impact: '影响类型分布和阅读偏好判断', priority: '优先级 4', action: '查看并批量分类', onAction: () => onFilterChange('missingType') },
     { key: 'missingIsbn', label: '缺 ISBN', value: summary.books.missingIsbn, impact: '影响重复识别和书籍补全', priority: '优先级 5', action: '自动补 ISBN/封面', onAction: onAutoCompleteIsbn, isPending: isAutoCompletingIsbn },
@@ -463,7 +484,6 @@ export default function LibraryPage() {
   const [exporting, setExporting] = useState(false);
   const [bulkPageCount, setBulkPageCount] = useState('');
   const [bulkType, setBulkType] = useState<BookFormData['type']>('children');
-  const [isAutoCompletingIsbn, setIsAutoCompletingIsbn] = useState(false);
 
   // Add form state
   const [addMode, setAddMode] = useState<'manual' | 'isbn' | 'search'>('manual');
@@ -693,6 +713,13 @@ export default function LibraryPage() {
     missingType: '缺分类',
     duplicateTitle: '同名疑似重复',
   };
+  const resultCountLabel = qualityFilter !== 'all'
+    ? qualityFilterLabelMap[qualityFilter]
+    : selectedReadStatus === 'finished'
+      ? '已读书籍'
+      : selectedReadStatus === 'reading'
+        ? '在读书籍'
+        : '全部图书';
 
   const ensureSelectedChild = (action: () => void, message = '请先在左侧选择孩子，再继续管理图书馆') => {
     if (!selectedChildId) {
@@ -798,55 +825,51 @@ export default function LibraryPage() {
     onError: (error) => toast.error(`处理失败：${getErrorMessage(error)}`),
   });
 
-  const handleAutoCompleteIsbnAndCover = async () => {
-    const targetBooks = books.filter((book) => !book.isbn?.trim());
-    if (targetBooks.length === 0) {
-      toast.info('当前没有缺 ISBN 图书');
-      return;
-    }
-
-    setIsAutoCompletingIsbn(true);
-    let updated = 0;
-    try {
-      for (const book of targetBooks.slice(0, 20)) {
-        try {
-          const candidates = await searchBooksByTitle(book.name, {
-            author: book.author,
-            publisher: book.publisher,
-          });
-          const candidate = candidates[0];
-          if (!candidate) continue;
-          const nextIsbn = candidate.isbn || book.isbn || '';
-          const nextCoverUrl = book.coverUrl || candidate.coverUrl || '';
-          if (!nextIsbn && !nextCoverUrl) continue;
-          const nextData: Partial<BookFormData> = {
-            isbn: nextIsbn,
-            author: book.author || candidate.author || '',
-            publisher: book.publisher || candidate.publisher || '',
-            coverUrl: nextCoverUrl,
-            totalPages: book.totalPages || candidate.totalPages || 0,
-          };
-          await updateBook(book.id, nextData);
-          updated++;
-        } catch {
-          // Continue with remaining books; the toast below reports aggregate result.
-        }
-      }
-
+  const fillMissingPagesMutation = useMutation({
+    mutationFn: fillMissingPages,
+    onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['library'] }),
         queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
       ]);
       await queryClient.refetchQueries({ queryKey: ['libraryDataQuality'] });
-      if (updated > 0) {
-        toast.success(`已尝试自动补全，成功更新 ${updated} 本`);
-        setQualityFilter('all');
+      if (result.updated > 0) {
+        toast.success(`已自动补齐 ${result.updated} 本页数，${result.skipped} 本需要手动补`);
       } else {
-        toast.info('没有匹配到可补全的 ISBN/封面，请手动补齐');
+        toast.info('没有可自动推断页数的图书，请在列表中手动补页数');
       }
-    } finally {
-      setIsAutoCompletingIsbn(false);
+      handleQualityFilterChange(result.updated > 0 ? 'all' : 'missingPageCount');
+    },
+    onError: (error) => toast.error(`补页数失败：${getErrorMessage(error)}`),
+  });
+
+  const autoFillMetadataMutation = useMutation({
+    mutationFn: () => autoFillBookMetadata(100),
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['libraryDataQuality'] });
+      const changed = result.isbnUpdated + result.coverUpdated + result.pageUpdated;
+      if (changed > 0) {
+        toast.success(`本次处理 ${result.processed} 本，补 ISBN ${result.isbnUpdated} 本，补封面 ${result.coverUpdated} 本，剩余缺 ISBN ${result.remainingMissingIsbn} 本`);
+      } else {
+        toast.info(`本次处理 ${result.processed} 本，没有匹配到可补全数据，剩余缺 ISBN ${result.remainingMissingIsbn} 本`);
+      }
+      handleQualityFilterChange(result.remainingMissingIsbn > 0 ? 'missingIsbn' : 'all');
+    },
+    onError: (error) => toast.error(`自动补 ISBN 失败：${getErrorMessage(error)}`),
+  });
+
+  const handleAutoCompleteIsbnAndCover = async () => {
+    if (autoFillMetadataMutation.isPending) return;
+    if (dataQuality?.books.missingIsbn === 0) {
+      toast.info('当前没有缺 ISBN 图书');
+      return;
     }
+    handleQualityFilterChange('missingIsbn');
+    autoFillMetadataMutation.mutate();
   };
 
   const handleBulkFillPages = () => {
@@ -1369,11 +1392,13 @@ export default function LibraryPage() {
         onFilterChange={handleQualityFilterChange}
         onOpenTasks={() => navigate('/parent/tasks')}
         onFixTaskAbility={() => fixTaskAbilityMutation.mutate()}
+        onFillMissingPages={() => fillMissingPagesMutation.mutate()}
         onMergeDuplicates={() => mergeDuplicateMutation.mutate()}
         onAutoCompleteIsbn={() => void handleAutoCompleteIsbnAndCover()}
         isFixingTaskAbility={fixTaskAbilityMutation.isPending}
+        isFillingMissingPages={fillMissingPagesMutation.isPending}
         isMergingDuplicates={mergeDuplicateMutation.isPending}
-        isAutoCompletingIsbn={isAutoCompletingIsbn}
+        isAutoCompletingIsbn={autoFillMetadataMutation.isPending}
       />
 
       {qualityFilter !== 'all' && (
@@ -1384,6 +1409,9 @@ export default function LibraryPage() {
           <div className="flex flex-wrap items-center gap-2">
             {qualityFilter === 'missingPageCount' ? (
               <>
+                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => fillMissingPagesMutation.mutate()} disabled={fillMissingPagesMutation.isPending}>
+                  {fillMissingPagesMutation.isPending ? '处理中...' : '自动补可推断页数'}
+                </Button>
                 <Input value={bulkPageCount} onChange={(event) => setBulkPageCount(event.target.value)} inputMode="numeric" placeholder="批量页数" className="h-8 w-24 bg-white" />
                 <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkFillPages} disabled={bulkQualityMutation.isPending}>批量补页数</Button>
               </>
@@ -1402,8 +1430,8 @@ export default function LibraryPage() {
               </Button>
             ) : null}
             {qualityFilter === 'missingIsbn' ? (
-              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => void handleAutoCompleteIsbnAndCover()} disabled={isAutoCompletingIsbn}>
-                {isAutoCompletingIsbn ? '处理中...' : '自动补 ISBN/封面'}
+              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => void handleAutoCompleteIsbnAndCover()} disabled={autoFillMetadataMutation.isPending}>
+                {autoFillMetadataMutation.isPending ? '处理中...' : '自动补 ISBN/封面'}
               </Button>
             ) : null}
             <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => handleQualityFilterChange('all')}>
@@ -1509,6 +1537,7 @@ export default function LibraryPage() {
         importing={importing || previewingImport}
         importProgress={importProgress}
         resultCount={filteredBooks.length}
+        resultLabel={resultCountLabel}
       />
 
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />

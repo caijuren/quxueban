@@ -1536,6 +1536,121 @@ libraryRouter.post('/data-quality/merge-duplicate-titles', authMiddleware, requi
 })
 
 /**
+ * POST /data-quality/fill-missing-pages - Fill missing totalPages from reliable reading evidence
+ */
+libraryRouter.post('/data-quality/fill-missing-pages', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const books = await prisma.book.findMany({
+    where: { familyId, status: 'active', totalPages: { lte: 0 } },
+    select: {
+      id: true,
+      name: true,
+      readingLogs: {
+        select: { pages: true, endPage: true },
+      },
+      bookReadStates: {
+        select: { status: true },
+      },
+    },
+  })
+
+  let updated = 0
+  let skipped = 0
+
+  await prisma.$transaction(async (tx) => {
+    for (const book of books) {
+      const maxEndPage = Math.max(0, ...book.readingLogs.map(log => log.endPage || 0))
+      const summedPages = book.readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0)
+      const hasFinishedState = book.bookReadStates.some(state => state.status === 'finished')
+      const inferredPages = Math.max(maxEndPage, hasFinishedState ? summedPages : 0)
+
+      if (inferredPages <= 0) {
+        skipped++
+        continue
+      }
+
+      await tx.book.update({
+        where: { id: book.id },
+        data: { totalPages: inferredPages },
+      })
+      updated++
+    }
+  })
+
+  res.json({
+    status: 'success',
+    message: `已自动补齐 ${updated} 本页数，${skipped} 本缺少可推断记录`,
+    data: { updated, skipped, total: books.length },
+  })
+})
+
+/**
+ * POST /data-quality/autofill-metadata - Fill ISBN/cover/page metadata from online sources
+ */
+libraryRouter.post('/data-quality/autofill-metadata', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const limitInput = Number(req.body?.limit || 100)
+  const limit = Number.isInteger(limitInput) ? Math.min(Math.max(limitInput, 1), 200) : 100
+
+  const books = await prisma.book.findMany({
+    where: { familyId, status: 'active', isbn: '' },
+    orderBy: { updatedAt: 'asc' },
+    take: limit,
+    select: { id: true, name: true, author: true, publisher: true, isbn: true, coverUrl: true, totalPages: true },
+  })
+
+  let isbnUpdated = 0
+  let coverUpdated = 0
+  let pageUpdated = 0
+  let skipped = 0
+
+  for (const book of books) {
+    try {
+      const candidates = [
+        ...(await searchGoogleBooksByMatch(book, 8).catch(() => [])),
+        ...(await searchOpenLibraryByMatch(book, 8).catch(() => [])),
+      ]
+      const candidate = candidates.find(item => cleanIsbn(item.isbn || '')) || candidates.find(item => item.coverUrl || item.totalPages > 0)
+      if (!candidate) {
+        skipped++
+        continue
+      }
+
+      const data: any = {}
+      const nextIsbn = cleanIsbn(candidate.isbn || '')
+      if (nextIsbn && !cleanIsbn(book.isbn || '')) data.isbn = nextIsbn
+      if (candidate.coverUrl && !book.coverUrl) data.coverUrl = (await downloadAndUploadCover(candidate.coverUrl, candidate.name || book.name || candidate.isbn || 'book')) || candidate.coverUrl
+      if (candidate.totalPages > 0 && (!book.totalPages || book.totalPages <= 0)) data.totalPages = candidate.totalPages
+      if (candidate.author && !book.author) data.author = candidate.author
+      if (candidate.publisher && !book.publisher) data.publisher = candidate.publisher
+
+      if (Object.keys(data).length === 0) {
+        skipped++
+        continue
+      }
+
+      await prisma.book.update({ where: { id: book.id }, data })
+      if (data.isbn) isbnUpdated++
+      if (data.coverUrl) coverUpdated++
+      if (data.totalPages) pageUpdated++
+    } catch {
+      skipped++
+    }
+  }
+
+  const remainingMissingIsbn = await prisma.book.count({
+    where: { familyId, status: 'active', isbn: '' },
+  })
+
+  res.json({
+    status: 'success',
+    message: `本次处理 ${books.length} 本，补 ISBN ${isbnUpdated} 本，补封面 ${coverUpdated} 本`,
+    data: { processed: books.length, isbnUpdated, coverUpdated, pageUpdated, skipped, remainingMissingIsbn },
+  })
+})
+
+/**
  * POST /data-quality/fix-task-ability - Infer ability points for tasks missing them
  */
 libraryRouter.post('/data-quality/fix-task-ability', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
