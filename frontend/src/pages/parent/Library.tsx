@@ -358,28 +358,7 @@ function DataQualityPanel({
   ];
   const visibleQualityItems = qualityItems.filter((item) => item.value > 0 || activeFilter === item.key);
 
-  if (bookIssueCount === 0 && summary.tasks.missingAbilityPoint === 0) {
-    return (
-      <section className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-white text-emerald-600">
-              <CheckCircle2 className="size-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-emerald-900">数据质量正常</h2>
-              <p className="text-xs text-emerald-700/80">图书 {summary.books.total} 本，完整率 {completionRate}%</p>
-            </div>
-          </div>
-          {activeFilter !== 'all' && (
-            <Button variant="outline" size="sm" onClick={() => onFilterChange('all')} className="border-emerald-200 bg-white text-emerald-700">
-              清除筛选
-            </Button>
-          )}
-        </div>
-      </section>
-    );
-  }
+  if (bookIssueCount === 0 && summary.tasks.missingAbilityPoint === 0) return null;
 
   return (
     <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
@@ -504,6 +483,7 @@ export default function LibraryPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const qualityActionRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -722,6 +702,18 @@ export default function LibraryPage() {
     action();
   };
 
+  const handleQualityFilterChange = useCallback((filter: QualityFilter) => {
+    setQualityFilter(filter);
+    setSearchInput('');
+    setSelectedType('all');
+    setSelectedReadStatus('all');
+    if (filter !== 'all') {
+      window.requestAnimationFrame(() => {
+        qualityActionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, []);
+
   // Mutations
   const createMutation = useMutation({
     mutationFn: createBook,
@@ -765,20 +757,27 @@ export default function LibraryPage() {
     mutationFn: async ({ updates }: { updates: Array<{ id: number; data: Partial<BookFormData> }> }) => {
       await Promise.all(updates.map((item) => updateBook(item.id, item.data)));
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['libraryDataQuality'] });
       toast.success('数据质量已更新');
       setBulkPageCount('');
+      setQualityFilter('all');
     },
     onError: (error) => toast.error(`处理失败：${getErrorMessage(error)}`),
   });
 
   const mergeDuplicateMutation = useMutation({
     mutationFn: mergeDuplicateTitles,
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['libraryDataQuality'] });
       toast.success(`已合并 ${result.mergedGroups} 组重复书，归档 ${result.mergedBooks} 本`);
       setQualityFilter('all');
     },
@@ -787,16 +786,20 @@ export default function LibraryPage() {
 
   const fixTaskAbilityMutation = useMutation({
     mutationFn: fixTaskAbilityPoints,
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['libraryDataQuality'] });
       toast.success(`已为 ${result.updated} 个任务补齐能力点`);
+      setQualityFilter('all');
     },
     onError: (error) => toast.error(`处理失败：${getErrorMessage(error)}`),
   });
 
   const handleAutoCompleteIsbnAndCover = async () => {
-    const targetBooks = filteredBooks.filter((book) => !book.isbn?.trim());
+    const targetBooks = books.filter((book) => !book.isbn?.trim());
     if (targetBooks.length === 0) {
       toast.info('当前没有缺 ISBN 图书');
       return;
@@ -813,11 +816,14 @@ export default function LibraryPage() {
           });
           const candidate = candidates[0];
           if (!candidate) continue;
+          const nextIsbn = candidate.isbn || book.isbn || '';
+          const nextCoverUrl = book.coverUrl || candidate.coverUrl || '';
+          if (!nextIsbn && !nextCoverUrl) continue;
           const nextData: Partial<BookFormData> = {
-            isbn: candidate.isbn || book.isbn,
+            isbn: nextIsbn,
             author: book.author || candidate.author || '',
             publisher: book.publisher || candidate.publisher || '',
-            coverUrl: book.coverUrl || candidate.coverUrl || '',
+            coverUrl: nextCoverUrl,
             totalPages: book.totalPages || candidate.totalPages || 0,
           };
           await updateBook(book.id, nextData);
@@ -827,9 +833,17 @@ export default function LibraryPage() {
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['library'] });
-      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
-      toast.success(`已尝试自动补全，成功更新 ${updated} 本`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['libraryDataQuality'] });
+      if (updated > 0) {
+        toast.success(`已尝试自动补全，成功更新 ${updated} 本`);
+        setQualityFilter('all');
+      } else {
+        toast.info('没有匹配到可补全的 ISBN/封面，请手动补齐');
+      }
     } finally {
       setIsAutoCompletingIsbn(false);
     }
@@ -1352,12 +1366,7 @@ export default function LibraryPage() {
       <DataQualityPanel
         summary={dataQuality}
         activeFilter={qualityFilter}
-        onFilterChange={(filter) => {
-          setQualityFilter(filter);
-          setSearchInput('');
-          setSelectedType('all');
-          setSelectedReadStatus('all');
-        }}
+        onFilterChange={handleQualityFilterChange}
         onOpenTasks={() => navigate('/parent/tasks')}
         onFixTaskAbility={() => fixTaskAbilityMutation.mutate()}
         onMergeDuplicates={() => mergeDuplicateMutation.mutate()}
@@ -1366,6 +1375,43 @@ export default function LibraryPage() {
         isMergingDuplicates={mergeDuplicateMutation.isPending}
         isAutoCompletingIsbn={isAutoCompletingIsbn}
       />
+
+      {qualityFilter !== 'all' && (
+        <div ref={qualityActionRef} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm">
+          <span className="font-medium text-indigo-800">
+            正在查看：{qualityFilterLabelMap[qualityFilter]}，共 {filteredBooks.length} 本
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {qualityFilter === 'missingPageCount' ? (
+              <>
+                <Input value={bulkPageCount} onChange={(event) => setBulkPageCount(event.target.value)} inputMode="numeric" placeholder="批量页数" className="h-8 w-24 bg-white" />
+                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkFillPages} disabled={bulkQualityMutation.isPending}>批量补页数</Button>
+              </>
+            ) : null}
+            {qualityFilter === 'missingType' ? (
+              <>
+                <select value={bulkType} onChange={(event) => setBulkType(event.target.value as BookFormData['type'])} className="h-8 rounded-lg border border-input bg-white px-2 text-sm">
+                  {bookTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                </select>
+                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkSetType} disabled={bulkQualityMutation.isPending}>批量分类</Button>
+              </>
+            ) : null}
+            {qualityFilter === 'duplicateTitle' ? (
+              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => mergeDuplicateMutation.mutate()} disabled={mergeDuplicateMutation.isPending}>
+                合并重复书
+              </Button>
+            ) : null}
+            {qualityFilter === 'missingIsbn' ? (
+              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => void handleAutoCompleteIsbnAndCover()} disabled={isAutoCompletingIsbn}>
+                {isAutoCompletingIsbn ? '处理中...' : '自动补 ISBN/封面'}
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => handleQualityFilterChange('all')}>
+              退出筛选
+            </Button>
+          </div>
+        </div>
+      )}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">
         <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
@@ -1444,43 +1490,6 @@ export default function LibraryPage() {
           </div>
         </div>
       </section>
-
-      {qualityFilter !== 'all' && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm">
-          <span className="font-medium text-indigo-800">
-            正在查看：{qualityFilterLabelMap[qualityFilter]}，共 {filteredBooks.length} 本
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            {qualityFilter === 'missingPageCount' ? (
-              <>
-                <Input value={bulkPageCount} onChange={(event) => setBulkPageCount(event.target.value)} inputMode="numeric" placeholder="批量页数" className="h-8 w-24 bg-white" />
-                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkFillPages} disabled={bulkQualityMutation.isPending}>批量补页数</Button>
-              </>
-            ) : null}
-            {qualityFilter === 'missingType' ? (
-              <>
-                <select value={bulkType} onChange={(event) => setBulkType(event.target.value as BookFormData['type'])} className="h-8 rounded-lg border border-input bg-white px-2 text-sm">
-                  {bookTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                </select>
-                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkSetType} disabled={bulkQualityMutation.isPending}>批量分类</Button>
-              </>
-            ) : null}
-            {qualityFilter === 'duplicateTitle' ? (
-              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => mergeDuplicateMutation.mutate()} disabled={mergeDuplicateMutation.isPending}>
-                合并重复书
-              </Button>
-            ) : null}
-            {qualityFilter === 'missingIsbn' ? (
-              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => void handleAutoCompleteIsbnAndCover()} disabled={bulkQualityMutation.isPending}>
-                自动补 ISBN/封面
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => setQualityFilter('all')}>
-              退出筛选
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Page Control Bar */}
       <BookFilter

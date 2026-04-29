@@ -207,6 +207,25 @@ function transformOpenLibraryDoc(doc: any, fallbackIsbn = '') {
   }
 }
 
+function transformGoogleBookVolume(volume: any) {
+  const info = volume?.volumeInfo || {}
+  const identifiers = Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : []
+  const isbn13 = identifiers.find((item: any) => item?.type === 'ISBN_13')?.identifier
+  const isbn10 = identifiers.find((item: any) => item?.type === 'ISBN_10')?.identifier
+  const imageLinks = info.imageLinks || {}
+  const coverUrl = imageLinks.thumbnail || imageLinks.smallThumbnail || ''
+
+  return {
+    name: info.title || '',
+    author: firstText(info.authors),
+    isbn: cleanIsbn(isbn13 || isbn10 || ''),
+    publisher: info.publisher || '',
+    coverUrl: coverUrl ? String(coverUrl).replace(/^http:/, 'https:') : '',
+    totalPages: firstNumber(info.pageCount),
+    publishYear: normalizeYear(info.publishedDate) || null,
+  }
+}
+
 interface BookMatchInput {
   name: string;
   isbn?: string | null;
@@ -280,6 +299,22 @@ async function searchOpenLibraryByMatch(input: BookMatchInput, limit = 10) {
   const query = buildOpenLibraryQuery(input)
   const data = await fetchJsonWithTimeout(`${OPEN_LIBRARY_BASE_URL}/search.json?${query}&limit=${limit}`)
   const candidates = (data?.docs || []).map((doc: any) => transformOpenLibraryDoc(doc)).filter((book: any) => book.name)
+  return rankBookCandidates(candidates, input)
+}
+
+async function searchGoogleBooksByMatch(input: BookMatchInput, limit = 10) {
+  const queryParts = [`intitle:${input.name}`]
+  if (input.author) queryParts.push(`inauthor:${input.author}`)
+  if (input.publisher) queryParts.push(`inpublisher:${input.publisher}`)
+  const params = new URLSearchParams({
+    q: queryParts.join(' '),
+    maxResults: String(limit),
+    printType: 'books',
+  })
+  const data = await fetchJsonWithTimeout(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`)
+  const candidates = (data?.items || [])
+    .map((item: any) => transformGoogleBookVolume(item))
+    .filter((book: any) => book.name)
   return rankBookCandidates(candidates, input)
 }
 
@@ -844,10 +879,25 @@ libraryRouter.get('/search-by-title/:title', authMiddleware, async (req: any, re
       return
     }
 
-    const onlineResults = await searchOpenLibraryByMatch(matchInput, 10)
+    const [openLibraryResults, googleResults] = await Promise.allSettled([
+      searchOpenLibraryByMatch(matchInput, 10),
+      searchGoogleBooksByMatch(matchInput, 10),
+    ])
+    const onlineResults = [
+      ...(openLibraryResults.status === 'fulfilled' ? openLibraryResults.value.map((book: any) => ({ ...book, source: 'openlibrary' })) : []),
+      ...(googleResults.status === 'fulfilled' ? googleResults.value.map((book: any) => ({ ...book, source: 'googlebooks' })) : []),
+    ]
+    const dedupedResults = Array.from(
+      new Map(onlineResults.map((book: any) => [`${cleanIsbn(book.isbn || '') || normalizeBookName(book.name)}:${normalizeText(book.author || '')}`, book])).values()
+    )
+    const rankedResults = rankBookCandidates(dedupedResults, matchInput).sort((a: any, b: any) => {
+      const aHasIsbn = cleanIsbn(a.isbn || '') ? 1 : 0
+      const bHasIsbn = cleanIsbn(b.isbn || '') ? 1 : 0
+      return bHasIsbn - aHasIsbn
+    })
     const transformedResults = []
-    for (const book of onlineResults) {
-      transformedResults.push(await persistRemoteCover(book, 'openlibrary'))
+    for (const book of rankedResults.slice(0, 10)) {
+      transformedResults.push(await persistRemoteCover(book, book.source || 'book-metadata'))
     }
     if (transformedResults[0]?.coverUrl && localResults[0]?.id) {
       await updateLocalBookCoverIfMissing(localResults[0].id, transformedResults[0].coverUrl)
