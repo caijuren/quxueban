@@ -97,10 +97,11 @@ type LocalChildSettings = {
   pushFrequency: string;
   pushTime: string;
   pushContents: string[];
+  pushRules: Record<string, { enabled: boolean; frequency: string; time: string }>;
 };
 
 const gradeOptions = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '初一', '初二', '初三'];
-const readingStageSuggestions = ['幼儿园小班', '幼儿园中班', '幼儿园大班', '一年级上', '一年级寒假', '一年级下', '一年级暑假', '二年级上'];
+const readingStageSuggestions = gradeOptions;
 const defaultInterestTags = ['科普百科', '历史文化', '文学阅读', '科学探索', '艺术创作'];
 const pushContentOptions = ['学习日报', '任务提醒', '阅读提醒', '成就提醒'];
 
@@ -116,6 +117,10 @@ function getDefaultLocalChildSettings(): LocalChildSettings {
     pushFrequency: '每日一次',
     pushTime: '18:30',
     pushContents: ['学习日报', '任务提醒', '阅读提醒'],
+    pushRules: Object.fromEntries(pushContentOptions.map((option) => [
+      option,
+      { enabled: ['学习日报', '任务提醒', '阅读提醒'].includes(option), frequency: '每日一次', time: '18:30' },
+    ])),
   };
 }
 
@@ -248,12 +253,14 @@ async function testChildDingTalkConfig(childId: number): Promise<any> {
 type ChildrenManagementProps = {
   dialogOnly?: boolean;
   openChildId?: number | null;
+  openAddRequest?: number;
   onOpenChildHandled?: () => void;
 };
 
 export default function ChildrenManagement({
   dialogOnly = false,
   openChildId = null,
+  openAddRequest = 0,
   onOpenChildHandled,
 }: ChildrenManagementProps = {}) {
   const queryClient = useQueryClient();
@@ -405,6 +412,25 @@ export default function ChildrenManagement({
     setLocalSettings((current) => ({ ...current, ...patch }));
   };
 
+  const updatePushRule = (option: string, patch: Partial<{ enabled: boolean; frequency: string; time: string }>) => {
+    setLocalSettings((current) => {
+      const currentRule = current.pushRules?.[option] || { enabled: current.pushContents.includes(option), frequency: current.pushFrequency, time: current.pushTime };
+      const nextRule = { ...currentRule, ...patch };
+      const nextContents = nextRule.enabled
+        ? Array.from(new Set([...current.pushContents, option]))
+        : current.pushContents.filter((item) => item !== option);
+
+      return {
+        ...current,
+        pushContents: nextContents,
+        pushRules: {
+          ...(current.pushRules || {}),
+          [option]: nextRule,
+        },
+      };
+    });
+  };
+
   const persistLocalSettings = (settings = localSettings) => {
     if (!selectedChild) return;
     saveProfileMutation.mutate({ childId: selectedChild.id, data: settings });
@@ -495,6 +521,11 @@ export default function ChildrenManagement({
     resetForm();
     setIsAddDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!openAddRequest) return;
+    handleOpenAdd();
+  }, [openAddRequest]);
 
   const handleOpenEdit = () => {
     if (selectedChild) {
@@ -1030,10 +1061,16 @@ export default function ChildrenManagement({
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="space-y-2"><Label>学年</Label><Input value={semesterConfig.schoolYear} onChange={(e) => setSemesterConfig({ ...semesterConfig, schoolYear: e.target.value })} /></div>
                     <div className="space-y-2"><Label>学期</Label><Select value={semesterConfig.term} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, term: value as SemesterConfig['term'] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="first">上学期</SelectItem><SelectItem value="second">下学期</SelectItem></SelectContent></Select></div>
-                    <div className="space-y-2"><Label>年级</Label><Select value={semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{gradeOptions.map((grade) => <SelectItem key={grade} value={grade}>{grade}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>年级</Label><Select value={semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{gradeOptions.map((grade) => <SelectItem key={grade} value={grade}>{grade}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>开始日期</Label><DatePicker value={semesterConfig.startDate} onChange={(startDate) => setSemesterConfig({ ...semesterConfig, startDate })} className="w-full" align="start" /></div>
                     <div className="space-y-2"><Label>结束日期</Label><DatePicker value={semesterConfig.endDate} onChange={(endDate) => setSemesterConfig({ ...semesterConfig, endDate })} className="w-full" align="start" /></div>
-                    <div className="space-y-2"><Label>阅读阶段</Label><Input value={semesterConfig.readingStage} onChange={(e) => setSemesterConfig({ ...semesterConfig, readingStage: e.target.value })} /></div>
+                    <div className="space-y-2">
+                      <Label>阅读阶段</Label>
+                      <Select value={semesterConfig.readingStage || semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{readingStageSuggestions.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="rounded-xl border border-violet-100 bg-violet-50/45 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -1046,7 +1083,7 @@ export default function ChildrenManagement({
                     <div className="grid gap-3 md:grid-cols-3">
                       <div className="space-y-2">
                         <Label>学习阶段</Label>
-                        <Select value={semesterConfig.readingStage} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, readingStage: value })}>
+                        <Select value={semesterConfig.readingStage || semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>{readingStageSuggestions.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}</SelectContent>
                         </Select>
@@ -1063,8 +1100,8 @@ export default function ChildrenManagement({
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>默认学习目标</Label>
-                        <Input value={localSettings.defaultLearningGoal} onChange={(e) => updateLocalSettings({ defaultLearningGoal: e.target.value })} placeholder="例如：提升英语阅读理解" />
+                        <Label>阶段备注</Label>
+                        <Input value={localSettings.defaultLearningGoal} onChange={(e) => updateLocalSettings({ defaultLearningGoal: e.target.value })} placeholder="例如：近期关注阅读理解" />
                       </div>
                     </div>
                   </div>
@@ -1110,7 +1147,7 @@ export default function ChildrenManagement({
                   </div>
                   <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-slate-900">能力偏好</h4>
+                      <h4 className="text-sm font-semibold text-slate-900">能力观察</h4>
                       <Badge variant="outline" className="bg-white">待接入能力模型</Badge>
                     </div>
                     {['阅读理解', '问题解决', '逻辑推理', '表达能力', '信息提取'].map((name, index) => (
@@ -1142,21 +1179,23 @@ export default function ChildrenManagement({
                         <Switch checked={localSettings.pushEnabled} onCheckedChange={(checked) => updateLocalSettings({ pushEnabled: checked })} />
                       </div>
                       <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                        <Label>推送内容</Label>
+                        <Label>推送内容与时间</Label>
                         <div className="mt-3 space-y-2">
                           {pushContentOptions.map((option) => {
-                            const checked = localSettings.pushContents.includes(option);
+                            const rule = localSettings.pushRules?.[option] || { enabled: localSettings.pushContents.includes(option), frequency: localSettings.pushFrequency, time: localSettings.pushTime };
                             return (
-                              <div key={option} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
-                                <span className="text-slate-700">{option}</span>
-                                <Switch
-                                  checked={checked}
-                                  onCheckedChange={() => updateLocalSettings({
-                                    pushContents: checked
-                                      ? localSettings.pushContents.filter((item) => item !== option)
-                                      : [...localSettings.pushContents, option],
-                                  })}
-                                />
+                              <div key={option} className="grid gap-2 rounded-lg bg-white px-3 py-2 text-sm md:grid-cols-[90px_88px_1fr_112px] md:items-center">
+                                <span className="font-medium text-slate-700">{option}</span>
+                                <Switch checked={rule.enabled} onCheckedChange={(checked) => updatePushRule(option, { enabled: checked })} />
+                                <Select value={rule.frequency} onValueChange={(frequency) => updatePushRule(option, { frequency })}>
+                                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="每日一次">每日一次</SelectItem>
+                                    <SelectItem value="每周一次">每周一次</SelectItem>
+                                    <SelectItem value="仅重要提醒">仅重要提醒</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Input type="time" value={rule.time} onChange={(e) => updatePushRule(option, { time: e.target.value })} className="h-9" />
                               </div>
                             );
                           })}
@@ -1165,7 +1204,7 @@ export default function ChildrenManagement({
                     </div>
                     <div className="space-y-3">
                       <div className="space-y-2 rounded-xl border border-border/70 bg-white p-3">
-                        <Label>推送频率</Label>
+                        <Label>默认推送频率</Label>
                         <Select value={localSettings.pushFrequency} onValueChange={(value) => updateLocalSettings({ pushFrequency: value })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -1176,7 +1215,7 @@ export default function ChildrenManagement({
                         </Select>
                       </div>
                       <div className="space-y-2 rounded-xl border border-border/70 bg-white p-3">
-                        <Label>推送时间</Label>
+                        <Label>默认推送时间</Label>
                         <Input type="time" value={localSettings.pushTime} onChange={(e) => updateLocalSettings({ pushTime: e.target.value })} />
                       </div>
                     </div>

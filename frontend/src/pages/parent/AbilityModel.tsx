@@ -399,8 +399,9 @@ async function getAbilityModel(): Promise<Record<CategoryId, EditableAbilityRow[
   return response.data.data || null;
 }
 
-async function updateAbilityModel(model: Record<CategoryId, EditableAbilityRow[]>): Promise<void> {
-  await apiClient.put('/settings/ability-model', { model });
+async function updateAbilityModel(model: Record<CategoryId, EditableAbilityRow[]>): Promise<Record<CategoryId, EditableAbilityRow[]>> {
+  const response = await apiClient.put('/settings/ability-model', { model });
+  return response.data.data || model;
 }
 
 async function resetAbilityModel(): Promise<void> {
@@ -496,8 +497,9 @@ export default function AbilityModel() {
 
   const saveAbilityModelMutation = useMutation({
     mutationFn: (data: Record<CategoryId, AbilityRow[]>) => updateAbilityModel(serializeAbilityData(data)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ability-model'] });
+    onSuccess: (savedModel) => {
+      queryClient.setQueryData(['ability-model'], savedModel);
+      setModelData(mergeEditableAbilityData(savedModel));
       toast.success('能力模型已保存');
     },
     onError: (error) => {
@@ -737,10 +739,10 @@ export default function AbilityModel() {
                   <span className="text-slate-900">{stats.progress}%</span>
                 </div>
                 <ProgressBar value={stats.progress} className="mt-2" />
-                <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">已掌握 {statusCounts.mastered} 个</span>
-                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">进行中 {statusCounts.progressing} 个</span>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">未开始 {statusCounts.pending} 个</span>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold">
+                  <span className="whitespace-nowrap rounded-md bg-emerald-50 px-2 py-1 text-emerald-700">已掌握 {statusCounts.mastered} 个</span>
+                  <span className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-amber-700">进行中 {statusCounts.progressing} 个</span>
+                  <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-slate-600">未开始 {statusCounts.pending} 个</span>
                 </div>
               </div>
             </div>

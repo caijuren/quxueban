@@ -202,9 +202,32 @@ async function deleteBook(id: number): Promise<void> {
   await apiClient.delete(`/library/${id}`);
 }
 
+async function mergeDuplicateTitles(): Promise<{ mergedGroups: number; mergedBooks: number }> {
+  const { data } = await apiClient.post('/library/data-quality/merge-duplicate-titles');
+  return data.data || { mergedGroups: 0, mergedBooks: 0 };
+}
+
+async function fixTaskAbilityPoints(): Promise<{ updated: number }> {
+  const { data } = await apiClient.post('/library/data-quality/fix-task-ability');
+  return data.data || { updated: 0 };
+}
+
+async function fetchBookLists(childId: number): Promise<BookList[]> {
+  const { data } = await apiClient.get(`/library/book-lists?childId=${childId}`);
+  return data.data || [];
+}
+
+async function saveBookLists({ childId, lists }: { childId: number; lists: BookList[] }): Promise<BookList[]> {
+  const { data } = await apiClient.put('/library/book-lists', { childId, lists });
+  return data.data || [];
+}
+
 const getScopedStorageKey = (key: string, childId: number | null) => `${key}_${childId ?? 'pending'}`;
 
 function getBookReadStatus(book: Book): { label: string; className: string; detail: string } {
+  if ((book.activeReadings || []).length > 0) {
+    return { label: '在读中', className: 'bg-blue-100 text-blue-700', detail: '阅读中' };
+  }
   if (book.readState?.status === 'finished') {
     return { label: '已读完', className: 'bg-emerald-100 text-emerald-700', detail: '已读完' };
   }
@@ -215,11 +238,11 @@ function getBookReadStatus(book: Book): { label: string; className: string; deta
 }
 
 function hasReadingState(book: Book) {
-  return book.readState?.status === 'reading' || book.readState?.status === 'finished';
+  return (book.activeReadings || []).length > 0 || book.readState?.status === 'reading' || book.readState?.status === 'finished';
 }
 
 function isReadingBook(book: Book) {
-  return book.readState?.status === 'reading';
+  return (book.activeReadings || []).length > 0 || book.readState?.status === 'reading';
 }
 
 function isFinishedBook(book: Book) {
@@ -239,6 +262,13 @@ function getBookProgressPages(book: Book) {
 function getBookProgressPercent(book: Book): number {
   if (!book.totalPages || book.totalPages <= 0) return 0;
   return Math.min(100, Math.round((getBookProgressPages(book) / book.totalPages) * 100));
+}
+
+function formatShortDate(date?: string | null) {
+  if (!date) return '未记录';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '未记录';
+  return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
 }
 
 function CoverSlot({ book, className }: { book?: Partial<Book> | null; className?: string }) {
@@ -289,11 +319,13 @@ function DataQualityPanel({
   activeFilter,
   onFilterChange,
   onOpenTasks,
+  onFixTaskAbility,
 }: {
   summary?: DataQualitySummary;
   activeFilter: QualityFilter;
   onFilterChange: (filter: QualityFilter) => void;
   onOpenTasks: () => void;
+  onFixTaskAbility: () => void;
 }) {
   if (!summary) return null;
 
@@ -377,7 +409,10 @@ function DataQualityPanel({
           ))}
           <button
             type="button"
-            onClick={onOpenTasks}
+            onClick={() => {
+              if (summary.tasks.missingAbilityPoint > 0) onFixTaskAbility();
+              else onOpenTasks();
+            }}
             className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition-all hover:bg-white sm:col-span-2"
           >
             <div className="flex items-center justify-between gap-3">
@@ -422,6 +457,8 @@ export default function LibraryPage() {
   const [importProgress, setImportProgress] = useState<number>(0);
   const [importStats, setImportStats] = useState({ imported: 0, skipped: 0 });
   const [exporting, setExporting] = useState(false);
+  const [bulkPageCount, setBulkPageCount] = useState('');
+  const [bulkType, setBulkType] = useState<BookFormData['type']>('children');
 
   // Add form state
   const [addMode, setAddMode] = useState<'manual' | 'isbn' | 'search'>('manual');
@@ -469,9 +506,38 @@ export default function LibraryPage() {
   const selectedTypeValue = watch('type');
   const coverUrl = watch('coverUrl');
 
+  const { data: persistedBookLists = [] } = useQuery({
+    queryKey: ['library-book-lists', selectedChildId],
+    queryFn: () => fetchBookLists(selectedChildId!),
+    enabled: !!selectedChildId,
+  });
+
+  const saveBookListsMutation = useMutation({
+    mutationFn: saveBookLists,
+    onSuccess: (lists) => {
+      setBookLists(lists);
+      queryClient.setQueryData(['library-book-lists', selectedChildId], lists);
+    },
+    onError: (error) => toast.error(`书单保存失败：${getErrorMessage(error)}`),
+  });
+
   useEffect(() => {
-    setBookLists(JSON.parse(localStorage.getItem(storageKeys.bookLists) || '[]'));
-  }, [storageKeys]);
+    setBookLists(persistedBookLists);
+  }, [persistedBookLists]);
+
+  useEffect(() => {
+    if (!selectedChildId || persistedBookLists.length > 0) return;
+    try {
+      const legacyLists = JSON.parse(localStorage.getItem(storageKeys.bookLists) || '[]');
+      if (Array.isArray(legacyLists) && legacyLists.length > 0) {
+        setBookLists(legacyLists);
+        saveBookListsMutation.mutate({ childId: selectedChildId, lists: legacyLists });
+        localStorage.removeItem(storageKeys.bookLists);
+      }
+    } catch {
+      localStorage.removeItem(storageKeys.bookLists);
+    }
+  }, [persistedBookLists, saveBookListsMutation, selectedChildId, storageKeys]);
 
   const { data: books = [], isLoading } = useQuery({
     queryKey: ['library', searchQuery, selectedType, sortBy, selectedChildId],
@@ -584,6 +650,11 @@ export default function LibraryPage() {
   }, [finishedBooksList]);
   const totalReadMinutes = books.reduce((sum, book) => sum + (book.totalReadMinutes || 0), 0);
   const readingHours = totalReadMinutes > 0 ? (totalReadMinutes / 60).toFixed(1) : '0.0';
+  const persistBookLists = (lists: BookList[]) => {
+    setBookLists(lists);
+    if (!selectedChildId) return;
+    saveBookListsMutation.mutate({ childId: selectedChildId, lists });
+  };
   const recentReadingItems = useMemo(() => (
     books
       .filter(book => hasReadingState(book) || (book.readLogCount || 0) > 0)
@@ -663,6 +734,98 @@ export default function LibraryPage() {
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
+
+  const bulkQualityMutation = useMutation({
+    mutationFn: async ({ updates }: { updates: Array<{ id: number; data: Partial<BookFormData> }> }) => {
+      await Promise.all(updates.map((item) => updateBook(item.id, item.data)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+      toast.success('数据质量已更新');
+      setBulkPageCount('');
+    },
+    onError: (error) => toast.error(`处理失败：${getErrorMessage(error)}`),
+  });
+
+  const mergeDuplicateMutation = useMutation({
+    mutationFn: mergeDuplicateTitles,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+      toast.success(`已合并 ${result.mergedGroups} 组重复书，归档 ${result.mergedBooks} 本`);
+      setQualityFilter('all');
+    },
+    onError: (error) => toast.error(`合并失败：${getErrorMessage(error)}`),
+  });
+
+  const fixTaskAbilityMutation = useMutation({
+    mutationFn: fixTaskAbilityPoints,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success(`已为 ${result.updated} 个任务补齐能力点`);
+    },
+    onError: (error) => toast.error(`处理失败：${getErrorMessage(error)}`),
+  });
+
+  const handleAutoCompleteIsbnAndCover = async () => {
+    const targetBooks = filteredBooks.filter((book) => !book.isbn?.trim());
+    if (targetBooks.length === 0) {
+      toast.info('当前没有缺 ISBN 图书');
+      return;
+    }
+
+    let updated = 0;
+    for (const book of targetBooks.slice(0, 20)) {
+      try {
+        const candidates = await searchBooksByTitle(book.name, {
+          author: book.author,
+          publisher: book.publisher,
+        });
+        const candidate = candidates[0];
+        if (!candidate) continue;
+        const nextData: Partial<BookFormData> = {
+          isbn: candidate.isbn || book.isbn,
+          author: book.author || candidate.author || '',
+          publisher: book.publisher || candidate.publisher || '',
+          coverUrl: book.coverUrl || candidate.coverUrl || '',
+          totalPages: book.totalPages || candidate.totalPages || 0,
+        };
+        await updateBook(book.id, nextData);
+        updated++;
+      } catch {
+        // Continue with remaining books; the toast below reports aggregate result.
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['library'] });
+    queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+    toast.success(`已尝试自动补全，成功更新 ${updated} 本`);
+  };
+
+  const handleBulkFillPages = () => {
+    const pages = Number(bulkPageCount);
+    if (!Number.isInteger(pages) || pages <= 0) {
+      toast.error('请输入有效页数');
+      return;
+    }
+    const targetBooks = filteredBooks.filter((book) => !book.totalPages || book.totalPages <= 0);
+    if (targetBooks.length === 0) {
+      toast.info('当前没有缺页数图书');
+      return;
+    }
+    bulkQualityMutation.mutate({ updates: targetBooks.map((book) => ({ id: book.id, data: { totalPages: pages } })) });
+  };
+
+  const handleBulkSetType = () => {
+    const targetBooks = filteredBooks.filter((book) => !book.type?.trim());
+    if (targetBooks.length === 0) {
+      toast.info('当前没有缺分类图书');
+      return;
+    }
+    bulkQualityMutation.mutate({ updates: targetBooks.map((book) => ({ id: book.id, data: { type: bulkType } })) });
+  };
 
   // Handlers
   const handleISBNLookup = async () => {
@@ -1165,6 +1328,7 @@ export default function LibraryPage() {
           setSelectedReadStatus('all');
         }}
         onOpenTasks={() => navigate('/parent/tasks')}
+        onFixTaskAbility={() => fixTaskAbilityMutation.mutate()}
       />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">
@@ -1219,19 +1383,21 @@ export default function LibraryPage() {
             <h2 className="text-lg font-semibold text-slate-950">阅读记录</h2>
             <span className="text-sm font-medium text-slate-400">按最近阅读展示</span>
           </div>
-          <div className="mt-5 divide-y divide-slate-100">
+          <div className="mt-4 divide-y divide-slate-100">
             {recentReadingItems.length > 0 ? recentReadingItems.map((book) => {
               const status = getBookReadStatus(book);
               return (
-              <div key={book.id} className="flex items-center gap-4 py-3.5">
-                <div className="h-16 w-12 overflow-hidden rounded-md bg-gradient-to-br from-slate-100 to-indigo-50">
+              <div key={book.id} className="grid grid-cols-[36px_minmax(0,1fr)_68px_86px_64px] items-center gap-3 py-2.5 text-sm">
+                <div className="h-11 w-8 overflow-hidden rounded bg-gradient-to-br from-slate-100 to-indigo-50">
                   <CoverSlot book={book} />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-semibold text-slate-950">{book.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">{status.detail}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-950">{book.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-400">{book.author || '未知作者'}</p>
                 </div>
-                <span className={cn('shrink-0 rounded-full px-3 py-1 text-xs font-medium', status.className)}>
+                <span className="text-xs font-medium text-slate-500">{formatShortDate(book.lastReadDate || book.readState?.finishedAt)}</span>
+                <span className="text-right text-xs text-slate-500">{book.totalReadPages || 0}页/{book.totalReadMinutes || 0}分</span>
+                <span className={cn('shrink-0 rounded-md px-2 py-1 text-center text-xs font-medium', status.className)}>
                   {status.label}
                 </span>
               </div>
@@ -1248,9 +1414,35 @@ export default function LibraryPage() {
           <span className="font-medium text-indigo-800">
             正在查看：{qualityFilterLabelMap[qualityFilter]}，共 {filteredBooks.length} 本
           </span>
-          <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => setQualityFilter('all')}>
-            退出数据质量筛选
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {qualityFilter === 'missingPageCount' ? (
+              <>
+                <Input value={bulkPageCount} onChange={(event) => setBulkPageCount(event.target.value)} inputMode="numeric" placeholder="批量页数" className="h-8 w-24 bg-white" />
+                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkFillPages} disabled={bulkQualityMutation.isPending}>批量补页数</Button>
+              </>
+            ) : null}
+            {qualityFilter === 'missingType' ? (
+              <>
+                <select value={bulkType} onChange={(event) => setBulkType(event.target.value as BookFormData['type'])} className="h-8 rounded-lg border border-input bg-white px-2 text-sm">
+                  {bookTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                </select>
+                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkSetType} disabled={bulkQualityMutation.isPending}>批量分类</Button>
+              </>
+            ) : null}
+            {qualityFilter === 'duplicateTitle' ? (
+              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => mergeDuplicateMutation.mutate()} disabled={mergeDuplicateMutation.isPending}>
+                合并重复书
+              </Button>
+            ) : null}
+            {qualityFilter === 'missingIsbn' ? (
+              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => void handleAutoCompleteIsbnAndCover()} disabled={bulkQualityMutation.isPending}>
+                自动补 ISBN/封面
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => setQualityFilter('all')}>
+              退出筛选
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1472,8 +1664,7 @@ export default function LibraryPage() {
                       onClick={(e) => {
                         e.stopPropagation();
                         const newLists = bookLists.filter(l => l.id !== list.id);
-                        setBookLists(newLists);
-                        localStorage.setItem(storageKeys.bookLists, JSON.stringify(newLists));
+                        persistBookLists(newLists);
                         toast.success('书单已删除');
                       }}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all"
@@ -1852,8 +2043,7 @@ export default function LibraryPage() {
               if (newListName.trim()) {
                 const newList = { id: Date.now().toString(), name: newListName.trim(), bookIds: [], createdAt: new Date().toISOString() };
                 const newLists = [...bookLists, newList];
-                setBookLists(newLists);
-                localStorage.setItem(storageKeys.bookLists, JSON.stringify(newLists));
+                persistBookLists(newLists);
                 toast.success('书单创建成功');
                 setNewListName('');
                 setShowBookListDialog(false);

@@ -120,6 +120,44 @@ function parseTaskTags(value: unknown): Record<string, unknown> {
   return {}
 }
 
+function normalizeBookLists(value: unknown): Array<{ id: string; name: string; bookIds: number[]; createdAt: string }> {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    .map((item) => ({
+      id: typeof item.id === 'string' && item.id.trim() ? item.id.trim().slice(0, 80) : `${Date.now()}`,
+      name: typeof item.name === 'string' ? item.name.trim().slice(0, 60) : '',
+      bookIds: Array.isArray(item.bookIds)
+        ? item.bookIds.map(Number).filter((id) => Number.isInteger(id) && id > 0).slice(0, 500)
+        : [],
+      createdAt: typeof item.createdAt === 'string' ? item.createdAt.slice(0, 40) : new Date().toISOString(),
+    }))
+    .filter((item) => item.name)
+    .slice(0, 100)
+}
+
+function normalizeBookMetadata(value: unknown): { notes: string; chapters: string[] } {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  return {
+    notes: typeof input.notes === 'string' ? input.notes.trim().slice(0, 5000) : '',
+    chapters: Array.isArray(input.chapters)
+      ? input.chapters.filter((item): item is string => typeof item === 'string').map((item) => item.trim().slice(0, 120)).filter(Boolean).slice(0, 300)
+      : [],
+  }
+}
+
+function inferAbilityPoint(task: { name?: string; category?: string }): { abilityCategory: string; abilityPoint: string } {
+  const text = `${task.name || ''} ${task.category || ''}`.toLowerCase()
+  if (/read|阅读|朗读|书/.test(text)) return { abilityCategory: '学科能力', abilityPoint: '阅读理解' }
+  if (/math|数学|计算|口算|题/.test(text)) return { abilityCategory: '学科能力', abilityPoint: '数学能力' }
+  if (/english|英语|单词|听力|拼读/.test(text)) return { abilityCategory: '学科能力', abilityPoint: '英语能力' }
+  if (/sport|体育|跳绳|跑步|运动|体能/.test(text)) return { abilityCategory: '体育与健康', abilityPoint: '基础体能' }
+  if (/复盘|总结|错题|反思/.test(text)) return { abilityCategory: '学习习惯', abilityPoint: '复盘与反思' }
+  if (/表达|讲述|口述|写作/.test(text)) return { abilityCategory: '思维与认知', abilityPoint: '表达输出' }
+  return { abilityCategory: '学习习惯', abilityPoint: '学习专注力' }
+}
+
 function parseExcelDate(value: unknown): Date {
   if (!value) return new Date()
   if (value instanceof Date) return value
@@ -926,7 +964,7 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
     include: {
       activeReadings: {
         where: { status: 'reading', ...(parsedChildId ? { childId: parsedChildId } : {}) },
-        select: { id: true, childId: true, readPages: true },
+        select: { id: true, childId: true, readPages: true, status: true },
       },
       bookReadStates: {
         where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
@@ -956,10 +994,15 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
     const totalReadMinutes = book.readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0)
     const progress = progressByBookId.get(book.id)
     const latestLogReadDate = book.readingLogs[0]?.readDate || null
+    const activeReading = book.activeReadings.find(reading => reading.status === 'reading')
+    const storedReadState = book.bookReadStates[0] || null
+    const readState = activeReading
+      ? { ...(storedReadState || {}), status: 'reading', finishedAt: null }
+      : storedReadState
 
     return {
       ...book,
-      readState: book.bookReadStates[0] || null,
+      readState,
       totalReadPages: logReadPages,
       totalReadMinutes,
       lastReadDate: latestLogReadDate || progress?.readDate || null,
@@ -1389,6 +1432,256 @@ libraryRouter.get('/data-quality', authMiddleware, requireRole('parent'), async 
 })
 
 /**
+ * POST /data-quality/merge-duplicate-titles - Merge books with the same normalized title
+ */
+libraryRouter.post('/data-quality/merge-duplicate-titles', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const books = await prisma.book.findMany({
+    where: { familyId, status: 'active' },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    select: { id: true, name: true, totalPages: true, coverUrl: true, isbn: true, updatedAt: true },
+  })
+
+  const groups = new Map<string, typeof books>()
+  for (const book of books) {
+    const key = normalizeBookName(book.name)
+    if (!key) continue
+    groups.set(key, [...(groups.get(key) || []), book])
+  }
+
+  let mergedGroups = 0
+  let mergedBooks = 0
+
+  await prisma.$transaction(async (tx) => {
+    for (const group of groups.values()) {
+      if (group.length < 2) continue
+
+      const keeper = [...group].sort((a, b) => {
+        const aScore = (a.totalPages > 0 ? 2 : 0) + (a.coverUrl ? 1 : 0) + (a.isbn ? 1 : 0)
+        const bScore = (b.totalPages > 0 ? 2 : 0) + (b.coverUrl ? 1 : 0) + (b.isbn ? 1 : 0)
+        if (aScore !== bScore) return bScore - aScore
+        return a.id - b.id
+      })[0]
+      const duplicates = group.filter(book => book.id !== keeper.id)
+      const duplicateIds = duplicates.map(book => book.id)
+      if (duplicateIds.length === 0) continue
+
+      await tx.readingLog.updateMany({ where: { familyId, bookId: { in: duplicateIds } }, data: { bookId: keeper.id } })
+      await tx.activeReading.updateMany({ where: { familyId, bookId: { in: duplicateIds } }, data: { bookId: keeper.id, status: 'merged' } })
+      await tx.bookReadState.deleteMany({ where: { familyId, bookId: { in: duplicateIds } } })
+      await tx.bookAIInsight.updateMany({ where: { familyId, bookId: { in: duplicateIds } }, data: { bookId: keeper.id } })
+      await tx.book.updateMany({ where: { familyId, id: { in: duplicateIds } }, data: { status: 'inactive' } })
+
+      mergedGroups++
+      mergedBooks += duplicateIds.length
+    }
+  })
+
+  res.json({
+    status: 'success',
+    message: `已合并 ${mergedGroups} 组重复书，归档 ${mergedBooks} 本重复书`,
+    data: { mergedGroups, mergedBooks },
+  })
+})
+
+/**
+ * POST /data-quality/fix-task-ability - Infer ability points for tasks missing them
+ */
+libraryRouter.post('/data-quality/fix-task-ability', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+
+  const tasks = await prisma.task.findMany({
+    where: { familyId, isActive: true },
+    select: { id: true, name: true, category: true, tags: true },
+  })
+
+  let updated = 0
+  for (const task of tasks) {
+    const tags = parseTaskTags(task.tags)
+    const abilityPoint = typeof tags.abilityPoint === 'string' ? tags.abilityPoint.trim() : ''
+    if (abilityPoint && abilityPoint !== '不关联目标') continue
+
+    const inferred = inferAbilityPoint(task)
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        tags: {
+          ...tags,
+          abilityCategory: typeof tags.abilityCategory === 'string' && tags.abilityCategory.trim() ? tags.abilityCategory : inferred.abilityCategory,
+          abilityPoint: inferred.abilityPoint,
+        },
+      },
+    })
+    updated++
+  }
+
+  res.json({
+    status: 'success',
+    message: `已为 ${updated} 个任务补齐能力点`,
+    data: { updated },
+  })
+})
+
+/**
+ * GET /book-lists - Get persisted child book lists
+ */
+libraryRouter.get('/book-lists', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = Number(req.query.childId)
+
+  if (!Number.isInteger(childId) || childId <= 0) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  const child = await prisma.user.findFirst({
+    where: { id: childId, familyId, role: 'child', status: 'active' },
+    select: { id: true },
+  })
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+  const settings = (family?.settings as any) || {}
+  const lists = normalizeBookLists(settings.libraryBookListsByChild?.[String(childId)])
+
+  res.json({ status: 'success', data: lists })
+})
+
+/**
+ * PUT /book-lists - Persist child book lists
+ */
+libraryRouter.put('/book-lists', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const { familyId } = req.user!
+  const childId = Number(req.body.childId)
+  const lists = normalizeBookLists(req.body.lists)
+
+  if (!Number.isInteger(childId) || childId <= 0) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  const child = await prisma.user.findFirst({
+    where: { id: childId, familyId, role: 'child', status: 'active' },
+    select: { id: true },
+  })
+  if (!child) {
+    throw new AppError(404, '孩子不存在')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as any) || {}
+  await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: {
+        ...currentSettings,
+        libraryBookListsByChild: {
+          ...(currentSettings.libraryBookListsByChild || {}),
+          [String(childId)]: lists,
+        },
+      },
+    },
+  })
+
+  res.json({ status: 'success', message: '书单已保存', data: lists })
+})
+
+/**
+ * GET /:id/metadata - Get persisted book notes and chapter catalog
+ */
+libraryRouter.get('/:id/metadata', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string)
+  const { familyId } = req.user!
+  const childId = Number(req.query.childId)
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError(400, '图书参数错误')
+  }
+  if (!Number.isInteger(childId) || childId <= 0) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  const book = await prisma.book.findFirst({
+    where: { id, familyId, status: 'active' },
+    select: { id: true },
+  })
+  if (!book) {
+    throw new AppError(404, '图书不存在')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+  const settings = (family?.settings as any) || {}
+  const key = `${childId}:${id}`
+  const metadata = normalizeBookMetadata(settings.bookMetadataByChild?.[key])
+
+  res.json({ status: 'success', data: metadata })
+})
+
+/**
+ * PUT /:id/metadata - Persist book notes and chapter catalog
+ */
+libraryRouter.put('/:id/metadata', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string)
+  const { familyId } = req.user!
+  const childId = Number(req.body.childId)
+  const metadata = normalizeBookMetadata(req.body)
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError(400, '图书参数错误')
+  }
+  if (!Number.isInteger(childId) || childId <= 0) {
+    throw new AppError(400, '请选择孩子')
+  }
+
+  const book = await prisma.book.findFirst({
+    where: { id, familyId, status: 'active' },
+    select: { id: true },
+  })
+  if (!book) {
+    throw new AppError(404, '图书不存在')
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { settings: true },
+  })
+  if (!family) {
+    throw new AppError(404, '家庭不存在')
+  }
+
+  const currentSettings = (family.settings as any) || {}
+  const key = `${childId}:${id}`
+  await prisma.family.update({
+    where: { id: familyId },
+    data: {
+      settings: {
+        ...currentSettings,
+        bookMetadataByChild: {
+          ...(currentSettings.bookMetadataByChild || {}),
+          [key]: metadata,
+        },
+      },
+    },
+  })
+
+  res.json({ status: 'success', message: '书籍资料已保存', data: metadata })
+})
+
+/**
  * POST /refresh-openlibrary - Refresh existing book metadata and covers from OpenLibrary
  * Body: { limit?, overwrite? }
  */
@@ -1564,7 +1857,7 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
     include: {
       activeReadings: {
         where: { status: 'reading', ...(parsedChildId ? { childId: parsedChildId } : {}) },
-        select: { id: true, childId: true, readPages: true },
+        select: { id: true, childId: true, readPages: true, status: true },
       },
       bookReadStates: {
         where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
@@ -1594,12 +1887,17 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
   const logReadPages = book.readingLogs.reduce((sum, log: any) => sum + (log.pages || 0), 0)
   const totalReadMinutes = book.readingLogs.reduce((sum, log: any) => sum + (log.minutes || 0), 0)
   const lastReadDate = book.readingLogs[0]?.readDate || progress._max.readDate || null
+  const activeReading = book.activeReadings.find(reading => reading.status === 'reading')
+  const storedReadState = book.bookReadStates[0] || null
+  const readState = activeReading
+    ? { ...(storedReadState || {}), status: 'reading', finishedAt: null }
+    : storedReadState
 
   res.json({
     status: 'success',
     data: {
       ...book,
-      readState: book.bookReadStates[0] || null,
+      readState,
       totalReadPages: logReadPages,
       totalReadMinutes,
       lastReadDate,

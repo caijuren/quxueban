@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { PublishPlanDialog } from '@/components/PublishPlanDialog';
-import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles, ClipboardCheck, Calculator, Languages, Dumbbell, BookMarked, Shapes } from 'lucide-react';
+import { Plus, X, ChevronDown, Send, Trash2, Move, CalendarDays, Download, AlertTriangle, Clock, Target, BookOpen, Sparkles, ClipboardCheck, Calculator, Languages, Dumbbell, BookMarked, Shapes, Check, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, startOfWeek, addWeeks, addDays, isToday, isSameDay } from 'date-fns';
@@ -28,6 +28,8 @@ interface TaskAllocation {
   subject: string | null;
   difficulty: string | null;
   scheduleRule: string;
+  timeSegment?: string;
+  sortOrder?: number;
 }
 
 interface WeeklyPlan {
@@ -61,6 +63,20 @@ const categoryOrder: { [key: string]: number } = {
   english: 4,
   sports: 5,
 };
+const timeSegmentOrder: Record<string, number> = {
+  '早晨': 0,
+  '上午': 1,
+  '中午': 2,
+  '放学后': 3,
+  '晚饭后': 4,
+  '睡前': 5,
+};
+
+function getTaskStatusOrder(task: TaskAllocation) {
+  if (task.progress >= task.target) return 0;
+  if (task.progress > 0) return 1;
+  return 2;
+}
 
 const getCategoryStyle = (category: string) => {
   const cat = (category || '').toLowerCase();
@@ -761,9 +777,22 @@ export default function PlansPage() {
                         const filteredAndSortedTasks = [...plan.allocations]
                           .filter(task => selectedCategory === 'all' || task.category === selectedCategory)
                           .sort((a, b) => {
+                            const timeA = timeSegmentOrder[a.timeSegment || '放学后'] ?? 99;
+                            const timeB = timeSegmentOrder[b.timeSegment || '放学后'] ?? 99;
+                            if (timeA !== timeB) return timeA - timeB;
+
+                            const statusA = getTaskStatusOrder(a);
+                            const statusB = getTaskStatusOrder(b);
+                            if (statusA !== statusB) return statusA - statusB;
+
                             const orderA = categoryOrder[a.category || ''] ?? 99;
                             const orderB = categoryOrder[b.category || ''] ?? 99;
                             if (orderA !== orderB) return orderA - orderB;
+
+                            const manualA = a.sortOrder ?? 0;
+                            const manualB = b.sortOrder ?? 0;
+                            if (manualA !== manualB) return manualA - manualB;
+
                             return a.taskName.localeCompare(b.taskName);
                           });
 
@@ -810,6 +839,7 @@ export default function PlansPage() {
                                     <span className="shrink-0 text-xs font-semibold text-slate-600">{taskItem.progress}/{taskItem.target}</span>
                                   </div>
                                   <p className="mt-1 text-xs font-medium text-slate-500">{stageSummary}</p>
+                                  <p className="mt-1 text-[11px] font-medium text-slate-400">{taskItem.timeSegment || '放学后'}</p>
                                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                                     <div className={cn('h-full rounded-full', color.bg)} style={{ width: `${progressPercent}%` }} />
                                   </div>
@@ -864,11 +894,16 @@ export default function PlansPage() {
                       )}
                       {plan.allocations.length > 0 && (
                         <div className="mt-5 flex w-max min-w-full flex-wrap items-center gap-x-8 gap-y-3 border-t border-slate-100 pt-4 text-sm">
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400 text-xs font-bold text-white">✓</i> 已完成</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="h-6 w-6 rounded-full border-[5px] border-orange-300 bg-white" /> 进行中</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-300">−</i> 未安排</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500 text-white"><Check className="h-3.5 w-3.5" /></i> 已完成</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-orange-300 bg-white text-orange-500"><Play className="h-3.5 w-3.5" /></i> 进行中</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="h-6 w-6 rounded-md border-2 border-slate-200 bg-white" /> 未开始</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-slate-200 bg-slate-50 text-slate-400"><Clock className="h-3.5 w-3.5" /></i> 延期</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 text-rose-500 ring-1 ring-rose-100"><X className="h-3.5 w-3.5" /></i> 未完成</span>
                           <span className="flex items-center gap-2 whitespace-nowrap font-medium text-slate-600">
                             <i className="text-amber-400">★</i> 重点任务
+                          </span>
+                          <span className="whitespace-nowrap text-slate-500">
+                            计划 {plan.allocations.length} 项 · 已完成 {plan.allocations.filter((item) => item.progress >= item.target).length} · 剩余 {plan.allocations.filter((item) => item.progress < item.target).length}
                           </span>
                         </div>
                       )}

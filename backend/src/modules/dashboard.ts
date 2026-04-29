@@ -431,10 +431,23 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       },
     },
   })
+  const readingAggregate = await prisma.readingLog.aggregate({
+    where: {
+      ...readingLogWhereClause,
+      readDate: {
+        gte: checkDate,
+        lte: checkDateEnd,
+      },
+    },
+    _sum: {
+      minutes: true,
+      pages: true,
+    },
+  })
   const readingPerformance = {
     records: todayReadingCount,
-    minutes: readingLogs.reduce((sum, log) => sum + (log.minutes || 0), 0),
-    pages: readingLogs.reduce((sum, log) => sum + (log.pages || 0), 0),
+    minutes: readingAggregate._sum.minutes || 0,
+    pages: readingAggregate._sum.pages || 0,
     recentBooks: readingLogs.map((log) => ({
       id: log.book?.id || log.bookId,
       name: log.book?.name || '未命名图书',

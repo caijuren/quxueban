@@ -40,6 +40,7 @@ import AccountSettings from './settings/AccountSettings';
 import ChildrenManagement from './settings/ChildrenManagement';
 import FamilySettings from './settings/FamilySettings';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 type UserInfo = {
   id: number;
@@ -214,6 +215,8 @@ const quickActions = [
   { title: '帮助中心', desc: '获取帮助与支持', icon: HelpCircle, action: 'help', status: '已接入' as SettingStatus, color: 'violet' },
 ];
 
+const gradeOptions = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '初一', '初二', '初三'];
+
 function getDefaultSemesterConfig(): SemesterConfig {
   const now = new Date();
   const year = now.getFullYear();
@@ -370,9 +373,11 @@ function MetricColumn({
 }) {
   return (
     <div className="min-w-0 border-slate-200 md:border-l md:pl-6">
-      <p className="text-sm font-bold text-slate-900">{title}</p>
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <p className="text-sm font-bold text-slate-900">{title}</p>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       <div className="mt-4 min-h-16 text-sm text-slate-600">{children}</div>
-      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }
@@ -390,12 +395,14 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { selectedChildId: globalSelectedChildId, selectChild } = useSelectedChild();
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profilePassword, setProfilePassword] = useState('');
   const [profileAvatar, setProfileAvatar] = useState('');
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
   const [childDetailOpenId, setChildDetailOpenId] = useState<number | null>(null);
+  const [childAddRequest, setChildAddRequest] = useState(0);
   const [dingtalkDialogOpen, setDingtalkDialogOpen] = useState(false);
   const [learningDialogOpen, setLearningDialogOpen] = useState(false);
   const [dingtalkWebhookUrl, setDingtalkWebhookUrl] = useState('');
@@ -406,7 +413,7 @@ export default function SettingsPage() {
   const { data: family, isLoading: isFamilyLoading, isError: isFamilyError } = useQuery({ queryKey: ['settings-family'], queryFn: getFamilySettings });
   const { data: children = [], isLoading: isChildrenLoading, isError: isChildrenError } = useQuery({ queryKey: ['children'], queryFn: getChildren });
 
-  const currentChild = children.find((child) => child.id === selectedChildId) || children[0];
+  const currentChild = children.find((child) => child.id === (selectedChildId ?? globalSelectedChildId)) || children[0];
 
   const { data: childStats } = useQuery({
     queryKey: ['settings-child-stats', currentChild?.id],
@@ -528,10 +535,14 @@ export default function SettingsPage() {
         : null;
 
   useEffect(() => {
+    if (globalSelectedChildId && children.some((child) => child.id === globalSelectedChildId)) {
+      setSelectedChildId(globalSelectedChildId);
+      return;
+    }
     if (!selectedChildId && children.length > 0) {
       setSelectedChildId(children[0].id);
     }
-  }, [children, selectedChildId]);
+  }, [children, globalSelectedChildId, selectedChildId]);
 
   useEffect(() => {
     if (user) {
@@ -644,6 +655,10 @@ export default function SettingsPage() {
     setChildDetailOpenId(currentChild.id);
   };
 
+  const openAddChildDialog = () => {
+    setChildAddRequest((value) => value + 1);
+  };
+
   const submitLearningSettings = () => {
     if (!currentChild) return;
     if (!semesterForm.schoolYear.trim() || !semesterForm.grade.trim() || !semesterForm.readingStage.trim()) {
@@ -668,7 +683,20 @@ export default function SettingsPage() {
     }
 
     try {
-      await navigator.clipboard.writeText(family.familyCode);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(family.familyCode);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = family.familyCode;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!copied) throw new Error('copy failed');
+      }
       toast.success('家庭码已复制');
     } catch {
       toast.error('复制失败，请手动复制家庭码');
@@ -676,10 +704,6 @@ export default function SettingsPage() {
   };
 
   const handleDomainClick = (path: string | undefined, status: SettingStatus) => {
-    if (path?.includes('/children-detail')) {
-      openChildDetailDialog();
-      return;
-    }
     if (path) {
       navigate(path);
       return;
@@ -693,7 +717,7 @@ export default function SettingsPage() {
       return;
     }
     if (action === 'account') navigate('/parent/settings/account-detail');
-    if (action === 'children') openChildDetailDialog();
+    if (action === 'children') openAddChildDialog();
     if (action === 'family') navigate('/parent/settings/family-detail');
     if (action === 'help') navigate('/parent/help');
   };
@@ -840,10 +864,11 @@ export default function SettingsPage() {
             <p className="mt-1 text-xs text-slate-400">用于邀请家人加入当前家庭</p>
           </MetricColumn>
 
-          <MetricColumn title="家庭成员" action={<Button variant="outline" size="sm" className="h-8 rounded-lg bg-violet-50 text-violet-700" onClick={openChildDetailDialog}>管理成员</Button>}>
+          <MetricColumn title="家庭成员" action={<Button variant="outline" size="sm" className="h-8 rounded-lg bg-violet-50 text-violet-700" onClick={() => navigate('/parent/settings/family-detail')}>管理成员</Button>}>
             <div className="flex gap-2">
               <Avatar className="h-8 w-8 border-2 border-white bg-violet-100">
-                <AvatarFallback>{userInitial}</AvatarFallback>
+                {isImageAvatar(user?.avatar) ? <AvatarImage src={user?.avatar} /> : null}
+                <AvatarFallback>{isImageAvatar(user?.avatar) ? userInitial : user?.avatar || userInitial}</AvatarFallback>
               </Avatar>
               {children.slice(0, 3).map((child) => (
                 <Avatar key={child.id} className="h-8 w-8 border-2 border-white bg-indigo-100">
@@ -884,7 +909,10 @@ export default function SettingsPage() {
                     onClick={() => {
                       const index = children.findIndex((child) => child.id === currentChild?.id);
                       const next = children[(index + 1) % children.length];
-                      if (next) setSelectedChildId(next.id);
+                      if (next) {
+                        setSelectedChildId(next.id);
+                        selectChild(next.id);
+                      }
                     }}
                     aria-label="切换孩子"
                   >
@@ -901,7 +929,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <MetricColumn title="学习状态" action={<Button variant="outline" size="sm" className="h-8 rounded-lg bg-violet-50 text-violet-700" onClick={() => navigate('/parent/dashboard')}>查看学习概览</Button>}>
+          <MetricColumn title="学习状态" action={<Button variant="outline" size="sm" className="h-8 rounded-lg bg-violet-50 text-violet-700" onClick={() => navigate('/parent')}>查看学习概览</Button>}>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-slate-400">学习时长</p>
@@ -970,6 +998,7 @@ export default function SettingsPage() {
       <ChildrenManagement
         dialogOnly
         openChildId={childDetailOpenId}
+        openAddRequest={childAddRequest}
         onOpenChildHandled={() => setChildDetailOpenId(null)}
       />
 
@@ -1074,11 +1103,25 @@ export default function SettingsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="settings-semester-grade">年级</Label>
-              <Input id="settings-semester-grade" value={semesterForm.grade} onChange={(event) => setSemesterForm({ ...semesterForm, grade: event.target.value })} placeholder="例如 一年级" />
+              <select
+                id="settings-semester-grade"
+                value={semesterForm.grade}
+                onChange={(event) => setSemesterForm({ ...semesterForm, grade: event.target.value, readingStage: event.target.value })}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {gradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="settings-reading-stage">阅读阶段</Label>
-              <Input id="settings-reading-stage" value={semesterForm.readingStage} onChange={(event) => setSemesterForm({ ...semesterForm, readingStage: event.target.value })} placeholder="例如 一年级下" />
+              <select
+                id="settings-reading-stage"
+                value={semesterForm.readingStage || semesterForm.grade}
+                onChange={(event) => setSemesterForm({ ...semesterForm, grade: event.target.value, readingStage: event.target.value })}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {gradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="settings-semester-start">开始日期</Label>

@@ -635,6 +635,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         t.name AS task_name,
         t.category AS task_category,
         t.time_per_unit,
+        t.sort_order,
         t.tags AS task_tags,
         t.weekly_rule AS task_weekly_rule,
         t.schedule_rule AS task_schedule_rule
@@ -678,6 +679,7 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
         t.name AS task_name,
         t.category AS task_category,
         t.time_per_unit,
+        t.sort_order,
         t.tags AS task_tags,
         t.weekly_rule AS task_weekly_rule,
         t.schedule_rule AS task_schedule_rule
@@ -731,7 +733,9 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           taskName: p.task_name,
           category: p.task_category,
           timePerUnit: p.time_per_unit,
+          sortOrder: Number(p.sort_order || 0),
           assignedDays: assignedDays,
+          timeSegment: taskTags?.timeSegment || taskTags?.preferredTimeSegment || '放学后',
           subject:subject,
           difficulty: taskTags?.difficulty || 'basic',
           taskKind: taskTags?.taskKind || '',

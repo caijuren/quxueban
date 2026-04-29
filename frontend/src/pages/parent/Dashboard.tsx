@@ -52,29 +52,52 @@ function StudyIllustration() {
   );
 }
 
-function TrendChart({ currentMinutes }: { currentMinutes: number }) {
-  const last = Math.max(0, Math.min(120, currentMinutes));
-  const points = [44, 48, 58, 86, 48, 30, last];
+type TrendPoint = {
+  date: string;
+  label: string;
+  minutes: number;
+};
+
+function TrendChart({ data }: { data: TrendPoint[] }) {
+  const points = data.length > 0 ? data.map((point) => Math.max(0, point.minutes)) : [0, 0, 0, 0, 0, 0, 0];
+  const maxValue = Math.max(60, Math.ceil(Math.max(...points) / 30) * 30);
+  const chartTop = 28;
+  const chartBottom = 156;
+  const chartHeight = chartBottom - chartTop;
+  const xStart = 48;
+  const xGap = 50;
   const path = points
     .map((value, index) => {
-      const x = 26 + index * 58;
-      const y = 150 - value;
+      const x = xStart + index * xGap;
+      const y = chartBottom - (value / maxValue) * chartHeight;
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
     })
     .join(' ');
+  const areaEndX = xStart + (points.length - 1) * xGap;
+  const ticks = [maxValue, Math.round(maxValue * 0.75), Math.round(maxValue * 0.5), Math.round(maxValue * 0.25), 0];
 
   return (
     <svg viewBox="0 0 390 190" className="h-56 w-full">
-      {[0, 1, 2, 3].map((i) => (
-        <line key={i} x1="22" x2="370" y1={38 + i * 34} y2={38 + i * 34} stroke="#e8eaf1" strokeWidth="1" />
-      ))}
-      <path d={`${path} L 374 168 L 26 168 Z`} fill="#8b5cf6" opacity="0.12" />
+      {ticks.map((tick, index) => {
+        const y = chartTop + index * (chartHeight / (ticks.length - 1));
+        return (
+          <g key={tick}>
+            <text x="38" y={y + 4} textAnchor="end" className="fill-slate-400 text-[10px]">{tick}</text>
+            <line x1="46" x2="370" y1={y} y2={y} stroke="#e8eaf1" strokeWidth="1" />
+          </g>
+        );
+      })}
+      {[0, 30, 60, 90, 120].filter((tick) => tick < maxValue && !ticks.includes(tick)).map((tick) => {
+        const y = chartBottom - (tick / maxValue) * chartHeight;
+        return <text key={tick} x="38" y={y + 4} textAnchor="end" className="fill-slate-300 text-[10px]">{tick}</text>;
+      })}
+      <path d={`${path} L ${areaEndX} ${chartBottom} L ${xStart} ${chartBottom} Z`} fill="#8b5cf6" opacity="0.12" />
       <path d={path} fill="none" stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       {points.map((value, index) => (
-        <circle key={index} cx={26 + index * 58} cy={150 - value} r="4" fill="#8b5cf6" />
+        <circle key={index} cx={xStart + index * xGap} cy={chartBottom - (value / maxValue) * chartHeight} r="4" fill="#8b5cf6" />
       ))}
-      {['04-20', '04-21', '04-22', '04-23', '04-24', '04-25', '04-26'].map((day, index) => (
-        <text key={day} x={26 + index * 58} y="184" textAnchor="middle" className="fill-slate-400 text-[11px]">{day}</text>
+      {data.map((point, index) => (
+        <text key={point.date} x={xStart + index * xGap} y="184" textAnchor="middle" className="fill-slate-400 text-[11px]">{point.label}</text>
       ))}
     </svg>
   );
@@ -221,6 +244,11 @@ interface DashboardStats {
   todayStudyMinutes: number;
   booksRead: number;
   todayReadingCount: number;
+  readingPerformance?: {
+    records: number;
+    minutes: number;
+    pages: number;
+  };
 }
 
 interface Task {
@@ -314,6 +342,22 @@ function getShiftedLocalDateString(dateString: string, days: number): string {
   date.setDate(date.getDate() + days);
   return getLocalDateString(date);
 }
+
+function getWeekDatesFromMonday(dateString: string): string[] {
+  const date = parseLocalDateString(dateString);
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(date);
+  monday.setDate(date.getDate() + diffToMonday);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const current = new Date(monday);
+    current.setDate(monday.getDate() + index);
+    return getLocalDateString(current);
+  });
+}
+
+const weekDayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 type CompletionStatus = 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
 
@@ -480,6 +524,29 @@ export default function ParentDashboard() {
       const compareDate = getShiftedLocalDateString(selectedDate, -7);
       const response = await apiClient.get(`/dashboard/stats?date=${compareDate}&childId=${selectedChildId}`);
       return response.data.data as DashboardStats;
+    },
+    staleTime: 2 * 60 * 1000,
+    enabled: !!selectedChildId,
+  });
+
+  const weekDates = getWeekDatesFromMonday(selectedDate);
+  const { data: weekTrend = [] } = useQuery({
+    queryKey: ['dashboard-week-trend', selectedChildId, weekDates[0]],
+    queryFn: async () => {
+      const results = await Promise.all(
+        weekDates.map(async (date, index) => {
+          const response = await apiClient.get(`/dashboard/stats?date=${date}&childId=${selectedChildId}`);
+          const dayStats = response.data.data as DashboardStats;
+
+          return {
+            date,
+            label: weekDayLabels[index],
+            minutes: dayStats.todayStudyMinutes || 0,
+          };
+        })
+      );
+
+      return results;
     },
     staleTime: 2 * 60 * 1000,
     enabled: !!selectedChildId,
@@ -829,7 +896,7 @@ export default function ParentDashboard() {
   const greeting = getGreeting();
   const displayName = selectedChild?.name || user?.name || '家长';
   const todayStudyMinutes = stats?.todayStudyMinutes || 0;
-  const readingCount = stats?.todayReadingCount || 0;
+  const readingPages = stats?.readingPerformance?.pages || 0;
   const totalFocusMinutes = todayCheckins.reduce((sum: number, checkin: Checkin) => sum + (checkin.focusMinutes || 0), 0);
   const yesterdayDelta = formatMinuteDelta(todayStudyMinutes, yesterdayStats?.todayStudyMinutes);
   const lastWeekDelta = formatMinuteDelta(todayStudyMinutes, lastWeekStats?.todayStudyMinutes);
@@ -902,7 +969,7 @@ export default function ParentDashboard() {
         <div className="grid gap-4 sm:grid-cols-2">
           <MetricTile label="待完成任务" value={remainingTasks} unit="项" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} tone="bg-emerald-50" />
           <MetricTile label="学习时长" value={todayStudyMinutes} unit="分钟" icon={<Clock className="h-5 w-5 text-indigo-600" />} tone="bg-indigo-50" />
-          <MetricTile label="阅读本数" value={readingCount} unit="本" icon={<BookOpen className="h-5 w-5 text-orange-500" />} tone="bg-orange-50" />
+          <MetricTile label="阅读页数" value={readingPages} unit="页" icon={<BookOpen className="h-5 w-5 text-orange-500" />} tone="bg-orange-50" />
           <MetricTile label="专注时长" value={totalFocusMinutes} unit="分钟" icon={<Brain className="h-5 w-5 text-sky-500" />} tone="bg-sky-50" />
         </div>
 
@@ -950,10 +1017,10 @@ export default function ParentDashboard() {
         <section className="flex h-[390px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-950">学习趋势</h2>
-            <Button variant="outline" size="sm" className="h-9 rounded-lg">近7天</Button>
+            <Button variant="outline" size="sm" className="h-9 rounded-lg">本周 · 较昨日</Button>
           </div>
           <div className="mt-4 flex-1">
-            <TrendChart currentMinutes={todayStudyMinutes} />
+            <TrendChart data={weekTrend} />
           </div>
           <div className="grid grid-cols-2 border-t border-slate-100 pt-4 text-sm">
             <div>
@@ -1043,7 +1110,7 @@ export default function ParentDashboard() {
               ['完成率', `${completionRate}%`, completionRate],
               ['剩余任务', `${remainingTasks}项`, totalTasksForRate > 0 ? Math.max(0, 100 - completionRate) : 0],
               ['学习时长', `${todayStudyMinutes}分钟`, Math.min(100, Math.round((todayStudyMinutes / 120) * 100))],
-              ['阅读记录', `${readingCount}次`, Math.min(100, readingCount * 25)],
+              ['阅读页数', `${readingPages}页`, Math.min(100, readingPages * 5)],
             ].map(([label, value, progress]) => (
               <div key={String(label)}>
                 <p className="text-xs text-muted-foreground">{label}</p>

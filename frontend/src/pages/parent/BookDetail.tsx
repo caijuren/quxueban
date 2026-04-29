@@ -74,6 +74,11 @@ interface ChildSemesterConfig {
   readingStage?: string;
 }
 
+interface BookMetadata {
+  notes: string;
+  chapters: string[];
+}
+
 async function fetchBook(id: number, childId?: number | null): Promise<Book> {
   const params = childId ? `?childId=${childId}` : '';
   const { data } = await apiClient.get(`/library/${id}${params}`);
@@ -109,6 +114,16 @@ async function markBookFinished(bookId: number, childId: number): Promise<void> 
 async function fetchChildSemesterConfig(childId: number): Promise<ChildSemesterConfig | null> {
   const { data } = await apiClient.get(`/children/${childId}/semester`);
   return data.data || null;
+}
+
+async function fetchBookMetadata(bookId: number, childId: number): Promise<BookMetadata> {
+  const { data } = await apiClient.get(`/library/${bookId}/metadata?childId=${childId}`);
+  return data.data || { notes: '', chapters: [] };
+}
+
+async function updateBookMetadata(bookId: number, childId: number, metadata: BookMetadata): Promise<BookMetadata> {
+  const { data } = await apiClient.put(`/library/${bookId}/metadata`, { childId, ...metadata });
+  return data.data || metadata;
 }
 
 const typeLabels: Record<string, string> = {
@@ -225,9 +240,7 @@ export default function BookDetailPage() {
   );
 
   // P1-9: 书籍详情增强 - 评分、评论、笔记
-  const [bookNotes, setBookNotes] = useState<string>(() => {
-    return localStorage.getItem(`book_notes_${detailStoragePrefix}`) || '';
-  });
+  const [bookNotes, setBookNotes] = useState<string>('');
   const [showNotesForm, setShowNotesForm] = useState(false);
   const [notesInput, setNotesInput] = useState('');
   const [selectedLog, setSelectedLog] = useState<ReadingLog | null>(null);
@@ -236,30 +249,7 @@ export default function BookDetailPage() {
   const [selectedChapter, setSelectedChapter] = useState('');
   const [readingDate, setReadingDate] = useState(() => new Date().toISOString().split('T')[0]);
   const chapterStorageKey = useMemo(() => `book_chapters_${id ?? 'book'}`, [id]);
-  const [chapters, setChapters] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(chapterStorageKey) || '[]');
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    const savedNotes = localStorage.getItem(`book_notes_${detailStoragePrefix}`) || '';
-
-    setBookNotes(savedNotes);
-  }, [detailStoragePrefix]);
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(chapterStorageKey) || '[]');
-      setChapters(Array.isArray(saved) ? saved : []);
-      setChapterInput(Array.isArray(saved) ? saved.join('\n') : '');
-    } catch {
-      setChapters([]);
-      setChapterInput('');
-    }
-  }, [chapterStorageKey]);
+  const [chapters, setChapters] = useState<string[]>([]);
 
   const { data: book, isLoading, error } = useQuery({
     queryKey: ['book', id, selectedChildId],
@@ -283,6 +273,52 @@ export default function BookDetailPage() {
     queryFn: () => fetchChildSemesterConfig(selectedChildId!),
     enabled: !!selectedChildId,
   });
+
+  const { data: bookMetadata } = useQuery({
+    queryKey: ['book-metadata', id, selectedChildId],
+    queryFn: () => fetchBookMetadata(Number(id), selectedChildId!),
+    enabled: !!id && !!selectedChildId,
+  });
+
+  const metadataMutation = useMutation({
+    mutationFn: (metadata: BookMetadata) => updateBookMetadata(Number(id), selectedChildId!, metadata),
+    onSuccess: (metadata) => {
+      queryClient.setQueryData(['book-metadata', id, selectedChildId], metadata);
+    },
+    onError: (error) => toast.error(`保存失败：${getErrorMessage(error)}`),
+  });
+
+  useEffect(() => {
+    if (!bookMetadata) return;
+    setBookNotes(bookMetadata.notes || '');
+    setChapters(bookMetadata.chapters || []);
+    setChapterInput((bookMetadata.chapters || []).join('\n'));
+  }, [bookMetadata]);
+
+  useEffect(() => {
+    if (!selectedChildId || !bookMetadata) return;
+    const hasRemoteMetadata = Boolean(bookMetadata.notes) || (bookMetadata.chapters || []).length > 0;
+    if (hasRemoteMetadata) return;
+
+    try {
+      const legacyNotes = localStorage.getItem(`book_notes_${detailStoragePrefix}`) || '';
+      const legacyChapters = JSON.parse(localStorage.getItem(chapterStorageKey) || '[]');
+      const nextMetadata = {
+        notes: legacyNotes,
+        chapters: Array.isArray(legacyChapters) ? legacyChapters : [],
+      };
+      if (nextMetadata.notes || nextMetadata.chapters.length > 0) {
+        setBookNotes(nextMetadata.notes);
+        setChapters(nextMetadata.chapters);
+        setChapterInput(nextMetadata.chapters.join('\n'));
+        metadataMutation.mutate(nextMetadata);
+        localStorage.removeItem(`book_notes_${detailStoragePrefix}`);
+        localStorage.removeItem(chapterStorageKey);
+      }
+    } catch {
+      localStorage.removeItem(chapterStorageKey);
+    }
+  }, [bookMetadata, chapterStorageKey, detailStoragePrefix, metadataMutation, selectedChildId]);
 
   const addMutation = useMutation({
     mutationFn: (log: Partial<ReadingLog>) => addReadingLog(Number(id), log),
@@ -354,8 +390,9 @@ export default function BookDetailPage() {
   // P1-9: 保存笔记
   const handleSaveNotes = () => {
     if (notesInput.trim()) {
-      setBookNotes(notesInput.trim());
-      localStorage.setItem(`book_notes_${detailStoragePrefix}`, notesInput.trim());
+      const nextNotes = notesInput.trim();
+      setBookNotes(nextNotes);
+      metadataMutation.mutate({ notes: nextNotes, chapters });
       toast.success('笔记已保存');
       setShowNotesForm(false);
     }
@@ -364,7 +401,7 @@ export default function BookDetailPage() {
   const handleSaveChapters = () => {
     const nextChapters = parseChapterCatalog(chapterInput);
     setChapters(nextChapters);
-    localStorage.setItem(chapterStorageKey, JSON.stringify(nextChapters));
+    metadataMutation.mutate({ notes: bookNotes, chapters: nextChapters });
     setShowChapterManager(false);
     toast.success(`章节目录已保存，共识别 ${nextChapters.length} 个章节`);
   };
