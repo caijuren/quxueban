@@ -6,6 +6,8 @@
 - 依赖只在仓库根目录 `/home/ubuntu` 安装，使用根目录 `pnpm-lock.yaml`。
 - 每次上线必须执行 `prisma migrate deploy`，禁止在生产环境执行 `prisma migrate reset`。
 - 前端构建后必须同步到 nginx 根目录 `/var/www/study-planner`，只执行 `pnpm build` 不会更新线上页面。
+- 默认不要删除 `node_modules`。只有依赖树损坏时才使用 `CLEAN_INSTALL=1 bash scripts/deploy-production.sh`。
+- 生产环境禁用 pnpm/corepack 按 `packageManager` 自动切换版本，避免触发 pnpm 自安装递归。
 
 ## 一键部署
 
@@ -19,8 +21,8 @@ bash scripts/deploy-production.sh
 脚本会执行：
 
 1. `git pull --ff-only`
-2. 清理旧的 `node_modules` 和 `package-lock.json`
-3. 固定 pnpm 版本并安装依赖
+2. 默认保留已有 `node_modules`；只有 `CLEAN_INSTALL=1` 时才清理依赖目录
+3. 禁用 pnpm 自管理并安装依赖
 4. 执行 Prisma Client 生成和数据库迁移
 5. 构建后端和前端
 6. 同步前端 `dist` 到 `/var/www/study-planner`
@@ -64,24 +66,25 @@ rm -rf /home/ubuntu/node_modules \
   /home/ubuntu/backend/package-lock.json \
   /home/ubuntu/frontend/package-lock.json
 
-corepack enable
-corepack prepare pnpm@10.32.1 --activate
-pnpm install --frozen-lockfile --prod=false
+export COREPACK_ENABLE_PROJECT_SPEC=0
+pnpm config set manage-package-manager-versions false --global
+pnpm install --frozen-lockfile --prod=false --reporter=append-only
 
 cd /home/ubuntu/backend
-pnpm exec prisma generate
-pnpm exec prisma migrate deploy
-pnpm build
+COREPACK_ENABLE_PROJECT_SPEC=0 pnpm exec prisma generate
+COREPACK_ENABLE_PROJECT_SPEC=0 pnpm exec prisma migrate deploy
+COREPACK_ENABLE_PROJECT_SPEC=0 pnpm build
 
 cd /home/ubuntu/frontend
-pnpm build
+COREPACK_ENABLE_PROJECT_SPEC=0 pnpm build
 
 sudo rsync -av --delete /home/ubuntu/frontend/dist/ /var/www/study-planner/
 sudo chown -R www-data:www-data /var/www/study-planner
 sudo nginx -t
 sudo systemctl reload nginx
 
-pm2 restart study-planner-api --update-env
+pm2 restart study-planner-api --update-env || pm2 start /home/ubuntu/ecosystem.config.js --only study-planner-api
+pm2 save
 
 curl -sS http://localhost:3001/api/health
 curl -sS http://localhost:3001/api/version
@@ -96,6 +99,7 @@ npm audit fix --force
 npx prisma migrate reset
 pnpm prisma:reset
 sudo rm -rf /home/ubuntu
+pnpm add -g pnpm
 ```
 
 ## 图书清单导入建议
