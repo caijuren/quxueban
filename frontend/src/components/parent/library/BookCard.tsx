@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Check, Trash2 } from 'lucide-react';
+import { BookOpen, Check, Pencil, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Book } from '@/types/library';
@@ -10,6 +10,7 @@ interface BookCardProps {
   book: Book;
   index: number;
   onDelete?: (book: Book) => void;
+  onEdit?: (book: Book) => void;
   selected?: boolean;
   onSelectChange?: (book: Book, selected: boolean) => void;
 }
@@ -22,6 +23,7 @@ export function BookCard({
   book,
   index,
   onDelete,
+  onEdit,
   selected = false,
   onSelectChange,
 }: BookCardProps) {
@@ -127,6 +129,22 @@ export function BookCard({
             </div>
           </div>
         </button>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit(book);
+            }}
+            className={cn(
+              'absolute z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-white/80 bg-white/90 text-slate-400 shadow-sm transition-colors hover:bg-indigo-50 hover:text-indigo-600 lg:opacity-0 lg:group-hover/card:opacity-100',
+              onDelete ? 'right-14 top-5' : 'right-5 top-5'
+            )}
+            aria-label="编辑图书"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        ) : null}
         {onDelete ? (
           <button
             type="button"

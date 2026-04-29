@@ -52,7 +52,7 @@ import type { ReactNode } from 'react';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Import components
-import { BookCard, BookFilter, EmptyState } from '@/components/parent/library';
+import { BatchActionBar, BookCard, BookFilter, EmptyState } from '@/components/parent/library';
 import type { Book, BookList, ReadStatus } from '@/types/library';
 import { bookTypes } from '@/types/library';
 
@@ -227,6 +227,11 @@ async function autoFillBookMetadata(limit = 100): Promise<{
 }> {
   const { data } = await apiClient.post('/library/data-quality/autofill-metadata', { limit });
   return data.data || { processed: 0, isbnUpdated: 0, coverUpdated: 0, pageUpdated: 0, skipped: 0, remainingMissingIsbn: 0 };
+}
+
+async function batchFinishBooks({ childId, bookIds, readStage }: { childId: number; bookIds: number[]; readStage: string }): Promise<{ updated: number }> {
+  const { data } = await apiClient.post('/library/batch/finish', { childId, bookIds, readStage });
+  return data.data || { updated: 0 };
 }
 
 async function fetchBookLists(childId: number): Promise<BookList[]> {
@@ -484,6 +489,8 @@ export default function LibraryPage() {
   const [exporting, setExporting] = useState(false);
   const [bulkPageCount, setBulkPageCount] = useState('');
   const [bulkType, setBulkType] = useState<BookFormData['type']>('children');
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<number>>(new Set());
+  const [batchReadStage, setBatchReadStage] = useState('');
 
   // Add form state
   const [addMode, setAddMode] = useState<'manual' | 'isbn' | 'search'>('manual');
@@ -653,6 +660,10 @@ export default function LibraryPage() {
   const pageStartIndex = (safeCurrentPage - 1) * pageSize;
   const paginatedBooks = filteredBooks.slice(pageStartIndex, pageStartIndex + pageSize);
   const pageEndIndex = Math.min(pageStartIndex + pageSize, filteredBooks.length);
+  const selectedFilteredBooks = useMemo(
+    () => filteredBooks.filter((book) => selectedBookIds.has(book.id)),
+    [filteredBooks, selectedBookIds]
+  );
   const currentReadingBooks = useMemo(
     () => books.filter(isReadingBook),
     [books]
@@ -778,6 +789,19 @@ export default function LibraryPage() {
       setBookToDelete(null);
     },
     onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const batchFinishMutation = useMutation({
+    mutationFn: batchFinishBooks,
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      toast.success(`已标记 ${result.updated} 本为已读完`);
+      setSelectedBookIds(new Set());
+    },
+    onError: (error) => toast.error(`批量标记失败：${getErrorMessage(error)}`),
   });
 
   const bulkQualityMutation = useMutation({
@@ -1024,6 +1048,96 @@ export default function LibraryPage() {
     if (bookToDelete) {
       deleteMutation.mutate(bookToDelete.id);
     }
+  };
+
+  const handleSelectBook = (book: Book, selected: boolean) => {
+    setSelectedBookIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(book.id);
+      else next.delete(book.id);
+      return next;
+    });
+  };
+
+  const handleSelectAllFilteredBooks = () => {
+    setSelectedBookIds((current) => {
+      const visibleIds = filteredBooks.map((book) => book.id);
+      const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => current.has(id));
+      if (isAllSelected) {
+        const next = new Set(current);
+        visibleIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      return new Set([...current, ...visibleIds]);
+    });
+  };
+
+  const handleBatchFinish = () => {
+    if (!selectedChildId) {
+      toast.error('请先选择孩子');
+      return;
+    }
+    const bookIds = selectedFilteredBooks.map((book) => book.id);
+    if (bookIds.length === 0) {
+      toast.info('请先选择要标记的图书');
+      return;
+    }
+    batchFinishMutation.mutate({ childId: selectedChildId, bookIds, readStage: batchReadStage });
+  };
+
+  const handleBatchDelete = async () => {
+    const bookIds = selectedFilteredBooks.map((book) => book.id);
+    if (bookIds.length === 0) {
+      toast.info('请先选择要删除的图书');
+      return;
+    }
+    if (!window.confirm(`确定删除选中的 ${bookIds.length} 本书吗？此操作不可恢复。`)) return;
+
+    try {
+      await Promise.all(bookIds.map((id) => deleteBook(id)));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      toast.success(`已删除 ${bookIds.length} 本书`);
+      setSelectedBookIds(new Set());
+    } catch (error) {
+      toast.error(`批量删除失败：${getErrorMessage(error)}`);
+    }
+  };
+
+  const handleBatchTypeChange = async (type: string) => {
+    const normalizedType = normalizeBookType(type);
+    const bookIds = selectedFilteredBooks.map((book) => book.id);
+    if (bookIds.length === 0) {
+      toast.info('请先选择要修改分类的图书');
+      return;
+    }
+    try {
+      await Promise.all(bookIds.map((id) => updateBook(id, { type: normalizedType })));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['library'] }),
+        queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] }),
+      ]);
+      toast.success(`已修改 ${bookIds.length} 本书分类`);
+    } catch (error) {
+      toast.error(`批量分类失败：${getErrorMessage(error)}`);
+    }
+  };
+
+  const handleAddSelectedToList = (listId: string) => {
+    const bookIds = selectedFilteredBooks.map((book) => book.id);
+    if (bookIds.length === 0) {
+      toast.info('请先选择要加入书单的图书');
+      return;
+    }
+    const nextLists = bookLists.map((list) => (
+      list.id === listId
+        ? { ...list, bookIds: Array.from(new Set([...list.bookIds, ...bookIds])) }
+        : list
+    ));
+    persistBookLists(nextLists);
+    toast.success(`已加入 ${bookIds.length} 本到书单`);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1299,26 +1413,6 @@ export default function LibraryPage() {
             title="图书馆"
             description={`${selectedChild?.name || '当前孩子'}的书库、阅读状态和图书导入管理`}
           />
-        }
-        right={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
-              disabled={importing || previewingImport}
-              className="h-11 rounded-xl bg-white"
-            >
-              {importing || previewingImport ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Upload className="mr-1.5 size-4" />}
-              {previewingImport ? '预检中' : '导入'}
-            </Button>
-            <Button
-              onClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')}
-              className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
-            >
-              <Plus className="mr-1.5 size-4" />
-              添加图书
-            </Button>
-          </>
         }
       />
       <section className="grid gap-4 xl:grid-cols-[1fr_280px]">
@@ -1785,6 +1879,22 @@ export default function LibraryPage() {
         />
       ) : (
         <>
+          <BatchActionBar
+            selectedCount={selectedFilteredBooks.length}
+            totalCount={filteredBooks.length}
+            onSelectAll={handleSelectAllFilteredBooks}
+            onClearSelection={() => setSelectedBookIds(new Set())}
+            onBatchFinish={handleBatchFinish}
+            onBatchDelete={handleBatchDelete}
+            onBatchTypeChange={handleBatchTypeChange}
+            onAddToList={handleAddSelectedToList}
+            bookLists={bookLists}
+            onCreateList={() => setShowBookListDialog(true)}
+            batchReadStage={batchReadStage}
+            onBatchReadStageChange={setBatchReadStage}
+            isProcessing={batchFinishMutation.isPending}
+          />
+
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
             {paginatedBooks.map((book, index) => (
               <BookCard
@@ -1792,6 +1902,9 @@ export default function LibraryPage() {
                 book={book}
                 index={index}
                 onDelete={handleDelete}
+                onEdit={(targetBook) => handleEdit(targetBook)}
+                selected={selectedBookIds.has(book.id)}
+                onSelectChange={handleSelectBook}
               />
             ))}
           </div>
