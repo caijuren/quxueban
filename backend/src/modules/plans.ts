@@ -691,6 +691,41 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
     throw new AppError(403, 'Unauthorized')
   }
 
+  const weekStartDate = new Date(weekStart)
+  weekStartDate.setHours(0, 0, 0, 0)
+  const weekEndDate = new Date(weekStartDate)
+  weekEndDate.setDate(weekStartDate.getDate() + 6)
+  weekEndDate.setHours(23, 59, 59, 999)
+  const childIds = children.map(child => child.id)
+  const weekCheckins = childIds.length > 0
+    ? await prisma.dailyCheckin.findMany({
+        where: {
+          familyId,
+          childId: { in: childIds },
+          checkDate: {
+            gte: weekStartDate,
+            lte: weekEndDate,
+          },
+        },
+        select: {
+          childId: true,
+          taskId: true,
+          status: true,
+          checkDate: true,
+          completedValue: true,
+          focusMinutes: true,
+        },
+      })
+    : []
+  const checkinsByChildTaskDay = new Map<string, typeof weekCheckins[number]>()
+  for (const checkin of weekCheckins) {
+    const checkDate = new Date(checkin.checkDate)
+    checkDate.setHours(0, 0, 0, 0)
+    const dayIndex = Math.round((checkDate.getTime() - weekStartDate.getTime()) / (24 * 60 * 60 * 1000))
+    if (dayIndex < 0 || dayIndex > 6) continue
+    checkinsByChildTaskDay.set(`${checkin.childId}:${checkin.taskId}:${dayIndex}`, checkin)
+  }
+
   // Group by child and format for frontend
   const plansByChild = children.map(child => {
     const childPlans = weeklyPlans.filter(p => p.child_id === child.id)
@@ -744,11 +779,20 @@ plansRouter.get('/week/:weekStart', async (req: AuthRequest, res: Response) => {
           scheduleRule,
           target: p.target,
           progress: p.progress,
+          dayStatuses: Array.from({ length: 7 }, (_, dayIndex) => {
+            const checkin = checkinsByChildTaskDay.get(`${child.id}:${p.task_id}:${dayIndex}`)
+            return {
+              day: dayIndex,
+              status: checkin?.status || null,
+              completedValue: checkin?.completedValue || 0,
+              focusMinutes: checkin?.focusMinutes || 0,
+            }
+          }),
         }
       }),
       dailyProgress: Array.from({ length: 7 }, (_, i) => ({
         day: i,
-        completed: 0,
+        completed: weekCheckins.filter((checkin) => checkin.childId === child.id && ['completed', 'advance'].includes(checkin.status) && Math.round((new Date(checkin.checkDate).setHours(0, 0, 0, 0) - weekStartDate.getTime()) / (24 * 60 * 60 * 1000)) === i).length,
         total: childPlans.length,
       })),
     }

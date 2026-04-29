@@ -320,12 +320,22 @@ function DataQualityPanel({
   onFilterChange,
   onOpenTasks,
   onFixTaskAbility,
+  onMergeDuplicates,
+  onAutoCompleteIsbn,
+  isFixingTaskAbility,
+  isMergingDuplicates,
+  isAutoCompletingIsbn,
 }: {
   summary?: DataQualitySummary;
   activeFilter: QualityFilter;
   onFilterChange: (filter: QualityFilter) => void;
   onOpenTasks: () => void;
   onFixTaskAbility: () => void;
+  onMergeDuplicates: () => void;
+  onAutoCompleteIsbn: () => void;
+  isFixingTaskAbility: boolean;
+  isMergingDuplicates: boolean;
+  isAutoCompletingIsbn: boolean;
 }) {
   if (!summary) return null;
 
@@ -336,11 +346,15 @@ function DataQualityPanel({
     label: string;
     value: number;
     impact: string;
+    priority: string;
+    action: string;
+    onAction: () => void;
+    isPending?: boolean;
   }> = [
-    { key: 'missingIsbn', label: '缺 ISBN', value: summary.books.missingIsbn, impact: '影响重复识别和书籍补全' },
-    { key: 'missingPageCount', label: '缺页数', value: summary.books.missingPageCount, impact: '影响阅读量统计和后续推荐' },
-    { key: 'missingType', label: '缺分类', value: summary.books.missingType, impact: '影响类型分布和阅读偏好判断' },
-    { key: 'duplicateTitle', label: '同名疑似重复', value: summary.books.duplicateTitle, impact: '影响书库统计准确性' },
+    { key: 'missingPageCount', label: '缺页数', value: summary.books.missingPageCount, impact: '影响阅读量统计和后续推荐', priority: '优先级 1', action: '查看并批量补页数', onAction: () => onFilterChange('missingPageCount') },
+    { key: 'duplicateTitle', label: '同名疑似重复', value: summary.books.duplicateTitle, impact: '影响书库统计准确性', priority: '优先级 3', action: '合并重复书', onAction: onMergeDuplicates, isPending: isMergingDuplicates },
+    { key: 'missingType', label: '缺分类', value: summary.books.missingType, impact: '影响类型分布和阅读偏好判断', priority: '优先级 4', action: '查看并批量分类', onAction: () => onFilterChange('missingType') },
+    { key: 'missingIsbn', label: '缺 ISBN', value: summary.books.missingIsbn, impact: '影响重复识别和书籍补全', priority: '优先级 5', action: '自动补 ISBN/封面', onAction: onAutoCompleteIsbn, isPending: isAutoCompletingIsbn },
   ];
   const visibleQualityItems = qualityItems.filter((item) => item.value > 0 || activeFilter === item.key);
 
@@ -387,42 +401,53 @@ function DataQualityPanel({
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[560px]">
+        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[620px]">
           {visibleQualityItems.map((item) => (
-            <button
+            <div
               key={item.key}
-              type="button"
-              onClick={() => onFilterChange(activeFilter === item.key ? 'all' : item.key)}
               className={cn(
                 'rounded-xl border p-3 text-left transition-all',
                 activeFilter === item.key ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:bg-white'
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-slate-900">{item.label}</span>
+                <div>
+                  <span className="text-sm font-semibold text-slate-900">{item.label}</span>
+                  <span className="ml-2 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{item.priority}</span>
+                </div>
                 <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', item.value > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
                   {item.value}
                 </span>
               </div>
               <p className="mt-1 text-xs leading-5 text-slate-500">{item.impact}</p>
-            </button>
+              <div className="mt-3 flex gap-2">
+                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => onFilterChange(activeFilter === item.key ? 'all' : item.key)}>
+                  查看问题
+                </Button>
+                <Button size="sm" className="h-8 rounded-lg" disabled={item.value === 0 || item.isPending} onClick={item.onAction}>
+                  {item.isPending ? '处理中...' : item.action}
+                </Button>
+              </div>
+            </div>
           ))}
-          <button
-            type="button"
-            onClick={() => {
-              if (summary.tasks.missingAbilityPoint > 0) onFixTaskAbility();
-              else onOpenTasks();
-            }}
-            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition-all hover:bg-white sm:col-span-2"
-          >
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition-all hover:bg-white sm:col-span-2">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-slate-900">任务缺能力点</span>
+              <div>
+                <span className="text-sm font-semibold text-slate-900">任务缺能力点</span>
+                <span className="ml-2 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">优先级 2</span>
+              </div>
               <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', summary.tasks.missingAbilityPoint > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
                 {summary.tasks.missingAbilityPoint}
               </span>
             </div>
             <p className="mt-1 text-xs leading-5 text-slate-500">影响 1.8 规则掌握度和任务归因，建议优先补齐。</p>
-          </button>
+            <div className="mt-3 flex gap-2">
+              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={onOpenTasks}>打开任务页</Button>
+              <Button size="sm" className="h-8 rounded-lg" disabled={summary.tasks.missingAbilityPoint === 0 || isFixingTaskAbility} onClick={onFixTaskAbility}>
+                {isFixingTaskAbility ? '处理中...' : '一键补能力点'}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -459,6 +484,7 @@ export default function LibraryPage() {
   const [exporting, setExporting] = useState(false);
   const [bulkPageCount, setBulkPageCount] = useState('');
   const [bulkType, setBulkType] = useState<BookFormData['type']>('children');
+  const [isAutoCompletingIsbn, setIsAutoCompletingIsbn] = useState(false);
 
   // Add form state
   const [addMode, setAddMode] = useState<'manual' | 'isbn' | 'search'>('manual');
@@ -776,32 +802,37 @@ export default function LibraryPage() {
       return;
     }
 
+    setIsAutoCompletingIsbn(true);
     let updated = 0;
-    for (const book of targetBooks.slice(0, 20)) {
-      try {
-        const candidates = await searchBooksByTitle(book.name, {
-          author: book.author,
-          publisher: book.publisher,
-        });
-        const candidate = candidates[0];
-        if (!candidate) continue;
-        const nextData: Partial<BookFormData> = {
-          isbn: candidate.isbn || book.isbn,
-          author: book.author || candidate.author || '',
-          publisher: book.publisher || candidate.publisher || '',
-          coverUrl: book.coverUrl || candidate.coverUrl || '',
-          totalPages: book.totalPages || candidate.totalPages || 0,
-        };
-        await updateBook(book.id, nextData);
-        updated++;
-      } catch {
-        // Continue with remaining books; the toast below reports aggregate result.
+    try {
+      for (const book of targetBooks.slice(0, 20)) {
+        try {
+          const candidates = await searchBooksByTitle(book.name, {
+            author: book.author,
+            publisher: book.publisher,
+          });
+          const candidate = candidates[0];
+          if (!candidate) continue;
+          const nextData: Partial<BookFormData> = {
+            isbn: candidate.isbn || book.isbn,
+            author: book.author || candidate.author || '',
+            publisher: book.publisher || candidate.publisher || '',
+            coverUrl: book.coverUrl || candidate.coverUrl || '',
+            totalPages: book.totalPages || candidate.totalPages || 0,
+          };
+          await updateBook(book.id, nextData);
+          updated++;
+        } catch {
+          // Continue with remaining books; the toast below reports aggregate result.
+        }
       }
-    }
 
-    queryClient.invalidateQueries({ queryKey: ['library'] });
-    queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
-    toast.success(`已尝试自动补全，成功更新 ${updated} 本`);
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryDataQuality'] });
+      toast.success(`已尝试自动补全，成功更新 ${updated} 本`);
+    } finally {
+      setIsAutoCompletingIsbn(false);
+    }
   };
 
   const handleBulkFillPages = () => {
@@ -1329,6 +1360,11 @@ export default function LibraryPage() {
         }}
         onOpenTasks={() => navigate('/parent/tasks')}
         onFixTaskAbility={() => fixTaskAbilityMutation.mutate()}
+        onMergeDuplicates={() => mergeDuplicateMutation.mutate()}
+        onAutoCompleteIsbn={() => void handleAutoCompleteIsbnAndCover()}
+        isFixingTaskAbility={fixTaskAbilityMutation.isPending}
+        isMergingDuplicates={mergeDuplicateMutation.isPending}
+        isAutoCompletingIsbn={isAutoCompletingIsbn}
       />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">

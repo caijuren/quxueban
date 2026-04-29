@@ -30,6 +30,12 @@ interface TaskAllocation {
   scheduleRule: string;
   timeSegment?: string;
   sortOrder?: number;
+  dayStatuses?: Array<{
+    day: number;
+    status: string | null;
+    completedValue?: number;
+    focusMinutes?: number;
+  }>;
 }
 
 interface WeeklyPlan {
@@ -76,6 +82,40 @@ function getTaskStatusOrder(task: TaskAllocation) {
   if (task.progress >= task.target) return 0;
   if (task.progress > 0) return 1;
   return 2;
+}
+
+function getPlanCellStatus(task: TaskAllocation, dayIndex: number, date: Date, isAssigned: boolean) {
+  if (!isAssigned) return 'unassigned';
+  const checkinStatus = task.dayStatuses?.find((item) => item.day === dayIndex)?.status || null;
+  if (checkinStatus === 'completed' || checkinStatus === 'advance') return 'completed';
+  if (checkinStatus === 'partial' || checkinStatus === 'makeup') return 'partial';
+  if (checkinStatus === 'postponed') return 'postponed';
+  if (checkinStatus === 'not_completed') return 'not_completed';
+  if (checkinStatus === 'not_involved') return 'not_involved';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cellDate = new Date(date);
+  cellDate.setHours(0, 0, 0, 0);
+  return cellDate < today ? 'not_completed' : 'pending';
+}
+
+function getPlanCellClass(status: string, color: ReturnType<typeof getCategoryStyle>) {
+  if (status === 'completed') return cn(color.bg, 'text-white ring-2 ring-slate-100');
+  if (status === 'partial') return 'border-2 border-orange-300 bg-orange-50 text-orange-500';
+  if (status === 'postponed') return 'border-2 border-slate-200 bg-slate-50 text-slate-400';
+  if (status === 'not_completed') return 'bg-rose-50 text-rose-500 ring-1 ring-rose-100';
+  if (status === 'not_involved') return 'border-2 border-slate-200 bg-slate-100 text-slate-300';
+  return cn('border-[3px] bg-white', color.border);
+}
+
+function PlanCellIcon({ status }: { status: string }) {
+  if (status === 'completed') return <Check className="h-3.5 w-3.5" />;
+  if (status === 'partial') return <Play className="h-3.5 w-3.5" />;
+  if (status === 'postponed') return <Clock className="h-3.5 w-3.5" />;
+  if (status === 'not_completed') return <X className="h-3.5 w-3.5" />;
+  if (status === 'not_involved') return <span className="text-xs font-bold leading-none">−</span>;
+  return null;
 }
 
 const getCategoryStyle = (category: string) => {
@@ -816,8 +856,6 @@ export default function PlansPage() {
                           const stageSummary = taskItem.target > 0
                             ? `本周目标 ${taskItem.target} 次`
                             : `本周安排 ${taskItem.assignedDays?.length || 0} 天`;
-                          const isKeyTask = taskItem.difficulty === 'challenge' || taskItem.category === 'advanced';
-
                           return (
                             <motion.div 
                               key={taskItem.taskId} 
@@ -847,9 +885,8 @@ export default function PlansPage() {
                               </div>
                               {weekDays.map((_, i) => {
                                 const isAssigned = isTaskAssignedOnDay(i);
-                                const dayProgress = plan.dailyProgress.find(d => d.day === i);
-                                const isCompleted = isCurrentWeek && dayProgress && isAssigned && dayProgress.completed > 0;
                                 const isHoliday = format(weekDates[i], 'MM-dd') === '05-01';
+                                const cellStatus = getPlanCellStatus(taskItem, i, weekDates[i], isAssigned);
                                 return (
                                   <div
                                     key={i}
@@ -865,18 +902,13 @@ export default function PlansPage() {
                                           onClick={() => setSelectedTask(taskItem)} 
                                           className={cn(
                                             'flex h-6 w-6 cursor-pointer items-center justify-center rounded-md shadow-sm transition-all',
-                                            isCompleted
-                                              ? cn(color.bg, 'text-white ring-2 ring-slate-100')
-                                              : cn('border-[3px] bg-white', color.border)
+                                            getPlanCellClass(cellStatus, color)
                                           )}
                                           title={`${taskItem.taskName} - 点击查看详情`}
                                           whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
                                           whileTap={{ scale: 0.95 }}
                                         >
-                                          {isCompleted && <span className="text-xs font-bold leading-none">✓</span>}
-                                          {isKeyTask && (
-                                            <span className="absolute -right-2 -top-2 text-[13px] leading-none text-amber-400 drop-shadow-sm">★</span>
-                                          )}
+                                          <PlanCellIcon status={cellStatus} />
                                         </motion.button>
                                       ) : (
                                         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-300">−</div>
@@ -895,13 +927,9 @@ export default function PlansPage() {
                       {plan.allocations.length > 0 && (
                         <div className="mt-5 flex w-max min-w-full flex-wrap items-center gap-x-8 gap-y-3 border-t border-slate-100 pt-4 text-sm">
                           <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500 text-white"><Check className="h-3.5 w-3.5" /></i> 已完成</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-orange-300 bg-white text-orange-500"><Play className="h-3.5 w-3.5" /></i> 进行中</span>
                           <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="h-6 w-6 rounded-md border-2 border-slate-200 bg-white" /> 未开始</span>
                           <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-slate-200 bg-slate-50 text-slate-400"><Clock className="h-3.5 w-3.5" /></i> 延期</span>
                           <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 text-rose-500 ring-1 ring-rose-100"><X className="h-3.5 w-3.5" /></i> 未完成</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap font-medium text-slate-600">
-                            <i className="text-amber-400">★</i> 重点任务
-                          </span>
                           <span className="whitespace-nowrap text-slate-500">
                             计划 {plan.allocations.length} 项 · 已完成 {plan.allocations.filter((item) => item.progress >= item.target).length} · 剩余 {plan.allocations.filter((item) => item.progress < item.target).length}
                           </span>
