@@ -11,6 +11,7 @@
 - 打卡保存接口已收紧，后续重复提交会更新同日同任务记录，并清理同任务当天旧重复。
 - 图书馆批量操作、封面展示、阅读记录、Logo、阅读状态等已完成一轮修复。
 - 已新增生产发布清单：`docs/PRODUCTION_RELEASE_CHECKLIST.md`。
+- 已新增协作与发布规范：`docs/WORKFLOW_CONVENTIONS.md`。
 - 已新增学习时长诊断脚本：`pnpm run script:check-daily-study-minutes`。
 
 接下来不急着直接进入 AI 大版本。先把系统稳定性、数据口径和发布流程打牢，再分阶段进入 1.8、2.0、3.0。
