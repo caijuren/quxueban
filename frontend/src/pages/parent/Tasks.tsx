@@ -603,15 +603,30 @@ export default function TasksPage() {
     return Math.min(score, 96);
   };
 
+  const getTaskConfigIssues = (task: Task) => {
+    const issues: string[] = [];
+    if (!task.tags?.abilityPoint) issues.push('缺能力点');
+    if (!task.tags?.linkedGoal || task.tags.linkedGoal === '不关联目标') issues.push('未关联目标');
+    if (!task.tags?.subject) issues.push('缺学科');
+    if (!task.scheduleRule && !task.tags?.scheduleRule) issues.push('缺计划规则');
+    if (!task.trackingType || task.trackingType === 'simple') issues.push('普通记录');
+    return issues;
+  };
+
   const totalMinutes = tasks.reduce((sum, task) => sum + (Number(task.timePerUnit) || 0), 0);
   const dailyTasks = tasks.filter(task => (task.scheduleRule || task.tags?.scheduleRule || 'daily') === 'daily');
   const flexibleTasks = tasks.filter(task => (task.scheduleRule || task.tags?.scheduleRule) === 'flexible');
   const trackedTasks = tasks.filter(task => task.trackingType && task.trackingType !== 'simple');
+  const incompleteConfigTasks = tasks.filter(task => getTaskConfigIssues(task).length > 0);
   const taskHealthScore = tasks.length > 0
     ? Math.round(tasks.reduce((sum, task) => sum + getOperationalScore(task), 0) / tasks.length)
     : 0;
   const attentionTasks = [...tasks]
-    .sort((a, b) => getOperationalScore(a) - getOperationalScore(b))
+    .sort((a, b) => {
+      const issueDiff = getTaskConfigIssues(b).length - getTaskConfigIssues(a).length;
+      if (issueDiff !== 0) return issueDiff;
+      return getOperationalScore(a) - getOperationalScore(b);
+    })
     .slice(0, Math.min(3, tasks.length));
   const editingLegacyTaskMissingAbility = editDialogOpen && !!taskToEdit && !normalizeTaskTags(taskToEdit.tags).abilityPoint;
 
@@ -639,8 +654,8 @@ export default function TasksPage() {
     },
     {
       label: '待关注任务',
-      value: attentionTasks.length,
-      helper: '配置完整度较低',
+      value: incompleteConfigTasks.length,
+      helper: '缺少能力、目标或记录配置',
       icon: AlertTriangle,
       tone: 'bg-rose-50 text-rose-600',
     },
@@ -731,6 +746,7 @@ export default function TasksPage() {
   const renderTaskCard = (task: Task) => {
     const visual = getTaskVisual(task);
     const score = getOperationalScore(task);
+    const issues = getTaskConfigIssues(task);
     const Icon = visual.Icon;
     return (
       <motion.div
@@ -789,11 +805,23 @@ export default function TasksPage() {
             <CalendarDays className="size-3" />
             <span className="truncate">{getParentRoleLabel(task)}</span>
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
-            <TrendingUp className="size-3" />
-            配置表现
+          <span className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+            issues.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+          )}>
+            {issues.length > 0 ? <AlertTriangle className="size-3" /> : <TrendingUp className="size-3" />}
+            {issues.length > 0 ? `${issues.length} 项待补` : '配置完整'}
           </span>
         </div>
+        {issues.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {issues.slice(0, 3).map((issue) => (
+              <span key={issue} className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                {issue}
+              </span>
+            ))}
+          </div>
+        )}
       </motion.div>
     );
   };
@@ -911,9 +939,14 @@ export default function TasksPage() {
                   key={task.id}
                   type="button"
                   onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left transition-colors hover:bg-slate-50"
+                  className="flex w-full items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left transition-colors hover:bg-slate-50"
                 >
-                  <span className="min-w-0 truncate text-xs font-medium text-slate-700">{task.name}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-medium text-slate-700">{task.name}</span>
+                    <span className="mt-1 block truncate text-[11px] text-slate-400">
+                      {getTaskConfigIssues(task).slice(0, 2).join(' · ') || '配置完整'}
+                    </span>
+                  </span>
                   <span className="shrink-0 text-xs font-semibold text-amber-600">{getOperationalScore(task)}%</span>
                 </button>
               )) : (

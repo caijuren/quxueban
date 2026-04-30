@@ -60,6 +60,13 @@ const subjectLabel = (s: string | null) => s === 'chinese' ? '语文' : s === 'm
 const subjectColor = (s: string | null) => s === 'chinese' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : s === 'math' ? 'bg-blue-50 text-blue-700 border border-blue-200' : s === 'english' ? 'bg-purple-50 text-purple-700 border border-purple-200' : s === 'sports' ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-gray-50 text-gray-600 border border-gray-200';
 const diffLabel = (d: string | null) => d === 'basic' ? '基础' : d === 'advanced' ? '提升' : d === 'challenge' ? '挑战' : '';
 const ruleLabel = (r: string) => r === 'daily' ? '每日任务' : r === 'school' ? '在校日任务' : r === 'flexible' ? '智能分配' : r === 'weekend' ? '周末任务' : r || '每日任务';
+const toBackendDayIndex = (frontendIndex: number) => frontendIndex === 6 ? 0 : frontendIndex + 1;
+
+function getDayLoadMeta(minutes: number) {
+  if (minutes > 90) return { label: '偏重', className: 'bg-rose-50 text-rose-600 border-rose-100' };
+  if (minutes > 45) return { label: '正常', className: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+  return { label: '轻量', className: 'bg-sky-50 text-sky-600 border-sky-100' };
+}
 
 const categoryOrder: { [key: string]: number } = {
   school: 0,
@@ -639,6 +646,41 @@ export default function PlansPage() {
     // If no plans, show empty plan
     return {id: "empty", childId: "0", childName: "学习计划", allocations: [], dailyProgress: []};
   }, [weeklyPlans, selectedChildId]);
+
+  const weeklySummary = useMemo(() => {
+    const allocations = displayPlan.allocations || [];
+    const dailyLoads = weekDays.map((day, index) => {
+      const backendIndex = toBackendDayIndex(index);
+      const dayTasks = allocations.filter((allocation) => allocation.assignedDays?.includes(backendIndex));
+      const minutes = dayTasks.reduce((sum, task) => sum + (Number(task.timePerUnit) || 0), 0);
+      return {
+        day,
+        date: weekDates[index],
+        taskCount: dayTasks.length,
+        minutes,
+        load: getDayLoadMeta(minutes),
+      };
+    });
+    const totalScheduledCount = dailyLoads.reduce((sum, day) => sum + day.taskCount, 0);
+    const totalMinutes = dailyLoads.reduce((sum, day) => sum + day.minutes, 0);
+    const completedCount = allocations.filter((item) => item.progress >= item.target && item.target > 0).length;
+    const remainingCount = allocations.filter((item) => item.target <= 0 || item.progress < item.target).length;
+    const attentionCount = allocations.filter((item) =>
+      item.dayStatuses?.some((status) => ['postponed', 'not_completed', 'partial'].includes(status.status || ''))
+    ).length;
+    const todayIndex = weekDates.findIndex((date) => isToday(date));
+
+    return {
+      uniqueTaskCount: allocations.length,
+      totalScheduledCount,
+      totalMinutes,
+      completedCount,
+      remainingCount,
+      attentionCount,
+      todayTaskCount: todayIndex >= 0 ? dailyLoads[todayIndex].taskCount : 0,
+      dailyLoads,
+    };
+  }, [displayPlan, weekDates]);
   
   const categories = [
     { value: 'all', label: '全部' },
@@ -759,6 +801,36 @@ export default function PlansPage() {
         ))}
       </FilterBar>
 
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950">本周计划摘要</h2>
+            <p className="mt-1 text-xs text-slate-500">用于快速判断任务量、时长和每日负荷，1.8 再接入阶段适配阈值。</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              ['任务项', `${weeklySummary.uniqueTaskCount} 项`],
+              ['安排次数', `${weeklySummary.totalScheduledCount} 次`],
+              ['预计时长', `${weeklySummary.totalMinutes} 分钟`],
+              ['已完成', `${weeklySummary.completedCount} 项`],
+              ['待推进', `${weeklySummary.remainingCount} 项`],
+              ['今日安排', `${weeklySummary.todayTaskCount} 项`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className="mt-1 font-semibold text-slate-950">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        {weeklySummary.attentionCount > 0 && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>本周有 {weeklySummary.attentionCount} 个任务出现部分完成、推迟或未完成，建议在周末复盘时优先调整。</span>
+          </div>
+        )}
+      </section>
+
       {/* Calendar View */}
       {plansLoading ? (
         <Card className="border border-border shadow-sm rounded-lg">
@@ -787,8 +859,7 @@ export default function PlansPage() {
                           const date = weekDates[i];
                           const isTodayDate = isToday(date);
                           const isHoliday = format(date, 'MM-dd') === '05-01';
-                          const backendIndex = i === 6 ? 0 : i + 1;
-                          const dayTasks = plan.allocations.filter(a => a.assignedDays.includes(backendIndex));
+                          const dayLoad = weeklySummary.dailyLoads[i];
                           return (
                             <div
                               key={day}
@@ -805,8 +876,16 @@ export default function PlansPage() {
                                 {day} {format(date, 'M/d')}
                               </div>
                               <div className={cn('mt-1 text-xs font-semibold', isTodayDate ? 'text-white/80' : 'text-slate-500')}>
-                                {isHoliday ? '劳动节' : `${dayTasks.length}项任务`}
+                                {isHoliday ? '劳动节' : `${dayLoad.taskCount}项 · ${dayLoad.minutes}分钟`}
                               </div>
+                              {!isHoliday && (
+                                <span className={cn(
+                                  'mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                                  isTodayDate ? 'border-white/30 bg-white/15 text-white' : dayLoad.load.className
+                                )}>
+                                  {dayLoad.load.label}
+                                </span>
+                              )}
                             </div>
                           );
                         })}

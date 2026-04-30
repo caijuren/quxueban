@@ -104,6 +104,10 @@ const gradeOptions = ['一年级', '二年级', '三年级', '四年级', '五�
 const readingStageSuggestions = gradeOptions;
 const defaultInterestTags = ['科普百科', '历史文化', '文学阅读', '科学探索', '艺术创作'];
 const pushContentOptions = ['学习日报', '任务提醒', '阅读提醒', '成就提醒'];
+const childEditorFieldClass = 'space-y-2';
+const childEditorLabelClass = 'text-sm font-medium text-slate-700';
+const childEditorControlClass = 'h-11 w-full rounded-xl bg-white';
+const childEditorGridClass = 'grid gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-3';
 
 function getDefaultLocalChildSettings(): LocalChildSettings {
   return {
@@ -1058,17 +1062,65 @@ export default function ChildrenManagement({
                 <section className="h-full overflow-y-auto rounded-xl border border-border/70 bg-white p-3 shadow-sm">
                   <div className="space-y-4">
                   <h3 className="text-base font-semibold text-slate-900">当前学期配置</h3>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="space-y-2"><Label>学年</Label><Input value={semesterConfig.schoolYear} onChange={(e) => setSemesterConfig({ ...semesterConfig, schoolYear: e.target.value })} /></div>
-                    <div className="space-y-2"><Label>学期</Label><Select value={semesterConfig.term} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, term: value as SemesterConfig['term'] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="first">上学期</SelectItem><SelectItem value="second">下学期</SelectItem></SelectContent></Select></div>
-                    <div className="space-y-2"><Label>年级</Label><Select value={semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{gradeOptions.map((grade) => <SelectItem key={grade} value={grade}>{grade}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-2"><Label>开始日期</Label><DatePicker value={semesterConfig.startDate} onChange={(startDate) => setSemesterConfig({ ...semesterConfig, startDate })} className="w-full" align="start" /></div>
-                    <div className="space-y-2"><Label>结束日期</Label><DatePicker value={semesterConfig.endDate} onChange={(endDate) => setSemesterConfig({ ...semesterConfig, endDate })} className="w-full" align="start" /></div>
-                    <div className="space-y-2">
-                      <Label>阅读阶段</Label>
+                  <div className={childEditorGridClass}>
+                    <div className={childEditorFieldClass}>
+                      <Label className={childEditorLabelClass}>学年</Label>
+                      <Input
+                        value={semesterConfig.schoolYear}
+                        onChange={(e) => setSemesterConfig({ ...semesterConfig, schoolYear: e.target.value })}
+                        className={childEditorControlClass}
+                      />
+                    </div>
+                    <div className={childEditorFieldClass}>
+                      <Label className={childEditorLabelClass}>学期</Label>
+                      <Select value={semesterConfig.term} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, term: value as SemesterConfig['term'] })}>
+                        <SelectTrigger className={childEditorControlClass}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="first">上学期</SelectItem>
+                          <SelectItem value="second">下学期</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className={childEditorFieldClass}>
+                      <Label className={childEditorLabelClass}>年级</Label>
+                      <Select value={semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}>
+                        <SelectTrigger className={childEditorControlClass}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {gradeOptions.map((grade) => <SelectItem key={grade} value={grade}>{grade}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className={childEditorFieldClass}>
+                      <Label className={childEditorLabelClass}>开始日期</Label>
+                      <DatePicker
+                        value={semesterConfig.startDate}
+                        onChange={(startDate) => setSemesterConfig({ ...semesterConfig, startDate })}
+                        className={cn(childEditorControlClass, 'justify-start px-3 [&>span]:truncate')}
+                        align="start"
+                      />
+                    </div>
+                    <div className={childEditorFieldClass}>
+                      <Label className={childEditorLabelClass}>结束日期</Label>
+                      <DatePicker
+                        value={semesterConfig.endDate}
+                        onChange={(endDate) => setSemesterConfig({ ...semesterConfig, endDate })}
+                        className={cn(childEditorControlClass, 'justify-start px-3 [&>span]:truncate')}
+                        align="start"
+                      />
+                    </div>
+                    <div className={childEditorFieldClass}>
+                      <Label className={childEditorLabelClass}>阅读阶段</Label>
                       <Select value={semesterConfig.readingStage || semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{readingStageSuggestions.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className={childEditorControlClass}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {readingStageSuggestions.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
@@ -1080,18 +1132,24 @@ export default function ChildrenManagement({
                       </div>
                       <Badge variant="outline" className="border-violet-200 bg-white text-violet-700">已接入后端</Badge>
                     </div>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label>学习阶段</Label>
+                    <div className={childEditorGridClass}>
+                      <div className={childEditorFieldClass}>
+                        <Label className={childEditorLabelClass}>学习阶段</Label>
                         <Select value={semesterConfig.readingStage || semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>{readingStageSuggestions.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}</SelectContent>
+                          <SelectTrigger className={childEditorControlClass}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {readingStageSuggestions.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label>默认能力级别</Label>
+                      <div className={childEditorFieldClass}>
+                        <Label className={childEditorLabelClass}>默认能力级别</Label>
                         <Select value={localSettings.defaultAbilityLevel} onValueChange={(value) => updateLocalSettings({ defaultAbilityLevel: value })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className={childEditorControlClass}>
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             {['L1（一年级）', 'L2（二年级）', 'L3（三年级）', 'L4（四年级）', 'L5（五年级）'].map((level) => (
                               <SelectItem key={level} value={level}>{level}</SelectItem>
@@ -1099,9 +1157,14 @@ export default function ChildrenManagement({
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label>阶段备注</Label>
-                        <Input value={localSettings.defaultLearningGoal} onChange={(e) => updateLocalSettings({ defaultLearningGoal: e.target.value })} placeholder="例如：近期关注阅读理解" />
+                      <div className={childEditorFieldClass}>
+                        <Label className={childEditorLabelClass}>阶段备注</Label>
+                        <Input
+                          value={localSettings.defaultLearningGoal}
+                          onChange={(e) => updateLocalSettings({ defaultLearningGoal: e.target.value })}
+                          placeholder="例如：近期关注阅读理解"
+                          className={childEditorControlClass}
+                        />
                       </div>
                     </div>
                   </div>
