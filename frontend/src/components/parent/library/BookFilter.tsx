@@ -30,6 +30,7 @@ interface BookFilterProps {
   importProgress: number;
   resultCount: number;
   resultLabel?: string;
+  showActions?: boolean;
 }
 
 export function BookFilter({
@@ -50,6 +51,7 @@ export function BookFilter({
   importProgress,
   resultCount,
   resultLabel = '当前结果',
+  showActions = true,
 }: BookFilterProps) {
   const hasActiveFilters =
     selectedType !== 'all' || selectedReadStatus !== 'all' || sortBy !== '' || !!searchInput;
@@ -197,59 +199,63 @@ export function BookFilter({
             <span className="rounded-lg bg-muted px-3 py-2 font-medium text-primary">{resultCount} 本</span>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={onImportClick}
-            disabled={importing}
-            className="relative h-10 rounded-lg border-border hover:bg-muted min-w-20"
-          >
-            <Upload className="w-4 h-4 mr-1.5 text-primary" />
-            <span className="text-sm">导入</span>
-            {importing && (
-              <div className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary/20 rounded-b-lg">
-                <div
-                  className="h-full bg-primary transition-all duration-300 rounded-b-lg"
-                  style={{ width: `${importProgress}%` }}
-                />
-              </div>
-            )}
-          </Button>
+          {showActions && (
+            <>
+              <Button
+                variant="outline"
+                onClick={onImportClick}
+                disabled={importing}
+                className="relative h-10 rounded-lg border-border hover:bg-muted min-w-20"
+              >
+                <Upload className="w-4 h-4 mr-1.5 text-primary" />
+                <span className="text-sm">导入</span>
+                {importing && (
+                  <div className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary/20 rounded-b-lg">
+                    <div
+                      className="h-full bg-primary transition-all duration-300 rounded-b-lg"
+                      style={{ width: `${importProgress}%` }}
+                    />
+                  </div>
+                )}
+              </Button>
 
-          {onTemplateClick && (
-            <Button
-              variant="outline"
-              onClick={onTemplateClick}
-              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-1.5 text-primary" />
-              <span className="text-sm">模板</span>
-            </Button>
-          )}
-
-          {onAddClick && (
-            <Button
-              onClick={onAddClick}
-              className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
-            >
-              <Plus className="size-4 mr-1.5" />
-              <span className="text-sm">添加图书</span>
-            </Button>
-          )}
-
-          {onExportClick && (
-            <Button
-              variant="outline"
-              onClick={onExportClick}
-              disabled={exporting}
-              className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
-            >
-              {exporting ? (
-                <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-primary" />
-              ) : (
-                <Download className="w-4 h-4 mr-1.5 text-primary" />
+              {onTemplateClick && (
+                <Button
+                  variant="outline"
+                  onClick={onTemplateClick}
+                  className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-1.5 text-primary" />
+                  <span className="text-sm">模板</span>
+                </Button>
               )}
-              <span className="text-sm">{exporting ? '导出中' : '导出'}</span>
-            </Button>
+
+              {onAddClick && (
+                <Button
+                  onClick={onAddClick}
+                  className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+                >
+                  <Plus className="size-4 mr-1.5" />
+                  <span className="text-sm">添加图书</span>
+                </Button>
+              )}
+
+              {onExportClick && (
+                <Button
+                  variant="outline"
+                  onClick={onExportClick}
+                  disabled={exporting}
+                  className="h-10 rounded-lg border-border hover:bg-muted min-w-20"
+                >
+                  {exporting ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-primary" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1.5 text-primary" />
+                  )}
+                  <span className="text-sm">{exporting ? '导出中' : '导出'}</span>
+                </Button>
+              )}
+            </>
           )}
 
         </div>

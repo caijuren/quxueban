@@ -9,6 +9,7 @@ import {
   Plus,
   BookOpen,
   Upload,
+  Download,
   X,
   Library as LibraryIcon,
   Loader2,
@@ -1414,6 +1415,39 @@ export default function LibraryPage() {
             description={`${selectedChild?.name || '当前孩子'}的书库、阅读状态和图书导入管理`}
           />
         }
+        right={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => ensureSelectedChild(() => importInputRef.current?.click(), '请先选择孩子，再导入图书')}
+              disabled={importing || previewingImport}
+              className="relative h-10 rounded-lg bg-white"
+            >
+              {importing || previewingImport ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Upload className="mr-1.5 size-4" />}
+              {previewingImport ? '预检中' : '导入'}
+              {(importing || previewingImport) && (
+                <div className="absolute -bottom-0.5 left-0 right-0 h-0.5 rounded-b-lg bg-primary/20">
+                  <div className="h-full rounded-b-lg bg-primary transition-all duration-300" style={{ width: `${importProgress}%` }} />
+                </div>
+              )}
+            </Button>
+            <Button variant="outline" onClick={handleDownloadImportTemplate} className="h-10 rounded-lg bg-white">
+              <FileSpreadsheet className="mr-1.5 size-4" />
+              模板
+            </Button>
+            <Button
+              onClick={() => ensureSelectedChild(() => setShowAddForm(true), '请先选择孩子，再添加图书')}
+              className="h-10 rounded-lg bg-primary text-white hover:bg-primary/90"
+            >
+              <Plus className="mr-1.5 size-4" />
+              添加图书
+            </Button>
+            <Button variant="outline" onClick={handleExportBooks} disabled={exporting} className="h-10 rounded-lg bg-white">
+              {exporting ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Download className="mr-1.5 size-4" />}
+              {exporting ? '导出中' : '导出'}
+            </Button>
+          </>
+        }
       />
       <section className="grid gap-4 xl:grid-cols-[1fr_280px]">
         <div className="grid gap-5 rounded-2xl border border-border bg-white p-5 shadow-sm md:grid-cols-4">
@@ -1479,61 +1513,6 @@ export default function LibraryPage() {
           </div>
         </div>
       </section>
-
-      <DataQualityPanel
-        summary={dataQuality}
-        activeFilter={qualityFilter}
-        onFilterChange={handleQualityFilterChange}
-        onOpenTasks={() => navigate('/parent/tasks')}
-        onFixTaskAbility={() => fixTaskAbilityMutation.mutate()}
-        onFillMissingPages={() => fillMissingPagesMutation.mutate()}
-        onMergeDuplicates={() => mergeDuplicateMutation.mutate()}
-        onAutoCompleteIsbn={() => void handleAutoCompleteIsbnAndCover()}
-        isFixingTaskAbility={fixTaskAbilityMutation.isPending}
-        isFillingMissingPages={fillMissingPagesMutation.isPending}
-        isMergingDuplicates={mergeDuplicateMutation.isPending}
-        isAutoCompletingIsbn={autoFillMetadataMutation.isPending}
-      />
-
-      {qualityFilter !== 'all' && (
-        <div ref={qualityActionRef} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm">
-          <span className="font-medium text-indigo-800">
-            正在查看：{qualityFilterLabelMap[qualityFilter]}，共 {filteredBooks.length} 本
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            {qualityFilter === 'missingPageCount' ? (
-              <>
-                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => fillMissingPagesMutation.mutate()} disabled={fillMissingPagesMutation.isPending}>
-                  {fillMissingPagesMutation.isPending ? '处理中...' : '自动补可推断页数'}
-                </Button>
-                <Input value={bulkPageCount} onChange={(event) => setBulkPageCount(event.target.value)} inputMode="numeric" placeholder="批量页数" className="h-8 w-24 bg-white" />
-                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkFillPages} disabled={bulkQualityMutation.isPending}>批量补页数</Button>
-              </>
-            ) : null}
-            {qualityFilter === 'missingType' ? (
-              <>
-                <select value={bulkType} onChange={(event) => setBulkType(event.target.value as BookFormData['type'])} className="h-8 rounded-lg border border-input bg-white px-2 text-sm">
-                  {bookTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                </select>
-                <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={handleBulkSetType} disabled={bulkQualityMutation.isPending}>批量分类</Button>
-              </>
-            ) : null}
-            {qualityFilter === 'duplicateTitle' ? (
-              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => mergeDuplicateMutation.mutate()} disabled={mergeDuplicateMutation.isPending}>
-                合并重复书
-              </Button>
-            ) : null}
-            {qualityFilter === 'missingIsbn' ? (
-              <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => void handleAutoCompleteIsbnAndCover()} disabled={autoFillMetadataMutation.isPending}>
-                {autoFillMetadataMutation.isPending ? '处理中...' : '自动补 ISBN/封面'}
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" className="h-8 rounded-lg bg-white" onClick={() => handleQualityFilterChange('all')}>
-              退出筛选
-            </Button>
-          </div>
-        </div>
-      )}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">
         <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
@@ -1632,6 +1611,7 @@ export default function LibraryPage() {
         importProgress={importProgress}
         resultCount={filteredBooks.length}
         resultLabel={resultCountLabel}
+        showActions={false}
       />
 
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
