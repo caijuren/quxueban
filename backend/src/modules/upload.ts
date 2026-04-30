@@ -62,16 +62,21 @@ const evidenceUpload = multer({
     fileSize: 10 * 1024 * 1024 // 10MB limit for evidence
   },
   fileFilter: (_req, file, cb) => {
-    // Allow images, audio, and video files
+    // Allow common evidence formats used for homework proof.
     const allowedTypes = [
       'image/',
       'audio/',
       'video/',
-      'application/pdf'
+      'application/pdf',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     ]
     const isAllowed = allowedTypes.some(type => file.mimetype.startsWith(type))
     if (!isAllowed) {
-      return cb(new AppError(400, 'Only image, audio, video, and PDF files are allowed'))
+      return cb(new AppError(400, '仅支持图片、音频、视频、PDF、Excel 和 PPT 文件'))
     }
     cb(null, true)
   }

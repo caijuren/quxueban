@@ -2,6 +2,10 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+function normalizeBookName(value: string): string {
+  return value.replace(/[《》【】「」""'']/g, '').trim()
+}
+
 function parseRequiredNumber(name: string): number {
   const value = process.env[name]
   const parsed = Number(value)
@@ -15,12 +19,17 @@ async function main() {
   const familyId = parseRequiredNumber('FAMILY_ID')
   const childId = parseRequiredNumber('CHILD_ID')
   const bookName = process.env.BOOK_NAME || '封神演义'
+  const normalizedBookName = normalizeBookName(bookName)
 
   const book = await prisma.book.findFirst({
     where: {
       familyId,
       status: 'active',
-      name: bookName,
+      OR: [
+        { name: bookName },
+        { name: `《${normalizedBookName}》` },
+        { name: { contains: normalizedBookName } },
+      ],
     },
     select: {
       id: true,
@@ -123,4 +132,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect()
   })
-

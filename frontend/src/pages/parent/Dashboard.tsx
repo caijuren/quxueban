@@ -1500,7 +1500,7 @@ export default function ParentDashboard() {
                       <input
                         type="file"
                         id="evidence-upload"
-                        accept="image/*,audio/*,video/*,.pdf"
+                        accept="image/*,audio/*,video/*,.pdf,.xls,.xlsx,.csv,.ppt,.pptx"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
@@ -1557,7 +1557,7 @@ export default function ParentDashboard() {
                   )}
 
                   <p className="text-xs text-gray-500">
-                    支持图片、音频、视频和 PDF，最大 10MB
+                    支持图片、音频、视频、PDF、Excel 和 PPT，最大 10MB
                   </p>
                 </div>
               )}

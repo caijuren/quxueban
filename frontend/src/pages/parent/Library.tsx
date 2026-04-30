@@ -380,7 +380,7 @@ function DataQualityPanel({
   }> = [
     { key: 'missingPageCount', label: '缺页数', value: summary.books.missingPageCount, impact: '影响阅读量统计和后续推荐', priority: '优先级 1', action: '自动补可推断页数', onAction: onFillMissingPages, isPending: isFillingMissingPages },
     { key: 'duplicateTitle', label: '同名疑似重复', value: summary.books.duplicateTitle, impact: '影响书库统计准确性', priority: '优先级 3', action: '合并重复书', onAction: onMergeDuplicates, isPending: isMergingDuplicates },
-    { key: 'missingType', label: '缺分类', value: summary.books.missingType, impact: '影响类型分布和阅读偏好判断', priority: '优先级 4', action: '查看并批量分类', onAction: () => onFilterChange('missingType') },
+    { key: 'missingType', label: '缺分类', value: summary.books.missingType, impact: '影响类型分布和阅读偏好判断', priority: '优先级 4', action: '查看缺分类', onAction: () => onFilterChange('missingType') },
     { key: 'missingIsbn', label: '缺 ISBN', value: summary.books.missingIsbn, impact: '影响重复识别和书籍补全', priority: '优先级 5', action: '自动补 ISBN/封面', onAction: onAutoCompleteIsbn, isPending: isAutoCompletingIsbn },
   ];
   const visibleQualityItems = qualityItems.filter((item) => item.value > 0 || activeFilter === item.key);

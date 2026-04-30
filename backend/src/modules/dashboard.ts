@@ -273,7 +273,7 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       t.tags
     FROM daily_checkins dc
     LEFT JOIN weekly_plans wp ON wp.id = dc.plan_id
-    LEFT JOIN tasks t ON t.id = wp.task_id
+    LEFT JOIN tasks t ON t.id = COALESCE(wp.task_id, dc.task_id)
     WHERE dc.family_id = $1
       ${childId ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId ? 3 : 2}
