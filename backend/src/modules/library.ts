@@ -1061,10 +1061,6 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
   })
 
   transformedBooks.sort((a, b) => {
-    const aFinished = a.readState?.status === 'finished' ? 1 : 0
-    const bFinished = b.readState?.status === 'finished' ? 1 : 0
-    if (aFinished !== bFinished) return aFinished - bFinished
-
     const aTime = new Date(a.lastReadDate || a.updatedAt || a.createdAt || 0).getTime()
     const bTime = new Date(b.lastReadDate || b.updatedAt || b.createdAt || 0).getTime()
     return bTime - aTime

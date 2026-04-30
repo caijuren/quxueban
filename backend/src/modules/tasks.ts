@@ -3,6 +3,7 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import { env } from '../config/env'
+import { isChinaPublicHoliday } from '../utils/china-holidays'
 
 export const tasksRouter: Router = Router()
 
@@ -181,7 +182,26 @@ function ensureAbilityPoint(tags: unknown) {
   }
 }
 
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
+function getDateForDayIndex(weekStartDate: Date, dayIndex: number): Date {
+  const date = new Date(weekStartDate)
+  const offset = dayIndex === 0 ? 6 : dayIndex - 1
+  date.setDate(weekStartDate.getDate() + offset)
+  return date
+}
+
+function removePublicHolidays(weekStartDate: Date, allowedDays: number[]): number[] {
+  return allowedDays.filter((dayIndex) => {
+    const date = getDateForDayIndex(weekStartDate, dayIndex)
+    return !isChinaPublicHoliday(formatLocalDate(date))
+  })
+}
 
 tasksRouter.post('/', async (req: AuthRequest, res: Response) => {
   const { name, category, type, timePerUnit, weeklyRule, tags, appliesTo, childId, weeklyFrequency, trackingType, trackingUnit, targetValue } = req.body
@@ -469,7 +489,7 @@ tasksRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
  */
 tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   try {
-  const { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules } = req.body
+  const { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules, skipHolidays = true } = req.body
   const { familyId } = req.user!
 
   console.log('[PUBLISH] Request:', { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules })
@@ -567,7 +587,7 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
         }
 
         // 直接分配到所有允许的日期（简化：不考虑时间限制）
-        const daysAllocated = allowedDays
+        const daysAllocated = skipHolidays ? removePublicHolidays(weekStartDate, allowedDays) : allowedDays
 
         // 创建周计划，即使没有分配到任何天数也创建
         const target = daysAllocated.length

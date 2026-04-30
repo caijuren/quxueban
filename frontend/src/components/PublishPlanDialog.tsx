@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
+import { isChinaPublicHoliday } from '@/lib/china-holidays';
 import { toast } from 'sonner';
 
 interface Task {
@@ -227,6 +228,10 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
         else if (rule === 'flexible') allowedDays = [0, 1, 2, 3, 4];
         else if (rule === 'weekend') allowedDays = [5, 6];
         
+        if (skipHolidays && isChinaPublicHoliday(dateStr)) {
+          return;
+        }
+
         if (allowedDays.includes(i)) {
           dayTasks.push(task.name);
         }
@@ -240,7 +245,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
       });
     }
     return schedule;
-  }, [selectedTasks, taskRules, tasks, shuffleSeed, getSelectedWeekStart]);
+  }, [selectedTasks, taskRules, tasks, shuffleSeed, getSelectedWeekStart, skipHolidays]);
 
   const stats = useMemo(() => {
     const totalTasks = selectedTasks.length;

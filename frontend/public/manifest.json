@@ -1,28 +1,28 @@
 {
   "name": "趣学伴",
   "short_name": "趣学伴",
-  "description": "趣学伴 - 让学习更有趣",
+  "description": "趣学伴——家庭学习伙伴",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6366f1",
   "icons": [
     {
-      "src": "/genie.svg",
+      "src": "/logo.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/genie.svg",
+      "src": "/logo.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/genie.svg",
+      "src": "/logo.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -36,7 +36,7 @@
       "name": "首页",
       "short_name": "首页",
       "url": "/",
-      "icons": [{ "src": "/genie.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/logo.png", "sizes": "192x192" }]
     }
   ]
 }

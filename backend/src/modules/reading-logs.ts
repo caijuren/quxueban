@@ -9,6 +9,16 @@ export const readingRouter: Router = Router()
 // All routes require authentication
 readingRouter.use(authMiddleware)
 
+function optionalString(value: unknown) {
+  return typeof value === 'string' ? value : undefined
+}
+
+function optionalNumber(value: unknown) {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 /**
  * GET /books/:bookId/logs - Get all reading logs for a book
  */
@@ -239,20 +249,26 @@ readingRouter.put('/logs/:id', requireRole('parent'), async (req: AuthRequest, r
     throw new AppError(404, '阅读记录不存在')
   }
 
+  const updateData: any = {
+    readDate: readDate ? new Date(readDate) : undefined,
+    effect: optionalString(effect),
+    performance: optionalString(performance),
+    note: optionalString(note),
+    readStage: optionalString(readStage),
+    pages: optionalNumber(pages),
+    minutes: optionalNumber(minutes),
+    startPage: optionalNumber(startPage),
+    endPage: optionalNumber(endPage),
+    evidenceUrl: optionalString(evidenceUrl),
+  }
+
+  Object.keys(updateData).forEach((key) => {
+    if (updateData[key] === undefined) delete updateData[key]
+  })
+
   const updatedLog = await prisma.readingLog.update({
     where: { id },
-    data: {
-      readDate: readDate ? new Date(readDate) : undefined,
-      effect,
-      performance,
-      note,
-      readStage,
-      pages,
-      minutes,
-      startPage,
-      endPage,
-      evidenceUrl,
-    },
+    data: updateData,
     include: {
       child: { select: { id: true, name: true, avatar: true } }
     }

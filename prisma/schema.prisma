@@ -244,7 +244,7 @@ model ReadingLog {
   endPage      Int      @default(0) @map("end_page")
   readDate     DateTime @map("read_date")
   effect       String   @default("") @db.VarChar(50)
-  performance  String   @default("") @db.VarChar(200)
+  performance  String   @default("") @db.Text
   note         String   @default("") @db.VarChar(500)
   evidenceUrl  String   @default("") @map("evidence_url") @db.Text
   readStage    String   @default("") @map("read_stage") @db.VarChar(50)

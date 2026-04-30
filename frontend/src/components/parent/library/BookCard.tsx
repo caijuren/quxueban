@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Check, Pencil, Trash2 } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Book } from '@/types/library';
@@ -11,8 +11,6 @@ interface BookCardProps {
   index: number;
   onDelete?: (book: Book) => void;
   onEdit?: (book: Book) => void;
-  selected?: boolean;
-  onSelectChange?: (book: Book, selected: boolean) => void;
 }
 
 export function formatBookName(name: string): string {
@@ -22,10 +20,6 @@ export function formatBookName(name: string): string {
 export function BookCard({
   book,
   index,
-  onDelete,
-  onEdit,
-  selected = false,
-  onSelectChange,
 }: BookCardProps) {
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
@@ -57,7 +51,7 @@ export function BookCard({
             src={book.coverUrl}
             alt={formatBookName(book.name)}
             className={cn(
-              "w-full h-full object-cover transition-all duration-300",
+              "w-full h-full object-contain transition-all duration-300",
               imageLoading ? "opacity-0" : "opacity-100"
             )}
             loading="lazy"
@@ -81,27 +75,8 @@ export function BookCard({
       className="group relative"
     >
       <Card className={cn(
-        'group/card flex h-full flex-col overflow-hidden rounded-xl border bg-white p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md',
-        selected ? 'border-primary ring-2 ring-primary/20' : 'border-border/70'
+        'group/card flex h-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md'
       )}>
-        {onSelectChange ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelectChange(book, !selected);
-            }}
-            className={cn(
-              'absolute left-5 top-5 z-20 flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-colors',
-              selected
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-white/80 bg-white/90 text-slate-400 hover:bg-primary/10 hover:text-primary'
-            )}
-            aria-label={selected ? '取消选择图书' : '选择图书'}
-          >
-            {selected ? <Check className="h-4 w-4" /> : <span className="h-3.5 w-3.5 rounded border border-current" />}
-          </button>
-        ) : null}
         <button type="button" onClick={handleClick} className="flex h-full flex-col text-left">
           <div className="relative rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50 p-4">
             <span className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-xs font-medium ${statusMeta.className}`}>
@@ -129,35 +104,6 @@ export function BookCard({
             </div>
           </div>
         </button>
-        {onEdit ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onEdit(book);
-            }}
-            className={cn(
-              'absolute z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-white/80 bg-white/90 text-slate-400 shadow-sm transition-colors hover:bg-indigo-50 hover:text-indigo-600 lg:opacity-0 lg:group-hover/card:opacity-100',
-              onDelete ? 'right-14 top-5' : 'right-5 top-5'
-            )}
-            aria-label="编辑图书"
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-        ) : null}
-        {onDelete ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(book);
-            }}
-            className="absolute right-5 top-5 z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-white/80 bg-white/90 text-slate-400 opacity-100 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600 lg:opacity-0 lg:group-hover/card:opacity-100"
-            aria-label="删除图书"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        ) : null}
       </Card>
     </motion.div>
   );

@@ -166,6 +166,14 @@ const taskBucketLabels: Record<string, string> = {
   other: '其他',
 }
 
+function getCountedStudyMinutes(checkin: any): number {
+  if (!['completed', 'partial'].includes(checkin.status)) return 0
+  if (checkin.completed_value !== null && checkin.completed_value !== undefined) {
+    return Number(checkin.completed_value) || 0
+  }
+  return (Number(checkin.time_per_unit) || 0) * (Number(checkin.value) || 1)
+}
+
 function formatRelativeTime(date: Date): string {
   const diffMs = Date.now() - date.getTime()
   const diffMin = Math.floor(diffMs / 60000)
@@ -272,15 +280,14 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       AND dc.check_date <= $${childId ? 4 : 3}`,
     ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
-  const rangeCheckins = rangeAllCheckins.filter((checkin: any) => ['completed', 'partial', 'advance'].includes(checkin.status))
+  const rangeCheckins = rangeAllCheckins.filter((checkin: any) => ['completed', 'partial'].includes(checkin.status))
 
   const todayStudyMinutes = rangeCheckins.reduce((sum, checkin: any) => {
-    const fallbackMinutes = (checkin.time_per_unit || 0) * (checkin.value || 1)
-    return sum + (checkin.completed_value || fallbackMinutes)
+    return sum + getCountedStudyMinutes(checkin)
   }, 0)
   const rangeCompletedTasks = rangeCheckins.length
   const taskStatusCounts = {
-    completed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'completed' || checkin.status === 'advance').length,
+    completed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'completed').length,
     partial: rangeAllCheckins.filter((checkin: any) => checkin.status === 'partial').length,
     notCompleted: rangeAllCheckins.filter((checkin: any) => checkin.status === 'not_completed').length,
     postponed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'postponed').length,
@@ -300,8 +307,7 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       name: checkin.name,
       tags: checkin.tags,
     })
-    const fallbackMinutes = (checkin.time_per_unit || 0) * (checkin.value || 1)
-    taskTypeMinutes[bucket] += checkin.completed_value || fallbackMinutes
+    taskTypeMinutes[bucket] += getCountedStudyMinutes(checkin)
   })
 
   // Calculate distinct books read for specified date/range or today.
@@ -393,7 +399,7 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       const allowedDays = getAllowedDays(scheduleRule, plan.assignedDays)
       const planned = countAssignedDaysInRange(checkDate, checkDateEnd, allowedDays)
       const checkins = checkinsByPlanId.get(plan.id) || []
-      const completed = checkins.filter((checkin: any) => ['completed', 'partial', 'advance'].includes(checkin.status)).length
+      const completed = checkins.filter((checkin: any) => ['completed', 'partial'].includes(checkin.status)).length
       const postponed = checkins.filter((checkin: any) => checkin.status === 'postponed').length
       const notCompleted = Math.max(planned - completed - postponed, 0) + checkins.filter((checkin: any) => checkin.status === 'not_completed').length
 

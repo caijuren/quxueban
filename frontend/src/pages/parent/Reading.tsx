@@ -287,7 +287,7 @@ export default function ReadingPage() {
                       <img
                         src={reading.book.coverUrl}
                         alt={reading.book.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

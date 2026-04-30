@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -26,9 +27,10 @@ function formatValue(date: Date) {
 
 export function DatePicker({ value, onChange, placeholder = '选择日期', className, align = 'end' }: DatePickerProps) {
   const selectedDate = parseDate(value);
+  const [open, setOpen] = useState(false);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -48,7 +50,10 @@ export function DatePicker({ value, onChange, placeholder = '选择日期', clas
           mode="single"
           selected={selectedDate}
           onSelect={(date) => {
-            if (date) onChange(formatValue(date));
+            if (date) {
+              onChange(formatValue(date));
+              setOpen(false);
+            }
           }}
           className="rounded-lg p-3"
           classNames={{

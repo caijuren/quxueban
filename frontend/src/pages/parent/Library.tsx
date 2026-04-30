@@ -53,7 +53,7 @@ import type { ReactNode } from 'react';
 import { PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
 // Import components
-import { BatchActionBar, BookCard, BookFilter, EmptyState } from '@/components/parent/library';
+import { BookCard, BookFilter, EmptyState } from '@/components/parent/library';
 import type { Book, BookList, ReadStatus } from '@/types/library';
 import { bookTypes } from '@/types/library';
 
@@ -296,7 +296,7 @@ function formatShortDate(date?: string | null) {
 
 function CoverSlot({ book, className }: { book?: Partial<Book> | null; className?: string }) {
   if (book?.coverUrl) {
-    return <img src={book.coverUrl} alt={book.name || '书籍封面'} className={cn('h-full w-full object-cover', className)} />;
+    return <img src={book.coverUrl} alt={book.name || '书籍封面'} className={cn('h-full w-full object-contain', className)} />;
   }
 
   return (
@@ -642,10 +642,6 @@ export default function LibraryPage() {
         return (b.totalReadMinutes || 0) - (a.totalReadMinutes || 0);
       }
 
-      const aFinished = a.readState?.status === 'finished' ? 1 : 0;
-      const bFinished = b.readState?.status === 'finished' ? 1 : 0;
-      if (aFinished !== bFinished) return aFinished - bFinished;
-
       const aTime = new Date(a.lastReadDate || a.readState?.finishedAt || 0).getTime();
       const bTime = new Date(b.lastReadDate || b.readState?.finishedAt || 0).getTime();
       return bTime - aTime;
@@ -666,14 +662,28 @@ export default function LibraryPage() {
     [filteredBooks, selectedBookIds]
   );
   const currentReadingBooks = useMemo(
-    () => books.filter(isReadingBook),
+    () => books.filter(isReadingBook).sort((a, b) => {
+      const aTime = new Date(a.lastReadDate || a.readState?.finishedAt || 0).getTime();
+      const bTime = new Date(b.lastReadDate || b.readState?.finishedAt || 0).getTime();
+      return bTime - aTime;
+    }),
+    [books]
+  );
+  const recentlyReadBooks = useMemo(
+    () => books
+      .filter((book) => Boolean(book.lastReadDate) || (book.readLogCount || 0) > 0)
+      .sort((a, b) => {
+        const aTime = new Date(a.lastReadDate || 0).getTime();
+        const bTime = new Date(b.lastReadDate || 0).getTime();
+        return bTime - aTime;
+      }),
     [books]
   );
   const finishedBooksList = useMemo(
     () => books.filter(isFinishedBook),
     [books]
   );
-  const featuredReadingBook = currentReadingBooks[0] || null;
+  const featuredReadingBook = recentlyReadBooks[0] || null;
   const totalReadPages = useMemo(
     () => books.reduce((sum, book) => sum + (book.totalReadPages || 0), 0),
     [books]
@@ -1826,7 +1836,7 @@ export default function LibraryPage() {
                     {list.bookIds.slice(0, 3).map((bookId, idx) => {
                       const book = books.find(b => b.id === bookId);
                       return book?.coverUrl ? (
-                        <img key={idx} src={book.coverUrl} alt="" className="w-8 h-10 object-cover rounded" />
+                        <img key={idx} src={book.coverUrl} alt="" className="w-8 h-10 object-contain rounded" />
                       ) : (
                         <div key={idx} className="w-8 h-10 bg-muted rounded flex items-center justify-center">
                           <BookOpen className="w-3 h-3 text-muted-foreground" />
@@ -1859,32 +1869,12 @@ export default function LibraryPage() {
         />
       ) : (
         <>
-          <BatchActionBar
-            selectedCount={selectedFilteredBooks.length}
-            totalCount={filteredBooks.length}
-            onSelectAll={handleSelectAllFilteredBooks}
-            onClearSelection={() => setSelectedBookIds(new Set())}
-            onBatchFinish={handleBatchFinish}
-            onBatchDelete={handleBatchDelete}
-            onBatchTypeChange={handleBatchTypeChange}
-            onAddToList={handleAddSelectedToList}
-            bookLists={bookLists}
-            onCreateList={() => setShowBookListDialog(true)}
-            batchReadStage={batchReadStage}
-            onBatchReadStageChange={setBatchReadStage}
-            isProcessing={batchFinishMutation.isPending}
-          />
-
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
             {paginatedBooks.map((book, index) => (
               <BookCard
                 key={book.id}
                 book={book}
                 index={index}
-                onDelete={handleDelete}
-                onEdit={(targetBook) => handleEdit(targetBook)}
-                selected={selectedBookIds.has(book.id)}
-                onSelectChange={handleSelectBook}
               />
             ))}
           </div>
@@ -2045,7 +2035,7 @@ export default function LibraryPage() {
                           className="flex items-center gap-3 rounded-2xl border border-white bg-white/90 p-3 text-left transition-all hover:border-emerald-300 hover:bg-emerald-50"
                         >
                           {book.coverUrl ? (
-                            <img src={book.coverUrl} alt={book.name} className="h-16 w-12 rounded-lg object-cover" loading="lazy" />
+                            <img src={book.coverUrl} alt={book.name} className="h-16 w-12 rounded-lg object-contain" loading="lazy" />
                           ) : (
                             <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-gray-100">
                               <BookOpen className="h-5 w-5 text-gray-400" />
@@ -2146,7 +2136,7 @@ export default function LibraryPage() {
                     </div>
                     <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-slate-50 p-5 text-center">
                       <div className="flex h-40 w-28 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm">
-                        {coverUrl ? <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" /> : <BookOpen className="h-10 w-10 text-gray-300" />}
+                        {coverUrl ? <img src={coverUrl} alt="Cover" className="h-full w-full object-contain" /> : <BookOpen className="h-10 w-10 text-gray-300" />}
                       </div>
                       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
                       <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="mt-4 rounded-xl">

@@ -21,6 +21,7 @@ import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { EmptyPanel } from '@/components/parent/PageToolbar';
+import { readStages } from '@/types/library';
 
 interface ReadingLog {
   id: number;
@@ -489,7 +490,13 @@ export default function BookDetailPage() {
   const latestLog = sortedReadingLogs[0];
   const latestPage = Math.max(...sortedReadingLogs.map(log => log.endPage || 0), 0);
   const lastReadDate = latestLog?.readDate || book.lastReadDate || null;
-  const defaultReadStage = childSemesterConfig?.readingStage || latestLog?.readStage || '';
+  const defaultReadStage = editingLog?.readStage || latestLog?.readStage || childSemesterConfig?.readingStage || '';
+  const readStageOptions = Array.from(new Set([
+    defaultReadStage,
+    latestLog?.readStage || '',
+    childSemesterConfig?.readingStage || '',
+    ...readStages.map(stage => stage.value),
+  ].filter(Boolean)));
   const latestChapter = sortedReadingLogs
     .map(log => getReadingLogChapter(log, chapters))
     .find(Boolean) || '';
@@ -518,9 +525,9 @@ export default function BookDetailPage() {
         <Card className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <CardContent className="p-0">
             <div className="grid gap-6 p-6 lg:grid-cols-[170px_minmax(0,1fr)_220px] md:p-8">
-              <div className="h-[236px] w-[166px] overflow-hidden rounded-xl bg-gradient-to-br from-indigo-200 to-violet-500 shadow-xl">
+              <div className="h-[236px] w-[166px] overflow-hidden rounded-xl bg-slate-50 shadow-xl ring-1 ring-slate-200">
                 {book.coverUrl ? (
-                  <img src={book.coverUrl} alt={displayBookName} className="h-full w-full object-cover" />
+                  <img src={book.coverUrl} alt={displayBookName} className="h-full w-full object-contain" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center p-5 text-center text-3xl font-bold leading-tight text-white">
                     {displayBookName.slice(0, 5)}
@@ -580,6 +587,9 @@ export default function BookDetailPage() {
                 <Button variant="outline" onClick={() => { setNotesInput(bookNotes); setShowNotesForm(true); }} className="h-11 rounded-xl bg-white">
                   <MessageSquare className="mr-2 size-4" /> 阅读笔记
                 </Button>
+                <Button variant="outline" onClick={() => setShowDeleteBookConfirm(true)} className="h-11 rounded-xl border-red-100 bg-white text-red-600 hover:bg-red-50 hover:text-red-700">
+                  <Trash2 className="mr-2 size-4" /> 删除图书
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -591,7 +601,7 @@ export default function BookDetailPage() {
               <h2 className="text-base font-bold text-slate-950">阅读状态</h2>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <InfoStat label="当前状态" value={readingStatus} />
-                <InfoStat label="当前阶段" value={defaultReadStage || latestLog?.readStage || '未配置'} />
+                <InfoStat label="阅读阶段" value={latestLog?.readStage || '未记录'} />
                 <InfoStat label="读到页码" value={latestPage ? `第 ${latestPage} 页` : '未记录'} />
                 <InfoStat label="当前章节" value={latestChapter || '未记录'} />
                 <InfoStat label="阅读进度" value={book.totalPages ? `${progress}%` : (isFinished ? '已读完' : '页数未知')} />
@@ -761,13 +771,16 @@ export default function BookDetailPage() {
                   <span className="mt-1 block text-xs text-slate-500">上次读到第 {latestPage || 0} 页，系统会自动计算本次页数。</span>
                 </label>
                 <label className="group relative block">
-                  <input
-                    type="text"
+                  <select
                     name="readStage"
-                    placeholder=" "
                     defaultValue={editingLog?.readStage || defaultReadStage}
-                    className="peer h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pb-2 pt-6 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-transparent focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100"
-                  />
+                    className="peer h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pb-2 pt-6 text-sm font-semibold text-slate-900 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100"
+                  >
+                    <option value="">请选择阅读阶段</option>
+                    {readStageOptions.map((stage) => (
+                      <option key={stage} value={stage}>{stage}</option>
+                    ))}
+                  </select>
                   <span className="pointer-events-none absolute left-4 top-2 text-xs font-medium text-slate-500 transition-all peer-focus:text-purple-600">阅读阶段</span>
                 </label>
               </div>

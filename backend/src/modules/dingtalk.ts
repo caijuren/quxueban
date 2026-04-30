@@ -68,6 +68,14 @@ function getAssignedDaysForPlan(plan: any): number[] {
   }
 }
 
+function getCountedStudyMinutes(checkin: any): number {
+  if (!['completed', 'partial'].includes(checkin.status)) return 0
+  if (checkin.completedValue !== null && checkin.completedValue !== undefined) {
+    return Number(checkin.completedValue) || 0
+  }
+  return (Number(checkin.plan?.task?.timePerUnit) || 0) * (Number(checkin.value) || 1)
+}
+
 // All routes require authentication and parent role
 dingtalkRouter.use(authMiddleware)
 dingtalkRouter.use(requireRole('parent'))
@@ -370,10 +378,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   // Calculate study time (only completed and partial tasks)
   const todayStudyMinutes = todayCheckins
     .filter(checkin => checkin.status === 'completed' || checkin.status === 'partial')
-    .reduce((sum, checkin) => {
-      const minutes = checkin.completedValue !== null && checkin.completedValue !== undefined ? checkin.completedValue : (checkin.plan?.task?.timePerUnit || 0)
-      return sum + minutes * (checkin.value || 1)
-    }, 0)
+    .reduce((sum, checkin) => sum + getCountedStudyMinutes(checkin), 0)
 
   // Group tasks by completion status
   const tasksByStatus: any = {
@@ -405,7 +410,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
         ...plan.task,
         checkinId: checkin.id,
         checkinStatus: checkin.status,
-        actualTime: checkin.completedValue !== null && checkin.completedValue !== undefined ? checkin.completedValue : plan.task.timePerUnit,
+        actualTime: getCountedStudyMinutes(checkin) || plan.task.timePerUnit,
         notes: checkin.notes
       }
       if (checkin.status === 'completed') {
@@ -435,7 +440,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   const notInvolvedTasks = tasksByStatus.notInvolved.length
   const notCompletedTasks = tasksByStatus.notCompleted.length
   const actionableTasks = totalTasks - notInvolvedTasks
-  const completionRate = actionableTasks > 0 ? Math.round((completedTasks / actionableTasks) * 100) : 0
+  const completionRate = actionableTasks > 0 ? Math.round(((completedTasks + partialTasks) / actionableTasks) * 100) : 0
 
   // Log debug information about task grouping
   console.log('[Share Dashboard] Completed tasks:', tasksByStatus.completed.length)

@@ -160,7 +160,7 @@ export default function BookInsightsPage() {
           <div className="flex flex-col gap-6 md:flex-row md:items-center">
             <div className="h-40 w-28 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-indigo-100 to-violet-400 shadow-lg">
               {book.coverUrl ? (
-                <img src={book.coverUrl} alt={book.name} className="h-full w-full object-cover" />
+                <img src={book.coverUrl} alt={book.name} className="h-full w-full object-contain" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center p-4 text-center text-xl font-bold text-white">《{book.name.slice(0, 4)}》</div>
               )}

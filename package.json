@@ -1,6 +1,6 @@
 {
   "name": "spec-template-backend",
-  "version": "1.7.3",
+  "version": "1.7.4",
   "packageManager": "pnpm@10.32.1",
   "description": "Backend API server for full-stack web application template",
   "main": "dist/index.js",

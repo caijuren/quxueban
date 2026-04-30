@@ -301,9 +301,7 @@ export default function ParentLayout() {
         <div className="border-b border-border px-2.5 py-2.5 flex-shrink-0">
           <div className="rounded-xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-2 py-2 shadow-sm">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-bold text-[11px] shadow-sm">
-                趣
-              </div>
+              <img src="/logo.png" alt="趣学伴" className="h-7 w-7 rounded-lg object-cover shadow-sm" />
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-semibold tracking-tight text-slate-900">趣学伴</p>
                 <p className="mt-0.5 text-[9px] text-muted-foreground">家庭学习伙伴</p>
@@ -656,9 +654,7 @@ export default function ParentLayout() {
                 <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-3 py-3 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-bold text-sm shadow-sm">
-                        趣
-                      </div>
+                      <img src="/logo.png" alt="趣学伴" className="h-10 w-10 rounded-2xl object-cover shadow-sm" />
                       <div>
                         <p className="text-[15px] font-semibold tracking-tight text-slate-900">趣学伴</p>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">家庭学习伙伴</p>
