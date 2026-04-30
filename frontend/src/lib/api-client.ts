@@ -54,7 +54,15 @@ apiClient.interceptors.request.use(
       if (!isNaN(selectedChildId)) {
         if (config.method?.toLowerCase() === 'get') {
           // GET 请求：添加到 query 参数，仅当 query 中没有 childId 时
-          if (!config.params || !('childId' in config.params)) {
+          const urlHasChildId = (() => {
+            try {
+              const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+              return new URLSearchParams(query).has('childId');
+            } catch {
+              return url.includes('childId=');
+            }
+          })();
+          if (!urlHasChildId && (!config.params || !('childId' in config.params))) {
             config.params = {
               ...config.params,
               childId: selectedChildId,
