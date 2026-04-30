@@ -1,6 +1,6 @@
 {
   "name": "quxueban-backend",
-  "version": "1.7.6",
+  "version": "1.7.7",
   "packageManager": "pnpm@10.32.1",
   "description": "Backend API server for quxueban education platform",
   "main": "dist/index.js",
@@ -16,6 +16,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "script:cleanup-duplicate-checkins": "tsx scripts/cleanup-duplicate-checkins.ts",
     "script:set-book-reading": "tsx scripts/set-book-reading-status.ts",
     "script:check-daily-study-minutes": "tsx scripts/check-daily-study-minutes.ts",
     "script:check-next-year-holidays": "tsx scripts/check-next-year-holidays.ts",

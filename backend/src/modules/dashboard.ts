@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { prisma } from '../config/database'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
+import { dedupeLatestDailyTaskCheckins, getCountedStudyMinutes } from '../utils/study-minutes'
 
 function getSingleQueryValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
@@ -164,45 +165,6 @@ const taskBucketLabels: Record<string, string> = {
   english: '英语',
   reading: '阅读',
   other: '其他',
-}
-
-function getCountedStudyMinutes(checkin: any): number {
-  if (!['completed', 'partial'].includes(checkin.status)) return 0
-  if (checkin.completed_value !== null && checkin.completed_value !== undefined) {
-    return Number(checkin.completed_value) || 0
-  }
-  return (Number(checkin.time_per_unit) || 0) * (Number(checkin.value) || 1)
-}
-
-function getLocalDateKey(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function dedupeLatestDailyTaskCheckins(checkins: any[]): any[] {
-  const latestByTask = new Map<string, any>()
-
-  checkins.forEach((checkin) => {
-    const taskKey = checkin.resolved_task_id || checkin.task_id || `plan:${checkin.plan_id}` || checkin.id
-    const key = `${checkin.child_id}:${getLocalDateKey(checkin.check_date)}:${taskKey}`
-    const existing = latestByTask.get(key)
-
-    if (!existing) {
-      latestByTask.set(key, checkin)
-      return
-    }
-
-    const existingCreatedAt = new Date(existing.created_at).getTime()
-    const currentCreatedAt = new Date(checkin.created_at).getTime()
-    if (currentCreatedAt > existingCreatedAt || (currentCreatedAt === existingCreatedAt && checkin.id > existing.id)) {
-      latestByTask.set(key, checkin)
-    }
-  })
-
-  return Array.from(latestByTask.values())
 }
 
 function formatRelativeTime(date: Date): string {

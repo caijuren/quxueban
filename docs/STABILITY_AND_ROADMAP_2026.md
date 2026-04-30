@@ -231,10 +231,10 @@
 
 建议范围：
 
-- 发布脚本化。
-- 重复打卡历史诊断/清理脚本。
-- 学习时长共享口径整理。
-- 2027 节假日数据检查机制完善。
+- 发布脚本化。已在 `scripts/release-production.sh` 中提供 `backend`、`frontend`、`full`、`check` 模式。
+- 重复打卡历史诊断/清理脚本。已新增 `pnpm run script:cleanup-duplicate-checkins`，默认 dry-run。
+- 学习时长共享口径整理。今日概览、钉钉和诊断脚本复用后端共享工具。
+- 2027 节假日数据检查机制完善。检查脚本支持 `HOLIDAY_CHECK_YEAR`、`HOLIDAY_MIN_DAYS` 和严格模式。
 
 不建议范围：
 

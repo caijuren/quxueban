@@ -43,3 +43,10 @@ export function isChinaPublicHoliday(dateString: string): boolean {
   return holidaySet.has(dateString)
 }
 
+export function getChinaPublicHolidayYears(): string[] {
+  return Object.keys(CHINA_PUBLIC_HOLIDAYS).sort()
+}
+
+export function getChinaPublicHolidays(year: string | number): string[] {
+  return CHINA_PUBLIC_HOLIDAYS[String(year)] || []
+}

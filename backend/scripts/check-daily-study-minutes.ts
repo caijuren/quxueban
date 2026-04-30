@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { dedupeLatestDailyTaskCheckins, getCountedStudyMinutes, getStudyTaskKey, sumCountedStudyMinutes } from '../src/utils/study-minutes'
 
 const prisma = new PrismaClient()
 
@@ -20,14 +21,6 @@ function parseDate(value: string | undefined): Date {
   const date = new Date(year, month - 1, day)
   date.setHours(0, 0, 0, 0)
   return date
-}
-
-function getMinutes(row: any): number {
-  if (!['completed', 'partial'].includes(row.status)) return 0
-  if (row.completed_value !== null && row.completed_value !== undefined) {
-    return Number(row.completed_value) || 0
-  }
-  return (Number(row.time_per_unit) || 0) * (Number(row.value) || 1)
 }
 
 async function main() {
@@ -63,30 +56,18 @@ async function main() {
     ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd]),
   ) as any[]
 
-  const latestByTask = new Map<string, any>()
   const duplicates = new Map<string, any[]>()
 
   rows.forEach((row) => {
-    const taskKey = `${row.child_id}:${row.resolved_task_id || row.task_id || `plan:${row.plan_id}` || row.id}`
+    const taskKey = `${row.child_id}:${getStudyTaskKey(row)}`
     const grouped = duplicates.get(taskKey) || []
     grouped.push(row)
     duplicates.set(taskKey, grouped)
-
-    const existing = latestByTask.get(taskKey)
-    if (!existing) {
-      latestByTask.set(taskKey, row)
-      return
-    }
-    const existingTime = new Date(existing.created_at).getTime()
-    const rowTime = new Date(row.created_at).getTime()
-    if (rowTime > existingTime || (rowTime === existingTime && row.id > existing.id)) {
-      latestByTask.set(taskKey, row)
-    }
   })
 
-  const rawMinutes = rows.reduce((sum, row) => sum + getMinutes(row), 0)
-  const dedupedRows = Array.from(latestByTask.values())
-  const dedupedMinutes = dedupedRows.reduce((sum, row) => sum + getMinutes(row), 0)
+  const rawMinutes = sumCountedStudyMinutes(rows)
+  const dedupedRows = dedupeLatestDailyTaskCheckins(rows)
+  const dedupedMinutes = sumCountedStudyMinutes(dedupedRows)
   const duplicateGroups = Array.from(duplicates.values()).filter((group) => group.length > 1)
 
   console.log(JSON.stringify({
@@ -104,7 +85,7 @@ async function main() {
         resolvedTaskId: group[0].resolved_task_id,
         taskName: group[0].task_name,
         rowCount: group.length,
-        minutes: group.map((row) => getMinutes(row)),
+        minutes: group.map((row) => getCountedStudyMinutes(row)),
         ids: group.map((row) => row.id),
         statuses: group.map((row) => row.status),
       })),
@@ -116,7 +97,7 @@ async function main() {
         status: row.status,
         completedValue: row.completed_value,
         timePerUnit: row.time_per_unit,
-        countedMinutes: getMinutes(row),
+        countedMinutes: getCountedStudyMinutes(row),
         createdAt: row.created_at,
       })),
     },

@@ -4,6 +4,7 @@ import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import fetch from 'node-fetch'
 import crypto from 'crypto'
+import { dedupeLatestDailyTaskCheckins, getCountedStudyMinutes } from '../utils/study-minutes'
 
 export const dingtalkRouter: Router = Router()
 
@@ -66,36 +67,6 @@ function getAssignedDaysForPlan(plan: any): number[] {
     default:
       return [0, 1, 2, 3, 4, 5, 6]
   }
-}
-
-function getCountedStudyMinutes(checkin: any): number {
-  if (!['completed', 'partial'].includes(checkin.status)) return 0
-  if (checkin.completedValue !== null && checkin.completedValue !== undefined) {
-    return Number(checkin.completedValue) || 0
-  }
-  return (Number(checkin.plan?.task?.timePerUnit ?? checkin.taskTimePerUnit) || 0) * (Number(checkin.value) || 1)
-}
-
-function dedupeLatestTaskCheckins(checkins: any[]): any[] {
-  const latestByTask = new Map<number | string, any>()
-
-  checkins.forEach((checkin) => {
-    const taskKey = checkin.plan?.task?.id || checkin.taskId || `plan:${checkin.planId}` || checkin.id
-    const existing = latestByTask.get(taskKey)
-
-    if (!existing) {
-      latestByTask.set(taskKey, checkin)
-      return
-    }
-
-    const existingCreatedAt = new Date(existing.createdAt).getTime()
-    const currentCreatedAt = new Date(checkin.createdAt).getTime()
-    if (currentCreatedAt > existingCreatedAt || (currentCreatedAt === existingCreatedAt && checkin.id > existing.id)) {
-      latestByTask.set(taskKey, checkin)
-    }
-  })
-
-  return Array.from(latestByTask.values())
 }
 
 // All routes require authentication and parent role
@@ -391,7 +362,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
     ...checkin,
     taskTimePerUnit: directTaskMinutes.get(checkin.taskId),
   }))
-  const activeTodayCheckins = dedupeLatestTaskCheckins(checkinsWithTaskMinutes)
+  const activeTodayCheckins = dedupeLatestDailyTaskCheckins(checkinsWithTaskMinutes)
 
   // Get all active plans
   const allActivePlans = weeklyPlans

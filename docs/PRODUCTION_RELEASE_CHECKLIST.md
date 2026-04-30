@@ -12,6 +12,15 @@
 
 ## 后端发布
 
+推荐使用脚本：
+
+```bash
+cd /home/ubuntu
+./scripts/release-production.sh backend
+```
+
+手动命令保留用于脚本异常时排查：
+
 ```bash
 cd /home/ubuntu/backend
 git pull
@@ -33,6 +42,15 @@ curl http://127.0.0.1:3001/api/version
 
 只要改了 `frontend/` 下代码，就必须执行：
 
+推荐使用脚本：
+
+```bash
+cd /home/ubuntu
+./scripts/release-production.sh frontend
+```
+
+手动命令保留用于脚本异常时排查：
+
 ```bash
 cd /home/ubuntu/frontend
 git pull
@@ -52,6 +70,13 @@ sudo systemctl reload nginx
 - 手机端如仍显示旧页面，清理缓存或使用无痕窗口验证。
 
 ## 常用生产诊断
+
+发布状态检查：
+
+```bash
+cd /home/ubuntu
+./scripts/release-production.sh check
+```
 
 查询某天某孩子学习时长：
 
@@ -74,10 +99,28 @@ cd /home/ubuntu/backend
 pnpm run script:check-next-year-holidays
 ```
 
+检查指定年份节假日数据：
+
+```bash
+HOLIDAY_CHECK_YEAR=2027 HOLIDAY_MIN_DAYS=20 pnpm run script:check-next-year-holidays
+```
+
 严格模式用于发布前阻断：
 
 ```bash
 HOLIDAY_CHECK_STRICT=true pnpm run script:check-next-year-holidays
+```
+
+预览重复打卡历史清理：
+
+```bash
+FAMILY_ID=1 CHILD_ID=24 START_DATE=2026-04-01 END_DATE=2026-05-01 pnpm run script:cleanup-duplicate-checkins
+```
+
+执行重复打卡历史清理：
+
+```bash
+FAMILY_ID=1 CHILD_ID=24 START_DATE=2026-04-01 END_DATE=2026-05-01 APPLY=true pnpm run script:cleanup-duplicate-checkins
 ```
 
 ## 发布后人工回归
