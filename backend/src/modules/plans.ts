@@ -383,17 +383,16 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
       : parseInt(String(focusMinutes))
   const normalizedEvidenceUrl = typeof evidenceUrl === 'string' ? evidenceUrl.trim() : ''
   const normalizedMetadata = parseJsonObject(metadata)
-  const metadataJson = JSON.stringify(normalizedMetadata)
 
-  // For parents, use provided childId; for children, use their own userId
-  const targetChildId = role === 'parent' ? childId : userId
+  // For parents, use provided childId; for children, use their own userId.
+  const targetChildId = Number(role === 'parent' ? childId : userId)
   
   // Validate childId for parents
   if (role === 'parent' && !childId) {
     throw new AppError(400, 'Missing required field: childId')
   }
 
-  if (!taskId || !status || Number.isNaN(parsedTaskId)) {
+  if (!taskId || !status || Number.isNaN(parsedTaskId) || !Number.isInteger(targetChildId)) {
     throw new AppError(400, 'Missing required fields: taskId, status')
   }
 
@@ -414,134 +413,92 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
   // Set to start of day in local time
   checkDate.setHours(0, 0, 0, 0)
 
-  // Check if already checked in for this task on the specified date
-  const existingCheckins = await prisma.dailyCheckin.findMany({
-    where: {
-      childId: targetChildId,
-      taskId: parsedTaskId,
-      checkDate: checkDate,
-    },
-    orderBy: { id: 'desc' },
-    select: {
-      id: true,
-      planId: true,
-      childId: true,
-      taskId: true,
-      status: true,
-      value: true,
-      completedValue: true,
-      focusMinutes: true,
-      notes: true,
-      metadata: true,
-      evidenceUrl: true,
-      checkDate: true,
-      createdAt: true,
-    },
-  })
-  const existingCheckin = existingCheckins[0]
+  const result = await prisma.$transaction(async (tx) => {
+    const lockKey = `${targetChildId}:${parsedTaskId}:${checkDate.toISOString().slice(0, 10)}`
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${familyId}, hashtext(${lockKey})::int)`
 
-  if (existingCheckin) {
-    await prisma.$executeRaw`
-      UPDATE daily_checkins
-      SET
-        status = ${status},
-        value = ${value || 1},
-        plan_id = ${parsedPlanId || existingCheckin.planId},
-        completed_value = ${parsedCompletedValue},
-        focus_minutes = ${parsedFocusMinutes},
-        notes = ${normalizedNotes || null},
-        metadata = ${metadataJson}::jsonb,
-        evidence_url = ${normalizedEvidenceUrl || existingCheckin.evidenceUrl || ''}
-      WHERE child_id = ${targetChildId}
-        AND task_id = ${parsedTaskId}
-        AND check_date = ${checkDate}
-    `
-
-    const updatedCheckin = {
-      ...existingCheckin,
-      status,
-      value: value || 1,
-      planId: parsedPlanId || existingCheckin.planId,
-      completedValue: parsedCompletedValue,
-      focusMinutes: parsedFocusMinutes,
-      notes: normalizedNotes,
-      metadata: normalizedMetadata,
-      evidenceUrl: normalizedEvidenceUrl || existingCheckin.evidenceUrl || '',
-    }
-
-    // Update weekly plan progress
-    if (parsedPlanId && (status === 'completed' || status === 'advance')) {
-      await prisma.$executeRaw`
-        UPDATE weekly_plans
-        SET progress = progress + 1, updated_at = NOW()
-        WHERE id = ${parsedPlanId}
-      `
-    }
-
-    res.json({
-      status: 'success',
-      message: 'Checkin updated',
-      data: updatedCheckin,
+    const existingCheckins = await tx.dailyCheckin.findMany({
+      where: {
+        familyId,
+        childId: targetChildId,
+        taskId: parsedTaskId,
+        checkDate,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     })
-  } else {
-    const insertedRows = await prisma.$queryRaw`
-      INSERT INTO daily_checkins (
-        family_id,
-        child_id,
-        task_id,
-        plan_id,
+    const existingCheckin = existingCheckins[0]
+
+    if (existingCheckin) {
+      const updatedCheckin = await tx.dailyCheckin.update({
+        where: { id: existingCheckin.id },
+        data: {
+          status,
+          value: value || 1,
+          planId: parsedPlanId || existingCheckin.planId,
+          completedValue: parsedCompletedValue,
+          focusMinutes: parsedFocusMinutes,
+          notes: normalizedNotes || null,
+          metadata: normalizedMetadata,
+          evidenceUrl: normalizedEvidenceUrl || existingCheckin.evidenceUrl || '',
+        },
+      })
+
+      if (existingCheckins.length > 1) {
+        await tx.dailyCheckin.deleteMany({
+          where: {
+            familyId,
+            childId: targetChildId,
+            taskId: parsedTaskId,
+            checkDate,
+            id: { not: existingCheckin.id },
+          },
+        })
+      }
+
+      return {
+        statusCode: 200,
+        message: existingCheckins.length > 1 ? 'Checkin updated; duplicate rows removed' : 'Checkin updated',
+        checkin: updatedCheckin,
+      }
+    }
+
+    const checkin = await tx.dailyCheckin.create({
+      data: {
+        familyId,
+        childId: targetChildId,
+        taskId: parsedTaskId,
+        planId: parsedPlanId,
         status,
-        value,
-        completed_value,
-        focus_minutes,
-        notes,
-        metadata,
-        evidence_url,
-        check_date,
-        created_at
-      )
-      VALUES (
-        ${familyId},
-        ${targetChildId},
-        ${parsedTaskId},
-        ${parsedPlanId},
-        ${status},
-        ${value || 1},
-        ${parsedCompletedValue},
-        ${parsedFocusMinutes},
-        ${normalizedNotes || null},
-        ${metadataJson}::jsonb,
-        ${normalizedEvidenceUrl},
-        ${checkDate},
-        NOW()
-      )
-      RETURNING id, plan_id, child_id, task_id, status, value, completed_value, focus_minutes, notes, metadata, evidence_url, check_date, created_at
-    ` as any[]
+        value: value || 1,
+        completedValue: parsedCompletedValue,
+        focusMinutes: parsedFocusMinutes,
+        notes: normalizedNotes || null,
+        metadata: normalizedMetadata,
+        evidenceUrl: normalizedEvidenceUrl,
+        checkDate,
+      },
+    })
 
-    const checkin = {
-      ...insertedRows[0],
-      completedValue: insertedRows[0]?.completed_value ?? parsedCompletedValue,
-      focusMinutes: insertedRows[0]?.focus_minutes ?? parsedFocusMinutes,
-      notes: insertedRows[0]?.notes ?? normalizedNotes,
-      metadata: insertedRows[0]?.metadata ?? normalizedMetadata,
-      evidenceUrl: insertedRows[0]?.evidence_url ?? normalizedEvidenceUrl,
-    }
-
-    // Update weekly plan progress
     if (parsedPlanId && (status === 'completed' || status === 'advance')) {
-      await prisma.$executeRaw`
+      await tx.$executeRaw`
         UPDATE weekly_plans
         SET progress = progress + 1, updated_at = NOW()
         WHERE id = ${parsedPlanId}
       `
     }
 
-    res.status(201).json({
-      status: 'success',
+    return {
+      statusCode: 201,
       message: 'Checkin recorded',
-      data: checkin,
-    })
-  }
+      checkin,
+    }
+  })
+
+  res.status(result.statusCode).json({
+    status: 'success',
+    message: result.message,
+    data: result.checkin,
+  })
 })
 
 /**

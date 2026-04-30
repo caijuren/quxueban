@@ -76,6 +76,28 @@ function getCountedStudyMinutes(checkin: any): number {
   return (Number(checkin.plan?.task?.timePerUnit ?? checkin.taskTimePerUnit) || 0) * (Number(checkin.value) || 1)
 }
 
+function dedupeLatestTaskCheckins(checkins: any[]): any[] {
+  const latestByTask = new Map<number | string, any>()
+
+  checkins.forEach((checkin) => {
+    const taskKey = checkin.plan?.task?.id || checkin.taskId || `plan:${checkin.planId}` || checkin.id
+    const existing = latestByTask.get(taskKey)
+
+    if (!existing) {
+      latestByTask.set(taskKey, checkin)
+      return
+    }
+
+    const existingCreatedAt = new Date(existing.createdAt).getTime()
+    const currentCreatedAt = new Date(checkin.createdAt).getTime()
+    if (currentCreatedAt > existingCreatedAt || (currentCreatedAt === existingCreatedAt && checkin.id > existing.id)) {
+      latestByTask.set(taskKey, checkin)
+    }
+  })
+
+  return Array.from(latestByTask.values())
+}
+
 // All routes require authentication and parent role
 dingtalkRouter.use(authMiddleware)
 dingtalkRouter.use(requireRole('parent'))
@@ -369,6 +391,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
     ...checkin,
     taskTimePerUnit: directTaskMinutes.get(checkin.taskId),
   }))
+  const activeTodayCheckins = dedupeLatestTaskCheckins(checkinsWithTaskMinutes)
 
   // Get all active plans
   const allActivePlans = weeklyPlans
@@ -385,10 +408,10 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   console.log('[Share Dashboard] Target date day of week:', todayDayOfWeek)
   console.log('[Share Dashboard] Total active plans:', allActivePlans.length)
   console.log('[Share Dashboard] Today scheduled plans:', todayScheduledPlans.length)
-  console.log('[Share Dashboard] Today checkins:', checkinsWithTaskMinutes.length)
+  console.log('[Share Dashboard] Today checkins:', activeTodayCheckins.length)
 
   // Calculate study time (only completed and partial tasks)
-  const todayStudyMinutes = checkinsWithTaskMinutes
+  const todayStudyMinutes = activeTodayCheckins
     .filter(checkin => checkin.status === 'completed' || checkin.status === 'partial')
     .reduce((sum, checkin) => sum + getCountedStudyMinutes(checkin), 0)
 
@@ -404,7 +427,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   // Create maps for quick lookup
   const checkinMapByPlanId = new Map<number, any>()
   const checkinMapByTaskId = new Map<number, any>()
-  checkinsWithTaskMinutes.forEach(checkin => {
+  activeTodayCheckins.forEach(checkin => {
     if (checkin.planId) {
       checkinMapByPlanId.set(checkin.planId, checkin)
     }
@@ -462,8 +485,8 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   console.log('[Share Dashboard] Not involved tasks:', tasksByStatus.notInvolved.length)
   
   // Log checkin statuses and full checkins
-  console.log('[Share Dashboard] Checkin statuses:', checkinsWithTaskMinutes.map(c => c.status))
-  console.log('[Share Dashboard] Full checkins:', checkinsWithTaskMinutes)
+  console.log('[Share Dashboard] Checkin statuses:', activeTodayCheckins.map(c => c.status))
+  console.log('[Share Dashboard] Full checkins:', activeTodayCheckins)
 
   // Generate dashboard message
   const message = generateDashboardMessage(

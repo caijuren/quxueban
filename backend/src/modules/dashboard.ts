@@ -174,6 +174,37 @@ function getCountedStudyMinutes(checkin: any): number {
   return (Number(checkin.time_per_unit) || 0) * (Number(checkin.value) || 1)
 }
 
+function getLocalDateKey(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function dedupeLatestDailyTaskCheckins(checkins: any[]): any[] {
+  const latestByTask = new Map<string, any>()
+
+  checkins.forEach((checkin) => {
+    const taskKey = checkin.resolved_task_id || checkin.task_id || `plan:${checkin.plan_id}` || checkin.id
+    const key = `${checkin.child_id}:${getLocalDateKey(checkin.check_date)}:${taskKey}`
+    const existing = latestByTask.get(key)
+
+    if (!existing) {
+      latestByTask.set(key, checkin)
+      return
+    }
+
+    const existingCreatedAt = new Date(existing.created_at).getTime()
+    const currentCreatedAt = new Date(checkin.created_at).getTime()
+    if (currentCreatedAt > existingCreatedAt || (currentCreatedAt === existingCreatedAt && checkin.id > existing.id)) {
+      latestByTask.set(key, checkin)
+    }
+  })
+
+  return Array.from(latestByTask.values())
+}
+
 function formatRelativeTime(date: Date): string {
   const diffMs = Date.now() - date.getTime()
   const diffMin = Math.floor(diffMs / 60000)
@@ -266,6 +297,7 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       dc.completed_value,
       dc.check_date,
       dc.created_at,
+      COALESCE(wp.task_id, dc.task_id) AS resolved_task_id,
       t.time_per_unit,
       t.name,
       t.category,
@@ -280,18 +312,19 @@ dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       AND dc.check_date <= $${childId ? 4 : 3}`,
     ...(childId ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
-  const rangeCheckins = rangeAllCheckins.filter((checkin: any) => ['completed', 'partial'].includes(checkin.status))
+  const dedupedRangeAllCheckins = dedupeLatestDailyTaskCheckins(rangeAllCheckins)
+  const rangeCheckins = dedupedRangeAllCheckins.filter((checkin: any) => ['completed', 'partial'].includes(checkin.status))
 
   const todayStudyMinutes = rangeCheckins.reduce((sum, checkin: any) => {
     return sum + getCountedStudyMinutes(checkin)
   }, 0)
   const rangeCompletedTasks = rangeCheckins.length
   const taskStatusCounts = {
-    completed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'completed').length,
-    partial: rangeAllCheckins.filter((checkin: any) => checkin.status === 'partial').length,
-    notCompleted: rangeAllCheckins.filter((checkin: any) => checkin.status === 'not_completed').length,
-    postponed: rangeAllCheckins.filter((checkin: any) => checkin.status === 'postponed').length,
-    notInvolved: rangeAllCheckins.filter((checkin: any) => checkin.status === 'not_involved').length,
+    completed: dedupedRangeAllCheckins.filter((checkin: any) => checkin.status === 'completed').length,
+    partial: dedupedRangeAllCheckins.filter((checkin: any) => checkin.status === 'partial').length,
+    notCompleted: dedupedRangeAllCheckins.filter((checkin: any) => checkin.status === 'not_completed').length,
+    postponed: dedupedRangeAllCheckins.filter((checkin: any) => checkin.status === 'postponed').length,
+    notInvolved: dedupedRangeAllCheckins.filter((checkin: any) => checkin.status === 'not_involved').length,
   }
   const taskTypeMinutes = {
     chinese: 0,
@@ -612,7 +645,7 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
       ${childId !== null ? 'AND dc.child_id = $2' : ''}
       AND dc.check_date >= $${childId !== null ? 3 : 2}
       AND dc.check_date <= $${childId !== null ? 4 : 3}
-    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.id DESC`,
+    ORDER BY COALESCE(wp.task_id, dc.task_id), dc.created_at DESC, dc.id DESC`,
     ...(childId !== null ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
   ) as any[]
 
