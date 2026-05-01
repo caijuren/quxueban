@@ -47,6 +47,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { showCopyableError } from '@/lib/error-toast';
+import {
+  type EducationStage,
+  educationStageOptions,
+  getAbilityDimensions,
+  getEducationStageLabel,
+} from '@/lib/education-stage';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
@@ -57,6 +63,7 @@ interface Child {
   name: string;
   avatar: string;
   role: string;
+  educationStage: EducationStage;
 }
 
 interface ChildStats {
@@ -221,12 +228,12 @@ async function getChildProfile(childId: number): Promise<any> {
   return response.data;
 }
 
-async function createChild(data: { name: string; avatar: string }): Promise<any> {
+async function createChild(data: { name: string; avatar: string; educationStage: EducationStage }): Promise<any> {
   const response = await apiClient.post('/add-child', data);
   return response.data;
 }
 
-async function updateChild(childId: number, data: { name: string; avatar: string }): Promise<void> {
+async function updateChild(childId: number, data: { name: string; avatar: string; educationStage: EducationStage }): Promise<void> {
   await apiClient.put(`/children/${childId}`, data);
 }
 
@@ -280,6 +287,7 @@ export default function ChildrenManagement({
   // Form states
   const [childName, setChildName] = useState('');
   const [childAvatar, setChildAvatar] = useState('🐶');
+  const [childEducationStage, setChildEducationStage] = useState<EducationStage>('primary');
   const [dingtalkWebhookUrl, setDingtalkWebhookUrl] = useState('');
   const [dingtalkSecret, setDingtalkSecret] = useState('');
   const [semesterConfig, setSemesterConfig] = useState<SemesterConfig>(getDefaultSemesterConfig);
@@ -332,12 +340,12 @@ export default function ChildrenManagement({
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ childId, data }: { childId: number; data: { name: string; avatar: string } }) =>
+    mutationFn: ({ childId, data }: { childId: number; data: { name: string; avatar: string; educationStage: EducationStage } }) =>
       updateChild(childId, data),
     onSuccess: async () => {
       toast.success('信息已更新');
       if (selectedChild) {
-        setSelectedChild({ ...selectedChild, name: childName.trim(), avatar: childAvatar });
+        setSelectedChild({ ...selectedChild, name: childName.trim(), avatar: childAvatar, educationStage: childEducationStage });
       }
       setIsEditDialogOpen(false);
       await refetch();
@@ -410,6 +418,7 @@ export default function ChildrenManagement({
   const resetForm = () => {
     setChildName('');
     setChildAvatar('🐶');
+    setChildEducationStage('primary');
   };
 
   const updateLocalSettings = (patch: Partial<LocalChildSettings>) => {
@@ -467,8 +476,9 @@ export default function ChildrenManagement({
         await updateChild(selectedChild.id, {
           name: childName.trim() || selectedChild.name,
           avatar: uploadedAvatar,
+          educationStage: childEducationStage,
         });
-        setSelectedChild({ ...selectedChild, name: childName.trim() || selectedChild.name, avatar: uploadedAvatar });
+        setSelectedChild({ ...selectedChild, name: childName.trim() || selectedChild.name, avatar: uploadedAvatar, educationStage: childEducationStage });
         await refetch();
         await refreshChildren();
         toast.success('头像已上传并更新');
@@ -506,6 +516,7 @@ export default function ChildrenManagement({
     setSelectedChild(child);
     setChildName(child.name);
     setChildAvatar(child.avatar || '🐶');
+    setChildEducationStage(child.educationStage || 'primary');
     setLocalSettings(getDefaultLocalChildSettings());
     setNewCustomTag('');
     setNewInterestTag('');
@@ -535,6 +546,7 @@ export default function ChildrenManagement({
     if (selectedChild) {
       setChildName(selectedChild.name);
       setChildAvatar(selectedChild.avatar || '🐶');
+      setChildEducationStage(selectedChild.educationStage || 'primary');
       setIsDetailOpen(false);
       setIsEditDialogOpen(true);
     }
@@ -557,6 +569,7 @@ export default function ChildrenManagement({
     createMutation.mutate({
       name: childName.trim(),
       avatar: childAvatar,
+      educationStage: childEducationStage,
     });
   };
 
@@ -575,6 +588,7 @@ export default function ChildrenManagement({
       data: {
         name: childName.trim(),
         avatar: childAvatar,
+        educationStage: childEducationStage,
       },
     });
     saveProfileMutation.mutate({ childId: selectedChild.id, data: localSettings });
@@ -596,10 +610,11 @@ export default function ChildrenManagement({
       await updateChild(selectedChild.id, {
         name: childName.trim(),
         avatar: childAvatar,
+        educationStage: childEducationStage,
       });
       await updateChildProfile(selectedChild.id, localSettings);
       await updateChildSemesterConfig(selectedChild.id, semesterConfig);
-      setSelectedChild({ ...selectedChild, name: childName.trim(), avatar: childAvatar });
+      setSelectedChild({ ...selectedChild, name: childName.trim(), avatar: childAvatar, educationStage: childEducationStage });
       await Promise.all([
         refetch(),
         refetchChildProfile(),
@@ -811,6 +826,9 @@ export default function ChildrenManagement({
                       <Badge variant="secondary" className="rounded-full bg-slate-100 text-slate-600">
                         孩子账户
                       </Badge>
+                      <Badge variant="outline" className="rounded-full border-sky-100 bg-sky-50 text-sky-700">
+                        {getEducationStageLabel(child.educationStage)}
+                      </Badge>
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">
                       查看学习摘要、阅读情况和钉钉配置
@@ -869,6 +887,9 @@ export default function ChildrenManagement({
                 </DialogDescription>
                 <div className="mt-2 flex h-6 flex-wrap gap-2 overflow-hidden">
                   <Badge variant="secondary" className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs">{semesterConfig.grade}</Badge>
+                  <Badge variant="secondary" className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs text-sky-700">
+                    {getEducationStageLabel(childEducationStage)}
+                  </Badge>
                   <Badge variant="secondary" className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs text-emerald-700">启用中</Badge>
                 </div>
               </div>
@@ -1017,6 +1038,20 @@ export default function ChildrenManagement({
                         </Select>
                       </div>
                       <div className="space-y-2">
+                        <Label>教育阶段</Label>
+                        <Select value={childEducationStage} onValueChange={(value) => setChildEducationStage(value as EducationStage)}>
+                          <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {educationStageOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs leading-5 text-slate-500">
+                          阶段会影响能力点、任务推荐、今日概览和钉钉推送。
+                        </p>
+                      </div>
+                      <div className="space-y-2">
                         <Label>班级</Label>
                         <Input value={localSettings.className} onChange={(e) => updateLocalSettings({ className: e.target.value })} placeholder="例如：三年级 2 班" className="w-full rounded-xl" />
                       </div>
@@ -1134,7 +1169,7 @@ export default function ChildrenManagement({
                     </div>
                     <div className={childEditorGridClass}>
                       <div className={childEditorFieldClass}>
-                        <Label className={childEditorLabelClass}>学习阶段</Label>
+                        <Label className={childEditorLabelClass}>阅读/年级阶段</Label>
                         <Select value={semesterConfig.readingStage || semesterConfig.grade} onValueChange={(value) => setSemesterConfig({ ...semesterConfig, grade: value, readingStage: value })}>
                           <SelectTrigger className={childEditorControlClass}>
                             <SelectValue />
@@ -1213,9 +1248,9 @@ export default function ChildrenManagement({
                       <h4 className="text-sm font-semibold text-slate-900">能力观察</h4>
                       <Badge variant="outline" className="bg-white">待接入能力模型</Badge>
                     </div>
-                    {['阅读理解', '问题解决', '逻辑推理', '表达能力', '信息提取'].map((name, index) => (
-                      <div key={name} className="grid grid-cols-[100px_1fr_70px] items-center gap-3 text-sm">
-                        <span className="text-slate-700">{name}</span>
+                    {getAbilityDimensions(childEducationStage).slice(0, 5).map((dimension, index) => (
+                      <div key={dimension.key} className="grid grid-cols-[120px_1fr_70px] items-center gap-3 text-sm">
+                        <span className="text-slate-700">{dimension.label}</span>
                         <div className="h-2 rounded-full bg-white"><div className="h-full rounded-full bg-violet-500" style={{ width: `${40 + index * 10}%` }} /></div>
                         <span className="text-slate-500">待接入</span>
                       </div>
@@ -1377,6 +1412,20 @@ export default function ChildrenManagement({
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>教育阶段</Label>
+              <Select value={childEducationStage} onValueChange={(value) => setChildEducationStage(value as EducationStage)}>
+                <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {educationStageOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {educationStageOptions.find((option) => option.value === childEducationStage)?.description}
+              </p>
+            </div>
           </div>
           <div className="flex justify-end gap-3 border-t border-border/70 bg-slate-50/80 px-6 py-4">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -1418,6 +1467,20 @@ export default function ChildrenManagement({
                   className="flex-1"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>教育阶段</Label>
+              <Select value={childEducationStage} onValueChange={(value) => setChildEducationStage(value as EducationStage)}>
+                <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {educationStageOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs leading-5 text-muted-foreground">
+                切换后，后续能力点、任务推荐、今日概览和钉钉推送会按新阶段展示。
+              </p>
             </div>
           </div>
           <div className="flex justify-end gap-3 border-t border-border/70 bg-slate-50/80 px-6 py-4">

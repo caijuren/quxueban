@@ -25,12 +25,12 @@ const TYPE_REVERSE_MAP: Record<string, string> = {
   'fixed': '固定', 'flexible': '灵活', 'follow': '跟随学校',
 }
 
-const VALID_SUBJECTS = ['chinese', 'math', 'english', 'sports']
+const VALID_SUBJECTS = ['chinese', 'math', 'english', 'sports', 'physics', 'chemistry', 'biology', 'history', 'geography', 'politics']
 const VALID_PARENT_ROLES = ['independent', 'accompany', 'parent-led']
 const VALID_DIFFICULTIES = ['basic', 'advanced', 'challenge']
 const VALID_AMOUNT_UNITS = ['page', 'chapter', 'section', 'time', 'question']
 const VALID_TRACKING_TYPES = ['simple', 'numeric', 'progress']
-const OPTIONAL_TAG_KEYS = ['taskKind', 'level', 'abilityCategory', 'abilityPoint', 'linkedGoal']
+const OPTIONAL_TAG_KEYS = ['taskKind', 'level', 'abilityCategory', 'abilityPoint', 'linkedGoal', 'targetType', 'timeBlock']
 
 const SUBJECT_MAP: Record<string, string> = { chinese: '语文', math: '数学', english: '英语', sports: '体育' }
 const PARENT_ROLE_MAP: Record<string, string> = { independent: '独立完成', accompany: '家长陪伴', 'parent-led': '家长主导', parent: '家长主导' }

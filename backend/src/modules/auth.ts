@@ -8,6 +8,20 @@ import { env } from '../config/env'
 
 export const authRouter: Router = Router()
 
+const educationStages = new Set(['primary', 'middle'])
+
+function normalizeEducationStage(value: unknown): string {
+  if (value === undefined || value === null || value === '') {
+    return 'primary'
+  }
+
+  if (typeof value !== 'string' || !educationStages.has(value)) {
+    throw new AppError(400, '教育阶段只能选择小学或初中')
+  }
+
+  return value
+}
+
 // ============================================
 // Auth Routes
 // ============================================
@@ -166,7 +180,7 @@ authRouter.post('/login', async (req, res: Response) => {
  */
 authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req: AuthRequest, res: Response) => {
   try {
-    const { name, avatar, age, grade, gender, birthday, interests, personality } = req.body
+    const { name, avatar, age, grade, gender, birthday, interests, personality, educationStage } = req.body
     const { familyId, userId } = req.user!
 
     if (!name) {
@@ -198,6 +212,7 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
         avatar: avatar || '🐛',
         passwordHash,
         familyId,
+        educationStage: normalizeEducationStage(educationStage),
         status: 'active',
       },
     })
@@ -210,6 +225,7 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
         name: child.name,
         avatar: child.avatar,
         role: child.role,
+        educationStage: child.educationStage,
       },
     })
   } catch (error: any) {
@@ -382,6 +398,7 @@ authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: A
         id: 2,
         name: '小明',
         avatar: '👶',
+        educationStage: 'primary',
         createdAt: new Date().toISOString(),
         weeklyProgress: 0,
         todayMinutes: 0,
@@ -394,6 +411,7 @@ authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: A
         id: 3,
         name: '小红',
         avatar: '🧒',
+        educationStage: 'primary',
         createdAt: new Date().toISOString(),
         weeklyProgress: 0,
         todayMinutes: 0,
@@ -421,6 +439,7 @@ authRouter.get('/children', authMiddleware, requireRole('parent'), async (req: A
       id: true,
       name: true,
       avatar: true,
+      educationStage: true,
       createdAt: true,
     },
     orderBy: {
@@ -458,7 +477,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       throw new AppError(400, '无效的孩子ID')
     }
     
-    const { name, avatar, age, grade, gender, birthday, interests, personality } = req.body
+    const { name, avatar, age, grade, gender, birthday, interests, personality, educationStage } = req.body
     const { familyId, userId } = req.user!
 
 
@@ -477,7 +496,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
     }
 
     // Build update data
-    const updateData: { name?: string; avatar?: string; passwordHash?: string } = {}
+    const updateData: { name?: string; avatar?: string; educationStage?: string; passwordHash?: string } = {}
 
     if (name !== undefined && name !== existingChild.name) {
       // Check if another child with the same name exists (excluding current child)
@@ -511,6 +530,10 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       updateData.avatar = avatar
     }
 
+    if (educationStage !== undefined) {
+      updateData.educationStage = normalizeEducationStage(educationStage)
+    }
+
     // Note: age, grade, gender, birthday, interests, personality
     // are not stored on User model - these should be stored in Family.settings if needed
 
@@ -523,6 +546,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
         name: true,
         avatar: true,
         role: true,
+        educationStage: true,
         updatedAt: true,
       },
     })

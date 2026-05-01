@@ -125,6 +125,7 @@ childrenRouter.get('/', async (req: AuthRequest, res: Response) => {
       id: true,
       name: true,
       avatar: true,
+      educationStage: true,
       status: true
     },
     orderBy: { id: 'asc' }

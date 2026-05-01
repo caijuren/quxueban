@@ -38,6 +38,7 @@ export interface Child {
   id: number;
   name: string;
   avatar: string;
+  educationStage: 'primary' | 'middle';
 }
 
 export interface Family {

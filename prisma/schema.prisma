@@ -34,6 +34,7 @@ model User {
   avatar            String           @default("🐛") @db.Text
   passwordHash      String           @map("password_hash") @db.VarChar(255)
   familyId          Int              @map("family_id")
+  educationStage    String           @default("primary") @map("education_stage") @db.VarChar(20)
   status            String           @default("active") @db.VarChar(20)
   dingtalkWebhook   String?          @default("") @map("dingtalk_webhook") @db.VarChar(500)
   dingtalkSecret    String?          @default("") @map("dingtalk_secret") @db.VarChar(100)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,13 @@ import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ExportDialog } from '@/components/ExportDialog';
+import {
+  getAbilityDimensions,
+  getEducationStageLabel,
+  middleSubjectOptions,
+  primaryTimeBlockOptions,
+  targetTypeOptions,
+} from '@/lib/education-stage';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { EmptyPanel, FilterBar, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 
@@ -32,7 +39,13 @@ const subjectReverseMap: Record<string, string> = {
   'chinese': '语文',
   'math': '数学',
   'english': '英语',
-  'sports': '体育'
+  'sports': '体育',
+  'physics': '物理',
+  'chemistry': '化学',
+  'biology': '生物',
+  'history': '历史',
+  'geography': '地理',
+  'politics': '道法'
 };
 const parentRoleReverseMap: Record<string, string> = {
   'independent': '独立完成',
@@ -59,6 +72,8 @@ export interface Task {
     abilityCategory?: string;
     abilityPoint?: string;
     linkedGoal?: string;
+    targetType?: string;
+    timeBlock?: string;
   };
   appliesTo?: number[];
   // 精细化记录字段
@@ -91,10 +106,27 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
 
 const taskKindOptions = ['学习', '阅读', '运动', '习惯', '生活', '情绪', '社交'];
 const levelOptions = ['L1 一年级', 'L2 二年级', 'L3 三年级', 'L4 四年级', 'L5 五年级'];
-const abilityCategoryOptions = ['学科能力', '思维与认知', '学习习惯', '体育与健康'];
+const abilityCategoryOptions = ['阶段能力', '学科能力', '习惯过程', '阅读表达', '身心生活'];
 const NO_ABILITY_POINT = '__none__';
-const abilityPointOptions = ['阅读理解', '数学能力', '英语能力', '问题理解', '表达输出', '学习计划制定', '时间管理', '复盘与反思', '学习专注力', '基础体能', '作息管理'];
 const linkedGoalOptions = ['不关联目标', '语文阅读理解', '数学计算稳定性', '每日固定学习时段', '错题复盘', '每周运动达标'];
+
+const primarySubjectOptions = ['语文', '数学', '英语', '体育'];
+const subjectMap: Record<string, string> = {
+  '语文': 'chinese',
+  '数学': 'math',
+  '英语': 'english',
+  '体育': 'sports',
+  '物理': 'physics',
+  '化学': 'chemistry',
+  '生物': 'biology',
+  '历史': 'history',
+  '地理': 'geography',
+  '道法': 'politics',
+};
+
+function getDefaultTargetType(stage?: string) {
+  return stage === 'middle' ? 'knowledge_mastery' : 'habit_process';
+}
 
 const normalizeTaskTags = (rawTags: unknown): TaskTags => {
   let tags: Record<string, unknown> = {};
@@ -134,6 +166,8 @@ const normalizeTaskTags = (rawTags: unknown): TaskTags => {
     abilityCategory: typeof merged.abilityCategory === 'string' ? merged.abilityCategory : undefined,
     abilityPoint,
     linkedGoal: typeof merged.linkedGoal === 'string' ? merged.linkedGoal : undefined,
+    targetType: typeof merged.targetType === 'string' ? merged.targetType : undefined,
+    timeBlock: typeof merged.timeBlock === 'string' ? merged.timeBlock : undefined,
   };
 };
 
@@ -199,6 +233,8 @@ export default function TasksPage() {
     abilityCategory: '学习习惯' as string,
     abilityPoint: NO_ABILITY_POINT as string,
     linkedGoal: '不关联目标' as string,
+    targetType: getDefaultTargetType(selectedChild?.educationStage) as string,
+    timeBlock: '' as string,
     totalUnits: 0,
     completedUnits: 0,
     totalPages: 0,
@@ -220,6 +256,27 @@ export default function TasksPage() {
   }, [activeTab]);
 
   const queryClient = useQueryClient();
+  const selectedEducationStage = selectedChild?.educationStage || 'primary';
+  const currentAbilityPointOptions = useMemo(
+    () => getAbilityDimensions(selectedEducationStage).map((dimension) => dimension.label),
+    [selectedEducationStage]
+  );
+  const currentSubjectOptions = useMemo(
+    () => selectedEducationStage === 'middle' ? middleSubjectOptions : primarySubjectOptions,
+    [selectedEducationStage]
+  );
+
+  useEffect(() => {
+    setFormData((current) => ({
+      ...current,
+      subject: currentSubjectOptions.includes(current.subject) ? current.subject : currentSubjectOptions[0],
+      abilityPoint: currentAbilityPointOptions.includes(current.abilityPoint) ? current.abilityPoint : NO_ABILITY_POINT,
+      targetType: ['habit_process', 'knowledge_mastery'].includes(current.targetType)
+        ? getDefaultTargetType(selectedEducationStage)
+        : current.targetType || getDefaultTargetType(selectedEducationStage),
+      timeBlock: selectedEducationStage === 'primary' ? current.timeBlock : '',
+    }));
+  }, [currentAbilityPointOptions, currentSubjectOptions, selectedEducationStage]);
   const { data: tasks = [], isLoading } = useQuery({ 
     queryKey: ['tasks', selectedChildId], 
     queryFn: () => fetchTasks(selectedChildId || undefined),
@@ -293,6 +350,8 @@ export default function TasksPage() {
       abilityCategory: '学习习惯',
       abilityPoint: NO_ABILITY_POINT,
       linkedGoal: '不关联目标',
+      targetType: getDefaultTargetType(selectedChild?.educationStage),
+      timeBlock: '',
       totalUnits: 0,
       completedUnits: 0,
       totalPages: 0,
@@ -333,6 +392,8 @@ export default function TasksPage() {
       abilityCategory: tags.abilityCategory || '学习习惯',
       abilityPoint: tags.abilityPoint || NO_ABILITY_POINT,
       linkedGoal: tags.linkedGoal || '不关联目标',
+      targetType: tags.targetType || getDefaultTargetType(selectedEducationStage),
+      timeBlock: tags.timeBlock || '',
       totalUnits: 0,
       completedUnits: 0,
       totalPages: 0,
@@ -354,12 +415,6 @@ export default function TasksPage() {
       toast.error('请选择任务关联的能力点');
       return;
     }
-    const subjectMap: Record<string, string> = {
-      '语文': 'chinese',
-      '数学': 'math',
-      '英语': 'english',
-      '体育': 'sports'
-    };
     const parentRoleMap: Record<string, string> = {
       '独立完成': 'independent',
       '家长陪伴': 'accompany',
@@ -390,6 +445,8 @@ export default function TasksPage() {
         abilityCategory: formData.abilityCategory,
         abilityPoint: formData.abilityPoint.trim(),
         linkedGoal: formData.linkedGoal,
+        targetType: formData.targetType,
+        timeBlock: formData.timeBlock,
       },
       appliesTo: selectedChildId ? [selectedChildId] : [],
     });
@@ -404,12 +461,6 @@ export default function TasksPage() {
       toast.error('请选择任务关联的能力点');
       return;
     }
-    const subjectMap: Record<string, string> = {
-      '语文': 'chinese',
-      '数学': 'math',
-      '英语': 'english',
-      '体育': 'sports'
-    };
     const parentRoleMap: Record<string, string> = {
       '独立完成': 'independent',
       '家长陪伴': 'accompany',
@@ -443,6 +494,8 @@ export default function TasksPage() {
           abilityCategory: formData.abilityCategory,
           abilityPoint: formData.abilityPoint.trim(),
           linkedGoal: formData.linkedGoal,
+          targetType: formData.targetType,
+          timeBlock: formData.timeBlock,
         },
         appliesTo: selectedChildId ? [selectedChildId] : [],
       }
@@ -450,14 +503,7 @@ export default function TasksPage() {
   };
 
   const getSubjectGroups = () => {
-    const subjectReverseMap: Record<string, string> = {
-      'chinese': '语文',
-      'math': '数学',
-      'english': '英语',
-      'sports': '体育'
-    };
-    const subjects = ['语文', '数学', '英语', '体育'];
-    return subjects.map(subject => {
+    return currentSubjectOptions.map(subject => {
       const subjectKey = Object.keys(subjectReverseMap).find(key => subjectReverseMap[key] === subject) || subject;
       const subjectTasks = tasks.filter(task => {
         const taskSubject = task.tags?.subject;
@@ -521,12 +567,6 @@ export default function TasksPage() {
   };
 
   const renderTags = (task: Task) => {
-    const subjectReverseMap: Record<string, string> = {
-      'chinese': '语文',
-      'math': '数学',
-      'english': '英语',
-      'sports': '体育'
-    };
     const parentRoleReverseMap: Record<string, string> = {
       'independent': '独立完成',
       'accompany': '家长陪伴',
@@ -543,6 +583,8 @@ export default function TasksPage() {
     }
     if (task.tags?.level) tags.push(task.tags.level);
     if (task.tags?.abilityPoint) tags.push(task.tags.abilityPoint);
+    if (task.tags?.targetType) tags.push(targetTypeOptions.find((item) => item.value === task.tags?.targetType)?.label || task.tags.targetType);
+    if (task.tags?.timeBlock) tags.push(task.tags.timeBlock);
     if (task.tags?.linkedGoal && task.tags.linkedGoal !== '不关联目标') tags.push(task.tags.linkedGoal);
     return tags.map(tag => {
       const config = tagConfig[tag];
@@ -668,7 +710,9 @@ export default function TasksPage() {
     )}>
       <div>
         <Label className="text-sm font-semibold text-slate-800">能力与目标关联</Label>
-        <p className="mt-1 text-xs text-slate-500">能力点为必填项，用于今日概览展示、任务归因和后续掌握度回流。</p>
+        <p className="mt-1 text-xs text-slate-500">
+          当前孩子为{getEducationStageLabel(selectedEducationStage)}，能力点会按阶段切换，用于今日概览展示、任务归因和后续掌握度回流。
+        </p>
       </div>
       {editingLegacyTaskMissingAbility && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-white/80 p-3 text-xs leading-5 text-amber-700">
@@ -705,17 +749,38 @@ export default function TasksPage() {
           </Select>
         </div>
         <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-600">目标类型</Label>
+          <Select value={formData.targetType} onValueChange={(value) => setFormData({ ...formData, targetType: value })}>
+            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {targetTypeOptions.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
           <Label className="text-xs font-medium text-slate-600">能力点 <span className="text-red-500">*</span></Label>
           <Select value={formData.abilityPoint} onValueChange={(value) => setFormData({ ...formData, abilityPoint: value })}>
             <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
             <SelectContent className="rounded-xl">
               <SelectItem value={NO_ABILITY_POINT}>请选择能力点</SelectItem>
-              {abilityPointOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              {currentAbilityPointOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
             </SelectContent>
           </Select>
           <p className="text-[11px] leading-5 text-slate-500">1.7 起任务必须绑定能力点，用于后续掌握度和阅读任务归因。</p>
         </div>
       </div>
+      {selectedEducationStage === 'primary' && (
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-slate-600">时间块</Label>
+          <Select value={formData.timeBlock || 'none'} onValueChange={(value) => setFormData({ ...formData, timeBlock: value === 'none' ? '' : value })}>
+            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="none">不指定</SelectItem>
+              {primaryTimeBlockOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="space-y-2">
         <Label className="text-xs font-medium text-slate-600">关联目标</Label>
         <Select value={formData.linkedGoal} onValueChange={(value) => setFormData({ ...formData, linkedGoal: value })}>
@@ -1223,35 +1288,17 @@ export default function TasksPage() {
             {/* 学科 */}
             <div className="space-y-3">
               <Label className="text-sm font-medium text-gray-700">学科</Label>
-              <div className="grid grid-cols-4 gap-2">
-                <Button
-                  variant={formData.subject === '语文' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '语文' })}
-                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  语文
-                </Button>
-                <Button
-                  variant={formData.subject === '数学' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '数学' })}
-                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  数学
-                </Button>
-                <Button
-                  variant={formData.subject === '英语' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '英语' })}
-                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  英语
-                </Button>
-                <Button
-                  variant={formData.subject === '体育' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '体育' })}
-                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  体育
-                </Button>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {currentSubjectOptions.map((subject) => (
+                  <Button
+                    key={subject}
+                    variant={formData.subject === subject ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, subject })}
+                    className={`rounded-xl ${formData.subject === subject ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    {subject}
+                  </Button>
+                ))}
               </div>
             </div>
 
@@ -1600,35 +1647,17 @@ export default function TasksPage() {
             {/* 学科 */}
             <div className="space-y-3">
               <Label className="text-sm font-medium text-gray-700">学科</Label>
-              <div className="grid grid-cols-4 gap-2">
-                <Button
-                  variant={formData.subject === '语文' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '语文' })}
-                  className={`rounded-xl ${formData.subject === '语文' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  语文
-                </Button>
-                <Button
-                  variant={formData.subject === '数学' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '数学' })}
-                  className={`rounded-xl ${formData.subject === '数学' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  数学
-                </Button>
-                <Button
-                  variant={formData.subject === '英语' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '英语' })}
-                  className={`rounded-xl ${formData.subject === '英语' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  英语
-                </Button>
-                <Button
-                  variant={formData.subject === '体育' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, subject: '体育' })}
-                  className={`rounded-xl ${formData.subject === '体育' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  体育
-                </Button>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {currentSubjectOptions.map((subject) => (
+                  <Button
+                    key={subject}
+                    variant={formData.subject === subject ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, subject })}
+                    className={`rounded-xl ${formData.subject === subject ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    {subject}
+                  </Button>
+                ))}
               </div>
             </div>
 
