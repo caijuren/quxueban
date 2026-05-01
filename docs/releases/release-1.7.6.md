@@ -31,4 +31,4 @@ cd /home/ubuntu/backend
 FAMILY_ID=1 CHILD_ID=24 CHECK_DATE=2026-04-30 pnpm run script:check-daily-study-minutes
 ```
 
-完整生产发布流程见 `docs/PRODUCTION_RELEASE_CHECKLIST.md`。
+完整生产发布流程见 `docs/production-release-checklist.md`。

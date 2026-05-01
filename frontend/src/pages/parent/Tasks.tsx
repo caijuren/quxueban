@@ -2,33 +2,33 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info, ClipboardList, Activity, AlertTriangle, Clock3, BarChart3, CalendarDays, MoreVertical, CheckCircle2, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info, ClipboardList, Activity, AlertTriangle, Clock3, BarChart3, CalendarDays, ArrowRight, CheckCircle2, TrendingUp } from 'lucide-react';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ExportDialog } from '@/components/ExportDialog';
-import {
-  getAbilityDimensions,
-  getEducationStageLabel,
-  middleSubjectOptions,
-  primaryTimeBlockOptions,
-  targetTypeOptions,
-} from '@/lib/education-stage';
+import { middleSubjectOptions, targetTypeOptions } from '@/lib/education-stage';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { EmptyPanel, FilterBar, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
-
-type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
-type TaskType = '固定' | '灵活' | '跟随学校';
-type ScheduleRule = 'daily' | 'school' | 'weekend' | 'flexible';
+import {
+  createDefaultTaskEditorFormData,
+  NO_ABILITY_POINT,
+  normalizeTaskEditorFormForStage,
+  ScheduleRule,
+  subjectMap,
+  taskEditorFormToPayload,
+  TaskCategory,
+  TaskEditor,
+  TaskEditorFormData,
+  TaskType,
+} from '@/components/parent/TaskEditor';
 
 const getWeekNo = (date: Date) => {
   return `${getISOWeekYear(date)}-${String(getISOWeek(date)).padStart(2, '0')}`;
@@ -82,10 +82,6 @@ export interface Task {
   targetValue?: number;
 }
 
-type TaskUpdatePayload = Partial<Task> & {
-  childId: number | null;
-};
-
 type TaskTags = NonNullable<Task['tags']>;
 
 const tagConfig: Record<string, { icon: any; color: string }> = {
@@ -104,29 +100,7 @@ const tagConfig: Record<string, { icon: any; color: string }> = {
   '家长主导': { icon: Users, color: 'bg-cyan-100 text-cyan-600' },
 };
 
-const taskKindOptions = ['学习', '阅读', '运动', '习惯', '生活', '情绪', '社交'];
-const levelOptions = ['L1 一年级', 'L2 二年级', 'L3 三年级', 'L4 四年级', 'L5 五年级'];
-const abilityCategoryOptions = ['阶段能力', '学科能力', '习惯过程', '阅读表达', '身心生活'];
-const NO_ABILITY_POINT = '__none__';
-const linkedGoalOptions = ['不关联目标', '语文阅读理解', '数学计算稳定性', '每日固定学习时段', '错题复盘', '每周运动达标'];
-
 const primarySubjectOptions = ['语文', '数学', '英语', '体育'];
-const subjectMap: Record<string, string> = {
-  '语文': 'chinese',
-  '数学': 'math',
-  '英语': 'english',
-  '体育': 'sports',
-  '物理': 'physics',
-  '化学': 'chemistry',
-  '生物': 'biology',
-  '历史': 'history',
-  '地理': 'geography',
-  '道法': 'politics',
-};
-
-function getDefaultTargetType(stage?: string) {
-  return stage === 'middle' ? 'knowledge_mastery' : 'habit_process';
-}
 
 const normalizeTaskTags = (rawTags: unknown): TaskTags => {
   let tags: Record<string, unknown> = {};
@@ -181,16 +155,6 @@ const normalizeTask = (task: Task): Task => {
   };
 };
 
-const toSubjectLabel = (value?: string) => {
-  if (!value) return '语文';
-  return subjectReverseMap[value] || value;
-};
-
-const toParentRoleLabel = (value?: string) => {
-  if (!value) return '独立完成';
-  return parentRoleReverseMap[value] || value;
-};
-
 async function fetchTasks(childId?: number): Promise<Task[]> {
   // 强制传递childId，确保数据隔离
   if (!childId) {
@@ -210,40 +174,13 @@ async function pushTaskToDingtalk(taskId: number, childId: number): Promise<void
 export default function TasksPage() {
   const navigate = useNavigate();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [updatePlanDialogOpen, setUpdatePlanDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
-  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const { selectedChildId, selectedChild } = useSelectedChild();
-  const [formData, setFormData] = useState({
-    name: '',
-    category: '校内巩固' as TaskCategory,
-    type: '固定' as TaskType,
-    timePerUnit: 30,
-    scheduleRule: 'daily' as ScheduleRule,
-    weeklyFrequency: 5,
-    subject: '语文' as string,
-    parentRole: '独立完成' as string,
-    difficulty: '基础' as string,
-    taskKind: '学习' as string,
-    level: 'L3 三年级' as string,
-    abilityCategory: '学习习惯' as string,
-    abilityPoint: NO_ABILITY_POINT as string,
-    linkedGoal: '不关联目标' as string,
-    targetType: getDefaultTargetType(selectedChild?.educationStage) as string,
-    timeBlock: '' as string,
-    totalUnits: 0,
-    completedUnits: 0,
-    totalPages: 0,
-    completedPages: 0,
-    // 精细化记录字段
-    trackingType: 'simple' as 'simple' | 'numeric' | 'progress',
-    trackingUnit: '' as string,
-    targetValue: 0 as number,
-  });
+  const [formData, setFormData] = useState<TaskEditorFormData>(() => createDefaultTaskEditorFormData(selectedChild?.educationStage));
   // 使用localStorage存储当前选中的选项卡
   const [activeTab, setActiveTab] = useState<'all' | 'subject' | 'type' | 'completion' | 'schedule'>(() => {
     const savedTab = localStorage.getItem('tasksActiveTab');
@@ -257,26 +194,14 @@ export default function TasksPage() {
 
   const queryClient = useQueryClient();
   const selectedEducationStage = selectedChild?.educationStage || 'primary';
-  const currentAbilityPointOptions = useMemo(
-    () => getAbilityDimensions(selectedEducationStage).map((dimension) => dimension.label),
-    [selectedEducationStage]
-  );
   const currentSubjectOptions = useMemo(
     () => selectedEducationStage === 'middle' ? middleSubjectOptions : primarySubjectOptions,
     [selectedEducationStage]
   );
 
   useEffect(() => {
-    setFormData((current) => ({
-      ...current,
-      subject: currentSubjectOptions.includes(current.subject) ? current.subject : currentSubjectOptions[0],
-      abilityPoint: currentAbilityPointOptions.includes(current.abilityPoint) ? current.abilityPoint : NO_ABILITY_POINT,
-      targetType: ['habit_process', 'knowledge_mastery'].includes(current.targetType)
-        ? getDefaultTargetType(selectedEducationStage)
-        : current.targetType || getDefaultTargetType(selectedEducationStage),
-      timeBlock: selectedEducationStage === 'primary' ? current.timeBlock : '',
-    }));
-  }, [currentAbilityPointOptions, currentSubjectOptions, selectedEducationStage]);
+    setFormData((current) => normalizeTaskEditorFormForStage(current, selectedEducationStage));
+  }, [selectedEducationStage]);
   const { data: tasks = [], isLoading } = useQuery({ 
     queryKey: ['tasks', selectedChildId], 
     queryFn: () => fetchTasks(selectedChildId || undefined),
@@ -307,25 +232,6 @@ export default function TasksPage() {
     onError: (e: any) => toast.error(getErrorMessage(e))
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: { id: number; updates: TaskUpdatePayload }) => {
-      const r = await apiClient.put('/tasks/' + data.id, data.updates);
-      return r.data;
-    },
-    onSuccess: (response) => {
-      const updatedTask = response?.data ? normalizeTask(response.data) : null;
-      if (updatedTask && selectedChildId) {
-        queryClient.setQueryData<Task[]>(['tasks', selectedChildId], (current = []) =>
-          current.map((task) => task.id === updatedTask.id ? updatedTask : task)
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success('更新成功');
-      setEditDialogOpen(false);
-    },
-    onError: (e: any) => toast.error(getErrorMessage(e))
-  });
-
   // Push task to DingTalk mutation
   const pushTaskToDingtalkMutation = useMutation({
     mutationFn: ({ taskId, childId }: { taskId: number; childId: number }) =>
@@ -335,75 +241,7 @@ export default function TasksPage() {
   });
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      category: '校内巩固',
-      type: '固定',
-      timePerUnit: 30,
-      scheduleRule: 'daily',
-      weeklyFrequency: 5,
-      subject: '语文',
-      parentRole: '独立完成',
-      difficulty: '基础',
-      taskKind: '学习',
-      level: 'L3 三年级',
-      abilityCategory: '学习习惯',
-      abilityPoint: NO_ABILITY_POINT,
-      linkedGoal: '不关联目标',
-      targetType: getDefaultTargetType(selectedChild?.educationStage),
-      timeBlock: '',
-      totalUnits: 0,
-      completedUnits: 0,
-      totalPages: 0,
-      completedPages: 0,
-      // 精细化记录字段
-      trackingType: 'simple',
-      trackingUnit: '',
-      targetValue: 0,
-    });
-  };
-
-  const handleEdit = (task: Task) => {
-    const normalizedTask = normalizeTask(task);
-    const tags = normalizedTask.tags || {};
-    setTaskToEdit(normalizedTask);
-    // 反向映射后端返回的英文值到前端显示的中文值
-    const subject = toSubjectLabel(tags.subject);
-    const parentRole = toParentRoleLabel(tags.parentRole);
-    const difficultyMap: Record<string, string> = {
-      'basic': '基础',
-      'advanced': '提高',
-      'challenge': '挑战'
-    };
-    const difficulty = tags.difficulty ? difficultyMap[tags.difficulty] || tags.difficulty : '基础';
-    
-    setFormData({
-      name: normalizedTask.name,
-      category: normalizedTask.category,
-      type: normalizedTask.type,
-      timePerUnit: normalizedTask.timePerUnit,
-      scheduleRule: (normalizedTask.scheduleRule as ScheduleRule) || 'daily',
-      weeklyFrequency: normalizedTask.weeklyFrequency || 5,
-      subject: subject,
-      parentRole: parentRole,
-      difficulty: difficulty,
-      taskKind: tags.taskKind || '学习',
-      level: tags.level || 'L3 三年级',
-      abilityCategory: tags.abilityCategory || '学习习惯',
-      abilityPoint: tags.abilityPoint || NO_ABILITY_POINT,
-      linkedGoal: tags.linkedGoal || '不关联目标',
-      targetType: tags.targetType || getDefaultTargetType(selectedEducationStage),
-      timeBlock: tags.timeBlock || '',
-      totalUnits: 0,
-      completedUnits: 0,
-      totalPages: 0,
-      completedPages: 0,
-      // 精细化记录字段 - 从task中获取
-      trackingType: (normalizedTask as any).trackingType || 'simple',
-      trackingUnit: (normalizedTask as any).trackingUnit || '',
-      targetValue: (normalizedTask as any).targetValue || 0,
-    });
-    setEditDialogOpen(true);
+    setFormData(createDefaultTaskEditorFormData(selectedEducationStage));
   };
 
   const handleCreate = () => {
@@ -415,91 +253,7 @@ export default function TasksPage() {
       toast.error('请选择任务关联的能力点');
       return;
     }
-    const parentRoleMap: Record<string, string> = {
-      '独立完成': 'independent',
-      '家长陪伴': 'accompany',
-      '家长主导': 'parent-led'
-    };
-    const difficultyMap: Record<string, string> = {
-      '基础': 'basic',
-      '提高': 'advanced',
-      '挑战': 'challenge'
-    };
-    createMutation.mutate({
-      childId: selectedChildId,
-      name: formData.name,
-      category: formData.category,
-      type: formData.type,
-      timePerUnit: formData.timePerUnit,
-      weeklyFrequency: formData.weeklyFrequency,
-      trackingType: formData.trackingType,
-      trackingUnit: formData.trackingUnit,
-      targetValue: formData.targetValue,
-      tags: {
-        subject: subjectMap[formData.subject],
-        parentRole: parentRoleMap[formData.parentRole],
-        difficulty: difficultyMap[formData.difficulty],
-        scheduleRule: formData.scheduleRule,
-        taskKind: formData.taskKind,
-        level: formData.level,
-        abilityCategory: formData.abilityCategory,
-        abilityPoint: formData.abilityPoint.trim(),
-        linkedGoal: formData.linkedGoal,
-        targetType: formData.targetType,
-        timeBlock: formData.timeBlock,
-      },
-      appliesTo: selectedChildId ? [selectedChildId] : [],
-    });
-  };
-
-  const handleUpdate = () => {
-    if (!taskToEdit || !formData.name.trim()) {
-      toast.error('请输入任务名称');
-      return;
-    }
-    if (!formData.abilityPoint || formData.abilityPoint === NO_ABILITY_POINT) {
-      toast.error('请选择任务关联的能力点');
-      return;
-    }
-    const parentRoleMap: Record<string, string> = {
-      '独立完成': 'independent',
-      '家长陪伴': 'accompany',
-      '家长主导': 'parent-led'
-    };
-    const difficultyMap: Record<string, string> = {
-      '基础': 'basic',
-      '提高': 'advanced',
-      '挑战': 'challenge'
-    };
-    updateMutation.mutate({ 
-      id: taskToEdit.id, 
-      updates: {
-        childId: selectedChildId,
-        name: formData.name,
-        category: formData.category,
-        type: formData.type,
-        timePerUnit: formData.timePerUnit,
-        scheduleRule: formData.scheduleRule,
-        weeklyFrequency: formData.weeklyFrequency,
-        trackingType: formData.trackingType,
-        trackingUnit: formData.trackingUnit,
-        targetValue: formData.targetValue,
-        tags: {
-          subject: subjectMap[formData.subject],
-          parentRole: parentRoleMap[formData.parentRole],
-          difficulty: difficultyMap[formData.difficulty],
-          scheduleRule: formData.scheduleRule,
-          taskKind: formData.taskKind,
-          level: formData.level,
-          abilityCategory: formData.abilityCategory,
-          abilityPoint: formData.abilityPoint.trim(),
-          linkedGoal: formData.linkedGoal,
-          targetType: formData.targetType,
-          timeBlock: formData.timeBlock,
-        },
-        appliesTo: selectedChildId ? [selectedChildId] : [],
-      }
-    });
+    createMutation.mutate(taskEditorFormToPayload(formData, selectedChildId));
   };
 
   const getSubjectGroups = () => {
@@ -670,8 +424,6 @@ export default function TasksPage() {
       return getOperationalScore(a) - getOperationalScore(b);
     })
     .slice(0, Math.min(3, tasks.length));
-  const editingLegacyTaskMissingAbility = editDialogOpen && !!taskToEdit && !normalizeTaskTags(taskToEdit.tags).abilityPoint;
-
   const operationalMetrics = [
     {
       label: '启用任务',
@@ -702,96 +454,6 @@ export default function TasksPage() {
       tone: 'bg-rose-50 text-rose-600',
     },
   ];
-
-  const renderBusinessLinkFields = () => (
-    <div className={cn(
-      'space-y-4 rounded-2xl border p-4',
-      editingLegacyTaskMissingAbility ? 'border-amber-200 bg-amber-50/70' : 'border-indigo-100 bg-indigo-50/40'
-    )}>
-      <div>
-        <Label className="text-sm font-semibold text-slate-800">能力与目标关联</Label>
-        <p className="mt-1 text-xs text-slate-500">
-          当前孩子为{getEducationStageLabel(selectedEducationStage)}，能力点会按阶段切换，用于今日概览展示、任务归因和后续掌握度回流。
-        </p>
-      </div>
-      {editingLegacyTaskMissingAbility && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-white/80 p-3 text-xs leading-5 text-amber-700">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>这个旧任务还没有能力点。请补齐后再保存，保存后任务列表和今日概览都会同步显示。</span>
-        </div>
-      )}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">任务类型</Label>
-          <Select value={formData.taskKind} onValueChange={(value) => setFormData({ ...formData, taskKind: value })}>
-            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl">
-              {taskKindOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">适用年级</Label>
-          <Select value={formData.level} onValueChange={(value) => setFormData({ ...formData, level: value })}>
-            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl">
-              {levelOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">能力分类</Label>
-          <Select value={formData.abilityCategory} onValueChange={(value) => setFormData({ ...formData, abilityCategory: value })}>
-            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl">
-              {abilityCategoryOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">目标类型</Label>
-          <Select value={formData.targetType} onValueChange={(value) => setFormData({ ...formData, targetType: value })}>
-            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl">
-              {targetTypeOptions.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">能力点 <span className="text-red-500">*</span></Label>
-          <Select value={formData.abilityPoint} onValueChange={(value) => setFormData({ ...formData, abilityPoint: value })}>
-            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value={NO_ABILITY_POINT}>请选择能力点</SelectItem>
-              {currentAbilityPointOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <p className="text-[11px] leading-5 text-slate-500">1.7 起任务必须绑定能力点，用于后续掌握度和阅读任务归因。</p>
-        </div>
-      </div>
-      {selectedEducationStage === 'primary' && (
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-slate-600">时间块</Label>
-          <Select value={formData.timeBlock || 'none'} onValueChange={(value) => setFormData({ ...formData, timeBlock: value === 'none' ? '' : value })}>
-            <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="none">不指定</SelectItem>
-              {primaryTimeBlockOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-slate-600">关联目标</Label>
-        <Select value={formData.linkedGoal} onValueChange={(value) => setFormData({ ...formData, linkedGoal: value })}>
-          <SelectTrigger className="rounded-xl border-indigo-100 bg-white"><SelectValue /></SelectTrigger>
-          <SelectContent className="rounded-xl">
-            {linkedGoalOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
 
   const trendPoints = [56, 63, 59, 68, 72, 70, Math.max(taskHealthScore, 48)];
   const trendPath = trendPoints.map((point, index) => {
@@ -835,12 +497,13 @@ export default function TasksPage() {
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              handleEdit(task);
+              navigate(`/parent/tasks/${task.id}`);
             }}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-100 transition-colors hover:bg-slate-50 hover:text-slate-700 lg:opacity-0 lg:group-hover:opacity-100"
-            aria-label="编辑任务"
+            aria-label="进入任务详情"
+            title="进入详情"
           >
-            <MoreVertical className="size-4" />
+            <ArrowRight className="size-4" />
           </button>
         </div>
 
@@ -915,7 +578,7 @@ export default function TasksPage() {
               <RefreshCw className="mr-1.5 size-4" />
               同步计划
             </Button>
-            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90">
               <Plus className="mr-1.5 size-4" />
               新建任务
             </Button>
@@ -1164,707 +827,17 @@ export default function TasksPage() {
               先定义任务怎么安排，再补齐能力点和记录方式。能力点必填，后续会用于能力分析和任务推荐。
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 py-2">
-            {/* 任务名称 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
-              <Input
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                placeholder="请输入任务名称"
-                required
-                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* 分配规则 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">分配规则</Label>
-              <div className="grid grid-cols-4 gap-2">
-                <Button
-                  variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  每日任务
-                </Button>
-                <Button
-                  variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  在校日任务
-                </Button>
-                <Button
-                  variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  智能分配
-                </Button>
-                <Button
-                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  周末任务
-                </Button>
-              </div>
-              {formData.scheduleRule === 'flexible' && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-700">每周次数</Label>
-                  <Input
-                    type="number"
-                    value={formData.weeklyFrequency}
-                    onChange={e => setFormData({ ...formData, weeklyFrequency: parseInt(e.target.value) || 1 })}
-                    className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* 任务分类 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">任务分类</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={formData.category === '校内巩固' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '校内巩固' })}
-                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  校内巩固
-                </Button>
-                <Button
-                  variant={formData.category === '校内拔高' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '校内拔高' })}
-                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  校内拔高
-                </Button>
-                <Button
-                  variant={formData.category === '课外课程' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '课外课程' })}
-                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  课外课程
-                </Button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={formData.category === '中文阅读' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '中文阅读' })}
-                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  中文阅读
-                </Button>
-                <Button
-                  variant={formData.category === '英语阅读' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '英语阅读' })}
-                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  英文阅读
-                </Button>
-                <Button
-                  variant={formData.category === '体育运动' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '体育运动' })}
-                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  体育锻炼
-                </Button>
-              </div>
-            </div>
-
-            {/* 单项任务时长 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">单项任务时长（分钟）</Label>
-              <Input
-                type="number"
-                value={formData.timePerUnit}
-                onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
-                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* 学科 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">学科</Label>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {currentSubjectOptions.map((subject) => (
-                  <Button
-                    key={subject}
-                    variant={formData.subject === subject ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, subject })}
-                    className={`rounded-xl ${formData.subject === subject ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    {subject}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* 完成方式 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">完成方式</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
-                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  自主完成
-                </Button>
-                <Button
-                  variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
-                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  家长陪伴
-                </Button>
-                <Button
-                  variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
-                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  家长主导
-                </Button>
-              </div>
-            </div>
-
-            {/* 任务难度 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">任务难度</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={formData.difficulty === '基础' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, difficulty: '基础' })}
-                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  基础
-                </Button>
-                <Button
-                  variant={formData.difficulty === '提高' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, difficulty: '提高' })}
-                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  提高
-                </Button>
-                <Button
-                  variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
-                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  挑战
-                </Button>
-              </div>
-            </div>
-
-            {/* 能力与目标关联 */}
-            {renderBusinessLinkFields()}
-
-            {/* 总单元数 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">总单元数</Label>
-              <div className="flex gap-4">
-                <Input
-                  type="number"
-                  value={formData.totalUnits}
-                  onChange={e => setFormData({ ...formData, totalUnits: parseInt(e.target.value) || 0 })}
-                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">已完成：</span>
-                  <Input
-                    type="number"
-                    value={formData.completedUnits}
-                    onChange={e => setFormData({ ...formData, completedUnits: parseInt(e.target.value) || 0 })}
-                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 总页数 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">总页数</Label>
-              <div className="flex gap-4">
-                <Input
-                  type="number"
-                  value={formData.totalPages}
-                  onChange={e => setFormData({ ...formData, totalPages: parseInt(e.target.value) || 0 })}
-                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">已完成：</span>
-                  <Input
-                    type="number"
-                    value={formData.completedPages}
-                    onChange={e => setFormData({ ...formData, completedPages: parseInt(e.target.value) || 0 })}
-                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 记录方式设置 */}
-            <div className="space-y-3 pt-4 border-t border-gray-100">
-              <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                记录方式设置
-              </Label>
-              
-              {/* 记录方式选择 */}
-              <div className="space-y-2">
-                <Label className="text-xs text-gray-500">记录类型</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant={formData.trackingType === 'simple' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, trackingType: 'simple', trackingUnit: '', targetValue: 0 })}
-                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    简单记录
-                  </Button>
-                  <Button
-                    variant={formData.trackingType === 'numeric' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, trackingType: 'numeric' })}
-                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    数值记录
-                  </Button>
-                  <Button
-                    variant={formData.trackingType === 'progress' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, trackingType: 'progress' })}
-                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    进度记录
-                  </Button>
-                </div>
-              </div>
-
-              {/* 单位和目标值（仅在数值记录或进度记录时显示） */}
-              {formData.trackingType !== 'simple' && (
-                <div className="space-y-3 pt-2">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs text-gray-500">计量单位</Label>
-                      <Select
-                        value={formData.trackingUnit}
-                        onValueChange={(value) => setFormData({ ...formData, trackingUnit: value })}
-                      >
-                        <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                          <SelectValue placeholder="选择单位" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="页">页</SelectItem>
-                          <SelectItem value="次">次</SelectItem>
-                          <SelectItem value="分钟">分钟</SelectItem>
-                          <SelectItem value="道">道</SelectItem>
-                          <SelectItem value="篇">篇</SelectItem>
-                          <SelectItem value="个">个</SelectItem>
-                          <SelectItem value="组">组</SelectItem>
-                          <SelectItem value="字">字</SelectItem>
-                          <SelectItem value="词">词</SelectItem>
-                          <SelectItem value="句">句</SelectItem>
-                          <SelectItem value="段">段</SelectItem>
-                          <SelectItem value="章">章</SelectItem>
-                          <SelectItem value="本">本</SelectItem>
-                          <SelectItem value="套">套</SelectItem>
-                          <SelectItem value="卷">卷</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-gray-500">目标值（可选）</Label>
-                      <Input
-                        type="number"
-                        value={formData.targetValue || ''}
-                        onChange={e => setFormData({ ...formData, targetValue: parseInt(e.target.value) || 0 })}
-                        placeholder="如：100"
-                        className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm text-indigo-700">
-                    <p className="flex items-start gap-2">
-                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>
-                        孩子完成时将看到：
-                        {formData.trackingType === 'numeric' 
-                          ? `输入本次完成的${formData.trackingUnit || '数量'}${formData.targetValue ? `（目标：${formData.targetValue}${formData.trackingUnit}）` : ''}`
-                          : `输入当前进度${formData.trackingUnit ? `（${formData.trackingUnit}）` : ''}${formData.targetValue ? `，目标${formData.targetValue}${formData.trackingUnit}` : ''}`
-                        }
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="rounded-xl h-11 px-6 bg-primary text-primary-foreground shadow-sm">
-              {createMutation.isPending ? '创建中...' : '创建'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[760px] max-h-[86vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <Edit2 className="w-5 h-5 text-white" />
-              </div>
-              编辑任务
-            </DialogTitle>
-            <DialogDescription>
-              修改后会同步到任务列表、今日概览和后续计划计算。旧任务如缺少能力点，需要补齐后才能保存。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5 py-2">
-            {/* 任务名称 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
-              <Input
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                placeholder="请输入任务名称"
-                required
-                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* 分配规则 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">分配规则</Label>
-              <div className="grid grid-cols-4 gap-2">
-                <Button
-                  variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  每日任务
-                </Button>
-                <Button
-                  variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  在校日任务
-                </Button>
-                <Button
-                  variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  智能分配
-                </Button>
-                <Button
-                  variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                  className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  周末任务
-                </Button>
-              </div>
-              {formData.scheduleRule === 'flexible' && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-700">每周次数</Label>
-                  <Input
-                    type="number"
-                    value={formData.weeklyFrequency}
-                    onChange={e => setFormData({ ...formData, weeklyFrequency: parseInt(e.target.value) || 1 })}
-                    className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* 任务分类 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">任务分类</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={formData.category === '校内巩固' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '校内巩固' })}
-                  className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  校内巩固
-                </Button>
-                <Button
-                  variant={formData.category === '校内拔高' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '校内拔高' })}
-                  className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  校内拔高
-                </Button>
-                <Button
-                  variant={formData.category === '课外课程' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '课外课程' })}
-                  className={`rounded-xl ${formData.category === '课外课程' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  课外课程
-                </Button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={formData.category === '中文阅读' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '中文阅读' })}
-                  className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  中文阅读
-                </Button>
-                <Button
-                  variant={formData.category === '英语阅读' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '英语阅读' })}
-                  className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  英文阅读
-                </Button>
-                <Button
-                  variant={formData.category === '体育运动' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, category: '体育运动' })}
-                  className={`rounded-xl ${formData.category === '体育运动' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  体育锻炼
-                </Button>
-              </div>
-            </div>
-
-            {/* 单项任务时长 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">单项任务时长（分钟）</Label>
-              <Input
-                type="number"
-                value={formData.timePerUnit}
-                onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
-                className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* 学科 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">学科</Label>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {currentSubjectOptions.map((subject) => (
-                  <Button
-                    key={subject}
-                    variant={formData.subject === subject ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, subject })}
-                    className={`rounded-xl ${formData.subject === subject ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    {subject}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* 完成方式 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">完成方式</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
-                  className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  自主完成
-                </Button>
-                <Button
-                  variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
-                  className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  家长陪伴
-                </Button>
-                <Button
-                  variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
-                  className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  家长主导
-                </Button>
-              </div>
-            </div>
-
-            {/* 任务难度 */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-gray-700">任务难度</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={formData.difficulty === '基础' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, difficulty: '基础' })}
-                  className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  基础
-                </Button>
-                <Button
-                  variant={formData.difficulty === '提高' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, difficulty: '提高' })}
-                  className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  提高
-                </Button>
-                <Button
-                  variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
-                  className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  挑战
-                </Button>
-              </div>
-            </div>
-
-            {/* 能力与目标关联 */}
-            {renderBusinessLinkFields()}
-
-            {/* 总单元数 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">总单元数</Label>
-              <div className="flex gap-4">
-                <Input
-                  type="number"
-                  value={formData.totalUnits}
-                  onChange={e => setFormData({ ...formData, totalUnits: parseInt(e.target.value) || 0 })}
-                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">已完成：</span>
-                  <Input
-                    type="number"
-                    value={formData.completedUnits}
-                    onChange={e => setFormData({ ...formData, completedUnits: parseInt(e.target.value) || 0 })}
-                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 总页数 */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">总页数</Label>
-              <div className="flex gap-4">
-                <Input
-                  type="number"
-                  value={formData.totalPages}
-                  onChange={e => setFormData({ ...formData, totalPages: parseInt(e.target.value) || 0 })}
-                  className="flex-1 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">已完成：</span>
-                  <Input
-                    type="number"
-                    value={formData.completedPages}
-                    onChange={e => setFormData({ ...formData, completedPages: parseInt(e.target.value) || 0 })}
-                    className="w-24 rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 记录方式设置 */}
-            <div className="space-y-3 pt-4 border-t border-gray-100">
-              <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                记录方式设置
-              </Label>
-              
-              {/* 记录方式选择 */}
-              <div className="space-y-2">
-                <Label className="text-xs text-gray-500">记录类型</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant={formData.trackingType === 'simple' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, trackingType: 'simple', trackingUnit: '', targetValue: 0 })}
-                    className={`rounded-xl ${formData.trackingType === 'simple' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    简单记录
-                  </Button>
-                  <Button
-                    variant={formData.trackingType === 'numeric' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, trackingType: 'numeric' })}
-                    className={`rounded-xl ${formData.trackingType === 'numeric' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    数值记录
-                  </Button>
-                  <Button
-                    variant={formData.trackingType === 'progress' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, trackingType: 'progress' })}
-                    className={`rounded-xl ${formData.trackingType === 'progress' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    进度记录
-                  </Button>
-                </div>
-              </div>
-
-              {/* 单位和目标值（仅在数值记录或进度记录时显示） */}
-              {formData.trackingType !== 'simple' && (
-                <div className="space-y-3 pt-2">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs text-gray-500">计量单位</Label>
-                      <Select
-                        value={formData.trackingUnit}
-                        onValueChange={(value) => setFormData({ ...formData, trackingUnit: value })}
-                      >
-                        <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                          <SelectValue placeholder="选择单位" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="页">页</SelectItem>
-                          <SelectItem value="次">次</SelectItem>
-                          <SelectItem value="分钟">分钟</SelectItem>
-                          <SelectItem value="道">道</SelectItem>
-                          <SelectItem value="篇">篇</SelectItem>
-                          <SelectItem value="个">个</SelectItem>
-                          <SelectItem value="组">组</SelectItem>
-                          <SelectItem value="字">字</SelectItem>
-                          <SelectItem value="词">词</SelectItem>
-                          <SelectItem value="句">句</SelectItem>
-                          <SelectItem value="段">段</SelectItem>
-                          <SelectItem value="章">章</SelectItem>
-                          <SelectItem value="本">本</SelectItem>
-                          <SelectItem value="套">套</SelectItem>
-                          <SelectItem value="卷">卷</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-gray-500">目标值（可选）</Label>
-                      <Input
-                        type="number"
-                        value={formData.targetValue || ''}
-                        onChange={e => setFormData({ ...formData, targetValue: parseInt(e.target.value) || 0 })}
-                        placeholder="如：100"
-                        className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-sm text-indigo-700">
-                    <p className="flex items-start gap-2">
-                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>
-                        孩子完成时将看到：
-                        {formData.trackingType === 'numeric' 
-                          ? `输入本次完成的${formData.trackingUnit || '数量'}${formData.targetValue ? `（目标：${formData.targetValue}${formData.trackingUnit}）` : ''}`
-                          : `输入当前进度${formData.trackingUnit ? `（${formData.trackingUnit}）` : ''}${formData.targetValue ? `，目标${formData.targetValue}${formData.trackingUnit}` : ''}`
-                        }
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter className="border-t border-gray-100 pt-6 gap-3">
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl h-11 px-6 border-gray-200 hover:bg-gray-50">取消</Button>
-            <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="rounded-xl h-11 px-6 bg-primary text-primary-foreground shadow-sm">
-              {updateMutation.isPending ? '保存中...' : '保存'}
-            </Button>
-          </DialogFooter>
+          <TaskEditor
+            value={formData}
+            onChange={setFormData}
+            educationStage={selectedEducationStage}
+            childName={selectedChild?.name}
+            onCancel={() => setCreateDialogOpen(false)}
+            onSubmit={handleCreate}
+            isSubmitting={createMutation.isPending}
+            submitLabel="创建"
+            submittingLabel="创建中..."
+          />
         </DialogContent>
       </Dialog>
 

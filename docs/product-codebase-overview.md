@@ -265,7 +265,7 @@
 
 - 线上数据库结构与当前 Prisma schema 并非完全一致
 - 数据库真实情况请参考：
-  [DATABASE_REALITY_REPORT.md](/Users/grubby/Desktop/quxueban/DATABASE_REALITY_REPORT.md)
+  [report-database-reality.md](/Users/grubby/Desktop/quxueban/docs/reports/report-database-reality.md)
 
 这意味着：
 
@@ -300,4 +300,3 @@
 
 - 孩子能力模型
 - AI 分析与建议升级
-

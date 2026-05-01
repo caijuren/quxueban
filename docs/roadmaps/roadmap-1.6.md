@@ -619,9 +619,9 @@ AI 书籍推荐、复杂相似书推荐、长期阅读路径推荐，后移到 2
 
 ### 文档
 
-1. `docs/ROADMAP_1_6.md`：1.6 业务逻辑梳理。
-2. `docs/BUSINESS_OBJECTS_1_6.md`：业务对象定义。
-3. `docs/FLOW_1_6.md`：核心业务流程图和页面流转。
+1. `docs/roadmaps/roadmap-1.6.md`：1.6 业务逻辑梳理。
+2. `docs/design-business-objects-1.6.md`：业务对象定义。
+3. `docs/design-flow-1.6.md`：核心业务流程图和页面流转。
 
 ### 产品调整
 

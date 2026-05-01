@@ -2,7 +2,7 @@
 
 适用版本：`1.7.x` 起
 
-协作、推送和发布分工见 `docs/WORKFLOW_CONVENTIONS.md`。
+协作、推送和发布分工见 `docs/workflow-conventions.md`。
 
 ## 服务器目录
 

@@ -64,7 +64,7 @@ git push --force origin main
    - `frontend/package.json`
    - `backend/src/modules/system.ts`
 2. 有发布记录：
-   - `docs/RELEASE_版本号.md`
+   - `docs/releases/release-<版本号>.md`
 3. 本地检查通过：
 
 ```bash

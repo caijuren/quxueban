@@ -335,7 +335,7 @@
 - 数据导出、备份和恢复。
 - 更完整的自动化部署策略。
 
-后续版本的详细排期见 `docs/ITERATION_PLAN_1_7_TO_1_9.md`。
+后续版本的详细排期见 `docs/roadmaps/roadmap-1.7-to-1.9.md`。
 
 ## 部署与运维
 

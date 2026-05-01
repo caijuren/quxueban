@@ -1,63 +1,73 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Save, BarChart3, Clock, Target, BookOpen, History, Edit, Trash2, Send, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  BookOpen,
+  Clock,
+  Edit2,
+  History,
+  Save,
+  Send,
+  Settings2,
+  Target,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { apiClient, getErrorMessage } from '@/lib/api-client';
-import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { EmptyPanel, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
+import { apiClient, getErrorMessage } from '@/lib/api-client';
+import {
+  getEducationStageLabel,
+  targetTypeOptions,
+} from '@/lib/education-stage';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import {
+  difficultyReverseMap,
+  NO_ABILITY_POINT,
+  normalizeTaskEditorFormForStage,
+  parentRoleReverseMap,
+  ScheduleRule,
+  subjectReverseMap,
+  taskEditorFormToPayload,
+  TaskCategory,
+  TaskEditor,
+  TaskEditorFormData,
+  taskToTaskEditorFormData,
+  TaskType,
+  TrackingType,
+} from '@/components/parent/TaskEditor';
 
-// 类型定义
-type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
-type TaskType = '固定' | '灵活' | '跟随学校';
-type ScheduleRule = 'daily' | 'school' | 'weekend' | 'flexible';
-
-// 映射对象
-const subjectMap: Record<string, string> = {
-  '语文': 'chinese',
-  '数学': 'math',
-  '英语': 'english',
-  '体育': 'sports'
-};
-
-const subjectReverseMap: Record<string, string> = {
-  'chinese': '语文',
-  'math': '数学',
-  'english': '英语',
-  'sports': '体育'
-};
-
-const parentRoleMap: Record<string, string> = {
-  '独立完成': 'independent',
-  '家长陪伴': 'accompany',
-  '家长主导': 'parent-led'
-};
-
-const parentRoleReverseMap: Record<string, string> = {
-  'independent': '独立完成',
-  'accompany': '家长陪伴',
-  'parent-led': '家长主导'
-};
-
-const difficultyMap: Record<string, string> = {
-  '基础': 'basic',
-  '提高': 'advanced',
-  '挑战': 'challenge'
-};
-
-const difficultyReverseMap: Record<string, string> = {
-  'basic': '基础',
-  'advanced': '提高',
-  'challenge': '挑战'
+type TaskTags = {
+  subject?: string;
+  parentRole?: string;
+  difficulty?: string;
+  scheduleRule?: ScheduleRule;
+  weeklyFrequency?: number;
+  taskKind?: string;
+  level?: string;
+  abilityCategory?: string;
+  abilityPoint?: string;
+  linkedGoal?: string;
+  targetType?: string;
+  timeBlock?: string;
 };
 
 interface Task {
@@ -68,55 +78,61 @@ interface Task {
   timePerUnit: number;
   scheduleRule?: ScheduleRule;
   weeklyFrequency?: number;
-  tags: {
-    subject?: string;
-    parentRole?: string;
-    difficulty?: string;
-    scheduleRule?: ScheduleRule;
-    weeklyFrequency?: number;
-  };
+  tags?: TaskTags;
   appliesTo: number[];
   createdAt: string;
   updatedAt: string;
-  // 累计进度字段
   totalCompleted?: number;
   totalTarget?: number;
   progress?: number;
-  // 初始数据字段
   initialCompleted?: number;
   initialUnit?: string;
-  // 精细化记录字段
-  trackingType?: 'simple' | 'numeric' | 'progress';
+  trackingType?: TrackingType;
   trackingUnit?: string;
   targetValue?: number;
 }
 
-const subjectColor = (s?: string) => {
-  const map: Record<string, string> = {
-    'chinese': 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    'math': 'bg-blue-50 text-blue-700 border border-blue-200',
-    'english': 'bg-purple-50 text-purple-700 border border-purple-200',
-    'sports': 'bg-orange-50 text-orange-700 border border-orange-200'
-  };
-  return map[s || ''] || 'bg-gray-50 text-gray-600 border border-gray-200';
+const scheduleRuleLabels: Record<ScheduleRule, string> = {
+  daily: '每日任务',
+  school: '在校日任务',
+  flexible: '智能分配',
+  weekend: '周末任务',
 };
 
-const ruleLabel = (r?: string) => {
-  const map: Record<string, string> = {
-    'daily': '每日任务',
-    'school': '在校日任务',
-    'flexible': '智能分配',
-    'weekend': '周末任务'
-  };
-  return map[r || ''] || '每日任务';
-};
+function normalizeTags(rawTags: unknown): TaskTags {
+  if (!rawTags || typeof rawTags !== 'object' || Array.isArray(rawTags)) return {};
+  return rawTags as TaskTags;
+}
+
+function getScheduleRule(task?: Task): ScheduleRule {
+  return (task?.scheduleRule || task?.tags?.scheduleRule || 'daily') as ScheduleRule;
+}
+
+function getTargetTypeLabel(value?: string) {
+  return targetTypeOptions.find((option) => option.value === value)?.label || '未设置';
+}
+
+function getSubjectLabel(value?: string) {
+  return value ? subjectReverseMap[value] || value : '未设置';
+}
+
+function getTaskConfigIssues(task: Task): string[] {
+  const tags = normalizeTags(task.tags);
+  const issues: string[] = [];
+  if (!tags.abilityPoint) issues.push('缺能力点');
+  if (!tags.linkedGoal || tags.linkedGoal === '不关联目标') issues.push('未关联目标');
+  if (!tags.targetType) issues.push('缺目标类型');
+  if (!tags.subject) issues.push('缺学科');
+  if (!task.trackingType || task.trackingType === 'simple') issues.push('普通记录');
+  return issues;
+}
 
 async function fetchTaskDetail(taskId: number): Promise<Task> {
   const { data } = await apiClient.get(`/tasks/${taskId}`);
   return data.data;
 }
 
-async function updateTask(taskId: number, updates: Partial<Task>): Promise<Task> {
+async function updateTask(taskId: number, updates: any): Promise<Task> {
   const { data } = await apiClient.put(`/tasks/${taskId}`, updates);
   return data.data;
 }
@@ -133,162 +149,159 @@ async function updateTaskInitialData(taskId: number, initialCompleted: number, i
   const { data } = await apiClient.put(`/tasks/${taskId}`, {
     initialCompleted,
     initialUnit,
-    childId
+    childId,
   });
   return data.data;
+}
+
+function InfoTile({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  helper?: string;
+  icon: React.ElementType;
+  tone: string;
+}) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', tone)}>
+        <Icon className="size-5" />
+      </div>
+      <p className="mt-4 text-xs font-medium text-slate-500">{label}</p>
+      <p className="mt-1 text-base font-semibold text-slate-950">{value}</p>
+      {helper ? <p className="mt-1 text-xs text-slate-400">{helper}</p> : null}
+    </section>
+  );
+}
+
+function Chip({ children, tone = 'slate' }: { children: React.ReactNode; tone?: 'slate' | 'blue' | 'green' | 'amber' | 'red' }) {
+  const tones = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+    blue: 'border-blue-100 bg-blue-50 text-blue-700',
+    green: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-100 bg-amber-50 text-amber-700',
+    red: 'border-red-100 bg-red-50 text-red-700',
+  };
+
+  return <span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-medium', tones[tone])}>{children}</span>;
+}
+
+function FormSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5">
+        <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
+        {description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const taskId = id ? parseInt(id) : 0;
-  const { selectedChildId } = useSelectedChild();
+  const taskId = id ? parseInt(id, 10) : 0;
+  const { selectedChildId, selectedChild } = useSelectedChild();
+  const selectedEducationStage = selectedChild?.educationStage || 'primary';
 
-  // 初始数据状态
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [isEditingInitial, setIsEditingInitial] = useState(false);
   const [initialCompleted, setInitialCompleted] = useState(0);
   const [initialUnit, setInitialUnit] = useState('页');
-  const [isEditingInitial, setIsEditingInitial] = useState(false);
-
-  // 任务编辑状态
-  const [isEditingTask, setIsEditingTask] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<TaskEditorFormData>(() => taskToTaskEditorFormData({
     name: '',
-    category: '校内巩固' as TaskCategory,
-    type: '固定' as TaskType,
+    category: '校内巩固',
+    type: '固定',
     timePerUnit: 30,
-    scheduleRule: 'daily' as ScheduleRule,
-    weeklyFrequency: 5,
-    subject: '语文' as string,
-    parentRole: '独立完成' as string,
-    difficulty: '基础' as string,
-    // 精细化记录字段
-    trackingType: 'simple' as 'simple' | 'numeric' | 'progress',
-    trackingUnit: '',
-    targetValue: 0,
-  });
+  }, selectedEducationStage));
 
   const { data: task, isLoading, error } = useQuery({
     queryKey: ['task', taskId],
     queryFn: () => fetchTaskDetail(taskId),
-    enabled: !!taskId
+    enabled: !!taskId,
   });
 
-  const updateInitialDataMutation = useMutation({
-    mutationFn: () => updateTaskInitialData(taskId, initialCompleted, initialUnit, selectedChildId!),
-    onSuccess: () => {
-      toast.success('初始数据设置成功');
-      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      setIsEditingInitial(false);
-    },
-    onError: (error) => toast.error(getErrorMessage(error))
-  });
+  useEffect(() => {
+    if (!task) return;
+
+    setInitialCompleted(task.initialCompleted || 0);
+    setInitialUnit(task.initialUnit || '页');
+    setFormData(taskToTaskEditorFormData(task, selectedEducationStage));
+  }, [selectedEducationStage, task]);
+
+  useEffect(() => {
+    setFormData((current) => normalizeTaskEditorFormForStage(current, selectedEducationStage));
+  }, [selectedEducationStage]);
 
   const updateTaskMutation = useMutation({
     mutationFn: () => {
-      return updateTask(taskId, {
-        name: formData.name,
-        category: formData.category,
-        type: formData.type,
-        timePerUnit: formData.timePerUnit,
-        scheduleRule: formData.scheduleRule,
-        weeklyFrequency: formData.weeklyFrequency,
-        tags: {
-          subject: subjectMap[formData.subject],
-          parentRole: parentRoleMap[formData.parentRole],
-          difficulty: difficultyMap[formData.difficulty],
-          scheduleRule: formData.scheduleRule,
-          weeklyFrequency: formData.weeklyFrequency,
-        },
-        appliesTo: task?.appliesTo || [],
-        // 精细化记录字段
-        trackingType: formData.trackingType,
-        trackingUnit: formData.trackingUnit,
-        targetValue: formData.targetValue,
-      });
+      if (!selectedChildId) throw new Error('请先选择孩子');
+      if (!task) throw new Error('任务不存在');
+
+      return updateTask(taskId, taskEditorFormToPayload(formData, selectedChildId, task.appliesTo || [selectedChildId]));
     },
-    onSuccess: (updatedTask) => {
-      toast.success('任务更新成功');
-      // 直接使用返回的更新后任务数据更新本地状态
-      setFormData({
-        name: updatedTask.name,
-        category: updatedTask.category,
-        type: updatedTask.type,
-        timePerUnit: updatedTask.timePerUnit,
-        scheduleRule: (updatedTask.scheduleRule as ScheduleRule) || 'daily',
-        weeklyFrequency: updatedTask.weeklyFrequency || 5,
-        subject: updatedTask.tags?.subject ? subjectReverseMap[updatedTask.tags.subject] || '语文' : '语文',
-        parentRole: updatedTask.tags?.parentRole ? parentRoleReverseMap[updatedTask.tags.parentRole] || '独立完成' : '独立完成',
-        difficulty: updatedTask.tags?.difficulty ? difficultyReverseMap[updatedTask.tags.difficulty] || '基础' : '基础',
-        trackingType: (updatedTask.trackingType || 'simple') as 'simple' | 'numeric' | 'progress',
-        trackingUnit: updatedTask.trackingUnit || '',
-        targetValue: updatedTask.targetValue || 0,
-      });
+    onSuccess: () => {
+      toast.success('任务已保存');
       queryClient.invalidateQueries({ queryKey: ['task', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsEditingTask(false);
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
-    }
+    onError: (mutationError) => toast.error(getErrorMessage(mutationError)),
+  });
+
+  const updateInitialDataMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedChildId) throw new Error('请先选择孩子');
+      return updateTaskInitialData(taskId, initialCompleted, initialUnit, selectedChildId);
+    },
+    onSuccess: () => {
+      toast.success('初始数据已保存');
+      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setIsEditingInitial(false);
+    },
+    onError: (mutationError) => toast.error(getErrorMessage(mutationError)),
   });
 
   const deleteTaskMutation = useMutation({
-    mutationFn: () => deleteTask(taskId, selectedChildId!),
+    mutationFn: () => {
+      if (!selectedChildId) throw new Error('请先选择孩子');
+      return deleteTask(taskId, selectedChildId);
+    },
     onSuccess: () => {
-      toast.success('任务删除成功');
+      toast.success('任务已删除');
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       navigate('/parent/tasks');
     },
-    onError: (error) => toast.error(getErrorMessage(error))
+    onError: (mutationError) => toast.error(getErrorMessage(mutationError)),
   });
 
   const pushTaskToDingtalkMutation = useMutation({
-    mutationFn: () => pushTaskToDingtalk(taskId, selectedChildId!),
-    onSuccess: () => {
-      toast.success('任务已推送到钉钉');
+    mutationFn: () => {
+      if (!selectedChildId) throw new Error('请先选择孩子');
+      return pushTaskToDingtalk(taskId, selectedChildId);
     },
-    onError: (error) => toast.error(getErrorMessage(error))
+    onSuccess: () => toast.success('任务已推送到钉钉'),
+    onError: (mutationError) => toast.error(getErrorMessage(mutationError)),
   });
-
-  useEffect(() => {
-    if (task) {
-      setInitialCompleted(task.initialCompleted || 0);
-      setInitialUnit(task.initialUnit || '页');
-      
-      // 从tags中提取scheduleRule作为备选
-      const tagsScheduleRule = task.tags?.scheduleRule;
-      
-      // 更新表单数据
-      setFormData({
-        name: task.name,
-        category: task.category,
-        type: task.type,
-        timePerUnit: task.timePerUnit,
-        scheduleRule: (task.scheduleRule as ScheduleRule) || tagsScheduleRule || 'daily',
-        weeklyFrequency: task.weeklyFrequency || 5,
-        subject: task.tags?.subject ? subjectReverseMap[task.tags.subject] || '语文' : '语文',
-        parentRole: task.tags?.parentRole ? parentRoleReverseMap[task.tags.parentRole] || '独立完成' : '独立完成',
-        difficulty: task.tags?.difficulty ? difficultyReverseMap[task.tags.difficulty] || '基础' : '基础',
-        // 精细化记录字段
-        trackingType: (task.trackingType || 'simple') as 'simple' | 'numeric' | 'progress',
-        trackingUnit: task.trackingUnit || '',
-        targetValue: task.targetValue || 0,
-      });
-    }
-  }, [task]);
-
-  const handleSaveInitialData = () => {
-    updateInitialDataMutation.mutate();
-  };
 
   const handleSaveTask = () => {
     if (!formData.name.trim()) {
       toast.error('请输入任务名称');
+      return;
+    }
+    if (!formData.abilityPoint || formData.abilityPoint === NO_ABILITY_POINT) {
+      toast.error('请选择任务关联的能力点');
       return;
     }
     updateTaskMutation.mutate();
@@ -296,19 +309,10 @@ export default function TaskDetail() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1360px] pb-24">
-        <div className="space-y-5">
-          <Skeleton className="h-10 w-48" />
-          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <CardContent className="p-6 space-y-4">
-              <Skeleton className="h-8 w-32" />
-              <Skeleton className="h-6 w-64" />
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-6 w-48" />
-            </CardContent>
-          </Card>
-        </div>
+      <div className="mx-auto max-w-[1360px] space-y-5 pb-24">
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-56 rounded-lg" />
+        <Skeleton className="h-72 rounded-lg" />
       </div>
     );
   }
@@ -320,11 +324,15 @@ export default function TaskDetail() {
           icon={AlertTriangle}
           title="任务不存在"
           description="该任务可能已经删除，或当前孩子没有访问权限。"
-          action={<Button onClick={() => navigate('/parent/tasks')}><ArrowLeft className="w-4 h-4" />返回任务列表</Button>}
+          action={<Button onClick={() => navigate('/parent/tasks')}><ArrowLeft className="size-4" />返回任务列表</Button>}
         />
       </div>
     );
   }
+
+  const tags = normalizeTags(task.tags);
+  const issues = getTaskConfigIssues(task);
+  const scheduleRule = getScheduleRule(task);
 
   return (
     <div className="mx-auto max-w-[1360px] space-y-5 pb-24">
@@ -333,536 +341,189 @@ export default function TaskDetail() {
           <PageToolbarTitle
             icon={BookOpen}
             title={task.name}
-            description="查看任务配置、执行规则、累计进度和历史记录"
+            description={`${selectedChild?.name || '当前孩子'} · ${getEducationStageLabel(selectedEducationStage)} · 任务详情与编辑`}
           />
         }
         right={
           <>
-          <Button 
-            variant="outline" 
-            className="h-11 rounded-xl bg-white"
-            onClick={() => navigate('/parent/tasks')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            返回任务列表
-          </Button>
-            <Button 
-              variant="outline" 
+            <Button variant="outline" className="h-11 rounded-xl bg-white" onClick={() => navigate('/parent/tasks')}>
+              <ArrowLeft className="mr-2 size-4" />
+              返回
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => pushTaskToDingtalkMutation.mutate()}
               disabled={pushTaskToDingtalkMutation.isPending}
               className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50"
             >
-              <Send className="w-4 h-4 mr-2" />
-              钉钉推送
+              <Send className="mr-2 size-4" />
+              钉钉
+            </Button>
+            <Button
+              onClick={() => setIsEditingTask((current) => !current)}
+              className="h-11 rounded-xl bg-primary text-primary-foreground"
+            >
+              <Edit2 className="mr-2 size-4" />
+              {isEditingTask ? '查看详情' : '编辑任务'}
             </Button>
           </>
         }
       />
-        
-        {!isEditingTask ? (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <span className={cn('text-sm px-3 py-1 rounded-full border font-medium', subjectColor(task.tags.subject))}>
-                {subjectReverseMap[task.tags.subject || ''] || '其他'}
-              </span>
-              {task.tags.difficulty && (
-                <span className='text-sm px-3 py-1 rounded-full bg-gray-50 text-gray-600 border border-gray-200'>
-                  {difficultyReverseMap[task.tags.difficulty] || ''}
-                </span>
-              )}
-              {task.tags.parentRole && (
-                <span className='text-sm px-3 py-1 rounded-full bg-green-50 text-green-600 border border-green-200'>
-                  {parentRoleReverseMap[task.tags.parentRole] || ''}
-                </span>
-              )}
-            </div>
 
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">分配规则</div>
-                <div className="mt-2 text-base font-semibold text-foreground">{ruleLabel(task.scheduleRule || task.tags?.scheduleRule)}</div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {(task.scheduleRule || task.tags?.scheduleRule) === 'daily' && '每天安排'}
-                  {(task.scheduleRule || task.tags?.scheduleRule) === 'school' && '周一 / 周二 / 周四 / 周五'}
-                  {(task.scheduleRule || task.tags?.scheduleRule) === 'flexible' && '工作日均匀安排'}
-                  {(task.scheduleRule || task.tags?.scheduleRule) === 'weekend' && '周六 / 周日安排'}
+      {!isEditingTask ? (
+        <>
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap gap-2">
+                  <Chip tone="blue">{getSubjectLabel(tags.subject)}</Chip>
+                  <Chip>{task.category}</Chip>
+                  <Chip>{scheduleRuleLabels[scheduleRule]}</Chip>
+                  <Chip>{getTargetTypeLabel(tags.targetType)}</Chip>
+                  {tags.timeBlock ? <Chip tone="green">{tags.timeBlock}</Chip> : null}
+                </div>
+                <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-500">
+                  任务详情页现在作为统一入口承接查看、编辑、推送和删除。列表页只负责筛选和进入详情。
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">单次时长</div>
-                <div className="mt-2 text-base font-semibold text-foreground">{task.timePerUnit} 分钟</div>
-                <p className="mt-1 text-xs text-muted-foreground">每次执行的建议时长</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">累计进度</div>
-                <div className="mt-2 text-base font-semibold text-foreground">
-                  {task.totalCompleted || 0} / {task.totalTarget || 0} {task.initialUnit || '页'}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">基于当前累计记录自动计算</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">适用孩子</div>
-                <div className="mt-2 text-base font-semibold text-foreground">{task.appliesTo?.length || 0} 个</div>
-                <p className="mt-1 text-xs text-muted-foreground">当前任务的分配对象数量</p>
+              <div className={cn(
+                'rounded-lg border px-4 py-3 text-sm',
+                issues.length > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              )}>
+                {issues.length > 0 ? `还有 ${issues.length} 项配置可补齐：${issues.join('、')}` : '配置完整'}
               </div>
             </div>
-          </>
-        ) : (
-          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>编辑任务</CardTitle>
-              <p className="text-sm text-muted-foreground">修改基础信息、执行规则和进阶配置。</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-5">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">基础信息</h3>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">任务名称 <span className="text-red-500">*</span></Label>
-                      <Input
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="请输入任务名称"
-                        required
-                        className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-gray-700">任务分类</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button
-                          variant={formData.category === '校内巩固' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, category: '校内巩固' })}
-                          className={`rounded-xl ${formData.category === '校内巩固' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          校内巩固
-                        </Button>
-                        <Button
-                          variant={formData.category === '校内拔高' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, category: '校内拔高' })}
-                          className={`rounded-xl ${formData.category === '校内拔高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          校内拔高
-                        </Button>
-                        <Button
-                          variant={formData.category === '课外课程' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, category: '课外课程' })}
-                          className={`rounded-xl ${formData.category === '课外课程' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          课外课程
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button
-                          variant={formData.category === '中文阅读' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, category: '中文阅读' })}
-                          className={`rounded-xl ${formData.category === '中文阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          中文阅读
-                        </Button>
-                        <Button
-                          variant={formData.category === '英语阅读' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, category: '英语阅读' })}
-                          className={`rounded-xl ${formData.category === '英语阅读' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          英文阅读
-                        </Button>
-                        <Button
-                          variant={formData.category === '体育运动' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, category: '体育运动' })}
-                          className={`rounded-xl ${formData.category === '体育运动' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          体育锻炼
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-gray-700">学科</Label>
-                      <div className="grid grid-cols-4 gap-2">
-                        <Button
-                          variant={formData.subject === '语文' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, subject: '语文' })}
-                          className={`rounded-xl ${formData.subject === '语文' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          语文
-                        </Button>
-                        <Button
-                          variant={formData.subject === '数学' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, subject: '数学' })}
-                          className={`rounded-xl ${formData.subject === '数学' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          数学
-                        </Button>
-                        <Button
-                          variant={formData.subject === '英语' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, subject: '英语' })}
-                          className={`rounded-xl ${formData.subject === '英语' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          英语
-                        </Button>
-                        <Button
-                          variant={formData.subject === '体育' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, subject: '体育' })}
-                          className={`rounded-xl ${formData.subject === '体育' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          体育
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          </section>
 
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">执行规则</h3>
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-gray-700">分配规则</Label>
-                      <div className="grid grid-cols-4 gap-2">
-                        <Button
-                          variant={formData.scheduleRule === 'daily' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, scheduleRule: 'daily' })}
-                          className={`rounded-xl ${formData.scheduleRule === 'daily' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          每日任务
-                        </Button>
-                        <Button
-                          variant={formData.scheduleRule === 'school' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, scheduleRule: 'school' })}
-                          className={`rounded-xl ${formData.scheduleRule === 'school' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          在校日任务
-                        </Button>
-                        <Button
-                          variant={formData.scheduleRule === 'flexible' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, scheduleRule: 'flexible' })}
-                          className={`rounded-xl ${formData.scheduleRule === 'flexible' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          智能分配
-                        </Button>
-                        <Button
-                          variant={formData.scheduleRule === 'weekend' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, scheduleRule: 'weekend' })}
-                          className={`rounded-xl ${formData.scheduleRule === 'weekend' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          周末任务
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
-                        <p className="text-center">每天安排</p>
-                        <p className="text-center">周一/二/四/五</p>
-                        <p className="text-center">工作日均匀安排</p>
-                        <p className="text-center">周六/日安排</p>
-                      </div>
-                    </div>
-                    {formData.scheduleRule === 'flexible' && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">每周次数</Label>
-                        <Input
-                          type="number"
-                          value={formData.weeklyFrequency}
-                          onChange={e => setFormData({ ...formData, weeklyFrequency: parseInt(e.target.value) || 1 })}
-                          className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        />
-                      </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <InfoTile icon={Clock} label="单次时长" value={`${task.timePerUnit} 分钟`} helper="每次执行建议时长" tone="bg-indigo-50 text-indigo-600" />
+            <InfoTile icon={Target} label="分配规则" value={scheduleRuleLabels[scheduleRule]} helper={scheduleRule === 'flexible' ? `每周 ${task.weeklyFrequency || tags.weeklyFrequency || 5} 次` : '按规则自动排入计划'} tone="bg-sky-50 text-sky-600" />
+            <InfoTile icon={BarChart3} label="累计进度" value={`${task.totalCompleted || 0} / ${task.totalTarget || 0} ${task.initialUnit || '页'}`} helper="基于累计记录计算" tone="bg-emerald-50 text-emerald-600" />
+            <InfoTile icon={Settings2} label="记录方式" value={task.trackingType === 'numeric' ? '数值记录' : task.trackingType === 'progress' ? '进度记录' : '简单记录'} helper={task.trackingUnit || '无需填写单位'} tone="bg-amber-50 text-amber-600" />
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <FormSection title="任务配置" description="展示当前任务的结构化字段，后续目标引擎会复用这些数据。">
+              <div className="grid gap-4 md:grid-cols-2">
+                <DetailRow label="任务类型" value={tags.taskKind || '未设置'} />
+                <DetailRow label="适用年级" value={tags.level || '未设置'} />
+                <DetailRow label="能力分类" value={tags.abilityCategory || '未设置'} />
+                <DetailRow label="能力点" value={tags.abilityPoint || '未设置'} />
+                <DetailRow label="关联目标" value={tags.linkedGoal || '不关联目标'} />
+                <DetailRow label="完成方式" value={tags.parentRole ? parentRoleReverseMap[tags.parentRole] || tags.parentRole : '未设置'} />
+                <DetailRow label="难度" value={tags.difficulty ? difficultyReverseMap[tags.difficulty] || tags.difficulty : '未设置'} />
+                <DetailRow label="适用孩子" value={`${task.appliesTo?.length || 0} 个`} />
+              </div>
+            </FormSection>
+
+            <FormSection title="初始数据" description="用于累计型任务的起始完成量。">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-slate-500">初始完成量</Label>
+                    {isEditingInitial ? (
+                      <Input className="mt-2" type="number" value={initialCompleted} onChange={(event) => setInitialCompleted(parseInt(event.target.value, 10) || 0)} />
+                    ) : (
+                      <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900">{initialCompleted}</p>
                     )}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">单项任务时长（分钟）</Label>
-                      <Input
-                        type="number"
-                        value={formData.timePerUnit}
-                        onChange={e => setFormData({ ...formData, timePerUnit: parseInt(e.target.value) || 30 })}
-                        className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-gray-700">完成方式</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button
-                          variant={formData.parentRole === '独立完成' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, parentRole: '独立完成' })}
-                          className={`rounded-xl ${formData.parentRole === '独立完成' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          独立完成
-                        </Button>
-                        <Button
-                          variant={formData.parentRole === '家长陪伴' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, parentRole: '家长陪伴' })}
-                          className={`rounded-xl ${formData.parentRole === '家长陪伴' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          家长陪伴
-                        </Button>
-                        <Button
-                          variant={formData.parentRole === '家长主导' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, parentRole: '家长主导' })}
-                          className={`rounded-xl ${formData.parentRole === '家长主导' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          家长主导
-                        </Button>
-                      </div>
-                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500">单位</Label>
+                    {isEditingInitial ? (
+                      <Select value={initialUnit} onValueChange={setInitialUnit}>
+                        <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['页', '题', '道', '篇', '章', '节', '分钟', '次'].map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900">{initialUnit}</p>
+                    )}
                   </div>
                 </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">进阶配置</h3>
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-gray-700">难度</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button
-                          variant={formData.difficulty === '基础' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, difficulty: '基础' })}
-                          className={`rounded-xl ${formData.difficulty === '基础' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          基础
-                        </Button>
-                        <Button
-                          variant={formData.difficulty === '提高' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, difficulty: '提高' })}
-                          className={`rounded-xl ${formData.difficulty === '提高' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          提高
-                        </Button>
-                        <Button
-                          variant={formData.difficulty === '挑战' ? 'default' : 'outline'}
-                          onClick={() => setFormData({ ...formData, difficulty: '挑战' })}
-                          className={`rounded-xl ${formData.difficulty === '挑战' ? 'bg-primary text-primary-foreground' : 'border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          挑战
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 保存按钮 */}
-                <Button 
-                  onClick={handleSaveTask}
-                  disabled={updateTaskMutation.isPending}
-                  className="w-full"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {updateTaskMutation.isPending ? '保存中...' : '保存任务'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-      {!isEditingTask && (
-        <>
-          {/* Task Info */}
-          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-              <div className='flex items-start justify-between gap-4'>
-                <div>
-                  <CardTitle>任务信息</CardTitle>
-                  <p className='text-sm text-muted-foreground mt-1'>快速查看当前任务的执行方式、进度和关键配置。</p>
-                </div>
-                <div className='flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700'>
-                  <AlertTriangle className='w-3.5 h-3.5' />
-                  删除等高风险操作已下沉
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
-                  <div className='w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center'>
-                    <Clock className='w-4 h-4 text-primary' />
-                  </div>
-                  <div className='flex-1'>
-                    <div className='text-xs text-gray-500'>每次时长</div>
-                    <div className='text-sm font-semibold text-gray-900'>{task.timePerUnit} 分钟</div>
-                  </div>
-                </div>
-
-                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
-                  <div className='w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center'>
-                    <Target className='w-4 h-4 text-primary' />
-                  </div>
-                  <div className='flex-1'>
-                    <div className='text-xs text-gray-500'>分配规则</div>
-                    <div className='text-sm font-semibold text-gray-900'>{ruleLabel(task.scheduleRule || task.tags?.scheduleRule)}</div>
-                    <div className='text-xs text-muted-foreground mt-1'>
-                      {(task.scheduleRule || task.tags?.scheduleRule) === 'daily' && '每天安排'}
-                      {(task.scheduleRule || task.tags?.scheduleRule) === 'school' && '周一/二/四/五'}
-                      {(task.scheduleRule || task.tags?.scheduleRule) === 'flexible' && '工作日均匀安排'}
-                      {(task.scheduleRule || task.tags?.scheduleRule) === 'weekend' && '周六/日安排'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
-                  <div className='w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center'>
-                    <BookOpen className='w-4 h-4 text-emerald-600' />
-                  </div>
-                  <div className='flex-1'>
-                    <div className='text-xs text-gray-500'>累计进度</div>
-                    <div className='text-sm font-semibold text-gray-900'>
-                      已完成 {task.totalCompleted || 0} / {task.totalTarget || 0} {task.initialUnit || '页'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className='flex items-center gap-3 rounded-xl bg-gray-50 p-4'>
-                  <div className='w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center'>
-                    <BarChart3 className='w-4 h-4 text-blue-600' />
-                  </div>
-                  <div className='flex-1'>
-                    <div className='text-xs text-gray-500'>适用孩子</div>
-                    <div className='text-sm font-semibold text-gray-900'>{task.appliesTo?.length || 0} 个</div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Initial Data Setting */}
-          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-              <div className='flex items-center justify-between'>
-                <div>
-                  <CardTitle>初始数据设置</CardTitle>
-                  <p className='text-sm text-muted-foreground mt-1'>用于设置累计型任务的起始完成量，仅在需要时修改。</p>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setIsEditingInitial(!isEditingInitial)}
-                  disabled={updateInitialDataMutation.isPending}
-                >
-                  <Edit className="w-4 h-4 mr-1" />
-                  {isEditingInitial ? '取消' : '编辑'}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                <div className='space-y-2'>
-                  <Label className="text-sm font-medium text-gray-700">初始完成量</Label>
-                  {isEditingInitial ? (
-                    <Input
-                      type="number"
-                      value={initialCompleted}
-                      onChange={(e) => setInitialCompleted(parseInt(e.target.value) || 0)}
-                      min="0"
-                      className="rounded-xl border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className='p-3 bg-gray-50 rounded-xl'>
-                      <div className='text-sm font-semibold text-gray-900'>{initialCompleted}</div>
-                    </div>
-                  )}
-                </div>
-                <div className='space-y-2'>
-                  <Label className="text-sm font-medium text-gray-700">单位</Label>
-                  {isEditingInitial ? (
-                    <Select value={initialUnit} onValueChange={setInitialUnit}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="选择单位" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="页">页</SelectItem>
-                        <SelectItem value="题">题</SelectItem>
-                        <SelectItem value="道">道</SelectItem>
-                        <SelectItem value="篇">篇</SelectItem>
-                        <SelectItem value="章">章</SelectItem>
-                        <SelectItem value="节">节</SelectItem>
-                        <SelectItem value="分钟">分钟</SelectItem>
-                        <SelectItem value="次">次</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className='p-3 bg-gray-50 rounded-xl'>
-                      <div className='text-sm font-semibold text-gray-900'>{initialUnit}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {isEditingInitial && (
-                <div className='mt-4'>
-                  <Button 
-                    onClick={handleSaveInitialData}
-                    disabled={updateInitialDataMutation.isPending}
-                    className="w-full"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {updateInitialDataMutation.isPending ? '保存中...' : '保存初始数据'}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsEditingInitial((current) => !current)}>
+                    {isEditingInitial ? '取消' : '编辑初始数据'}
                   </Button>
+                  {isEditingInitial ? (
+                    <Button onClick={() => updateInitialDataMutation.mutate()} disabled={updateInitialDataMutation.isPending}>
+                      <Save className="mr-2 size-4" />
+                      保存
+                    </Button>
+                  ) : null}
                 </div>
-              )}
-              <div className='text-xs text-gray-500 mt-2'>
-                初始数据用于设置任务的起始完成量，会影响累计进度的计算。
               </div>
-            </CardContent>
-          </Card>
+            </FormSection>
+          </div>
 
-          {/* Task History */}
-          <Card className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>任务历史</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className='p-8 text-center text-gray-500'>
-                <History className='w-12 h-12 mx-auto mb-4 text-gray-300' />
-                <p className='text-base font-medium text-gray-700'>还没有打卡记录</p>
-                <p className='text-sm mt-2 text-gray-500'>完成任务后，会在这里展示执行历史和累计数据。</p>
-                <Button variant="outline" className='mt-5' onClick={() => navigate('/parent')}>
-                  去首页打卡
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <FormSection title="任务历史" description="完成任务后，这里会展示执行历史和累计数据。">
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-slate-500">
+              <History className="mx-auto mb-3 size-10 text-slate-300" />
+              <p className="text-sm font-medium text-slate-700">还没有打卡记录</p>
+              <Button variant="outline" className="mt-4" onClick={() => navigate('/parent')}>
+                去首页打卡
+              </Button>
+            </div>
+          </FormSection>
 
-          {/* Danger Zone */}
-          <Card className="rounded-xl border border-red-200 bg-red-50/50 shadow-sm">
-            <CardHeader>
-              <CardTitle className='text-red-700'>危险操作</CardTitle>
-            </CardHeader>
-            <CardContent className='flex items-center justify-between gap-4'>
+          <section className="rounded-lg border border-red-200 bg-red-50/50 p-5 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className='text-sm font-medium text-red-700'>删除任务</p>
-                <p className='text-sm text-red-600/80 mt-1'>删除后任务配置和相关计划不可恢复，请谨慎操作。</p>
+                <h2 className="text-sm font-semibold text-red-700">危险操作</h2>
+                <p className="mt-1 text-sm text-red-600/80">删除后任务配置和相关计划不可恢复。</p>
               </div>
-              <Button 
-                variant="destructive" 
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
+              <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                <Trash2 className="mr-2 size-4" />
                 删除任务
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </>
+      ) : (
+        <TaskEditor
+          value={formData}
+          onChange={setFormData}
+          educationStage={selectedEducationStage}
+          childName={selectedChild?.name}
+          onCancel={() => setIsEditingTask(false)}
+          onSubmit={handleSaveTask}
+          isSubmitting={updateTaskMutation.isPending}
+        />
       )}
 
-      {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="rounded-2xl border border-slate-200 shadow-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-red-600 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-destructive flex items-center justify-center">
-                <Trash2 className="w-5 h-5 text-white" />
+            <AlertDialogTitle className="flex items-center gap-3 text-xl font-bold text-red-600">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-destructive">
+                <Trash2 className="size-5 text-white" />
               </div>
               确认删除
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-500 ml-[52px]">
-              确定要删除任务「{task?.name}」吗？此操作不可撤销。
+            <AlertDialogDescription className="text-slate-500">
+              确定要删除任务「{task.name}」吗？此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-3">
-            <AlertDialogCancel className="rounded-xl h-11 px-6">取消</AlertDialogCancel>
+            <AlertDialogCancel className="h-11 rounded-xl px-6">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteTaskMutation.mutate()}
-              className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-11 px-6"
+              className="h-11 rounded-xl bg-red-500 px-6 text-white hover:bg-red-600"
             >
               删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg bg-slate-50 px-3 py-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
     </div>
   );
 }

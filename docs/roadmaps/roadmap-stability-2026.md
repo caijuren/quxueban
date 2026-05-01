@@ -10,11 +10,11 @@
 - 今日概览和钉钉学习时长已改为“同日同孩子同任务只按最后一次打卡统计”。
 - 打卡保存接口已收紧，后续重复提交会更新同日同任务记录，并清理同任务当天旧重复。
 - 图书馆批量操作、封面展示、阅读记录、Logo、阅读状态等已完成一轮修复。
-- 已新增生产发布清单：`docs/PRODUCTION_RELEASE_CHECKLIST.md`。
-- 已新增协作与发布规范：`docs/WORKFLOW_CONVENTIONS.md`。
-- 已新增技术健康基线：`docs/STABILITY_BASELINE_1_7_7.md`。
-- 已新增阶段化能力模型设计：`docs/EDUCATION_STAGE_MODEL.md`。
-- 已新增 1.8 阶段化 ToDo：`docs/TODO_1_8_STAGE_MODEL.md`。
+- 已新增生产发布清单：`docs/production-release-checklist.md`。
+- 已新增协作与发布规范：`docs/workflow-conventions.md`。
+- 已新增技术健康基线：`docs/checks/baseline-stability-1.7.7.md`。
+- 已新增阶段化能力模型设计：`docs/design-education-stage-model.md`。
+- 已新增 1.8 阶段化 ToDo：`docs/todos/todo-1.8-stage-model.md`。
 - 已新增学习时长诊断脚本：`pnpm run script:check-daily-study-minutes`。
 
 接下来不急着直接进入 AI 大版本。先把系统稳定性、数据口径和发布流程打牢，再分阶段进入 1.8、2.0、3.0。
@@ -47,7 +47,7 @@
 
 - 建立 `educationStage`，支持小学/初中双轨能力模型。
 - 能力模型和执行目标解耦，小学偏过程习惯，初中偏学科结果。
-- 1.8 具体执行范围以 `docs/TODO_1_8_STAGE_MODEL.md` 为准，完整知识图谱、目标校差距、AI 规划后移。
+- 1.8 具体执行范围以 `docs/todos/todo-1.8-stage-model.md` 为准，完整知识图谱、目标校差距、AI 规划后移。
 - 今日概览、任务、计划、阅读、钉钉的业务口径一致。
 - 家长能清楚知道今天做了什么、哪里没做、下一步怎么调整。
 - 阅读系统从“记录”升级为“成长档案”。
@@ -255,7 +255,7 @@
 
 - `1.7.7` 作为当前稳定基线，不在该版本继续做大版本依赖升级。
 - 进入 1.8 前优先做 `1.7.8` 环境和目录治理。
-- 1.8 必须纳入小学/初中阶段化基础字段和能力配置，详见 `docs/EDUCATION_STAGE_MODEL.md`。
+- 1.8 必须纳入小学/初中阶段化基础字段和能力配置，详见 `docs/design-education-stage-model.md`。
 - 1.8 和 2.0 的产品目标可以统一叙事，但工程上分阶段发布。
 - 3.0 才全面升级 AI。
 - 3.0 前必须先完成数据口径、事件日志和结构化表现记录。
