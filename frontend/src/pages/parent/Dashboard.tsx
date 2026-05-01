@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { DatePicker } from '@/components/ui/date-picker';
 import { ExportDialog } from '@/components/ExportDialog';
+import { getEducationStageLabel } from '@/lib/education-stage';
 import { toast } from 'sonner';
 import { startOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -286,6 +287,26 @@ interface CheckinPayload {
   metadata?: Record<string, any>;
   evidenceUrl?: string;
   date: string;
+}
+
+function getStagePrimaryAdvice(remainingTasks: number, needsAttentionCount: number) {
+  if (needsAttentionCount > 0) {
+    return `有 ${needsAttentionCount} 项任务需要复盘，先看孩子卡在哪里，再补家长观察。`;
+  }
+  if (remainingTasks > 0) {
+    return `今天还有 ${remainingTasks} 项待处理，建议放进固定时间块，先完成阅读或短任务。`;
+  }
+  return '今天任务推进稳定，可以做 5 分钟亲子复盘，并记录阅读或专注表现。';
+}
+
+function getStageMiddleAdvice(remainingTasks: number, needsAttentionCount: number) {
+  if (needsAttentionCount > 0) {
+    return `有 ${needsAttentionCount} 项任务需要复盘，优先确认薄弱学科、错因和明天补救安排。`;
+  }
+  if (remainingTasks > 0) {
+    return `今天还有 ${remainingTasks} 项待处理，建议按学科优先级处理，并保留错题复盘时间。`;
+  }
+  return '今天任务推进稳定，可以整理错题、薄弱点和明日复习优先级。';
 }
 
 interface AIAnalysisResult {
@@ -892,6 +913,10 @@ export default function ParentDashboard() {
   const remainingTasks = pendingTasks.length + partialTasks.length;
   const remainingMinutes = pendingTasks.reduce((sum, task) => sum + (task.task.timePerUnit || 0), 0);
   const needsAttentionTasks = [...partialTasks, ...notCompletedTasks, ...postponedTasks];
+  const selectedEducationStage = selectedChild?.educationStage || 'primary';
+  const stageAdviceText = selectedEducationStage === 'middle'
+    ? getStageMiddleAdvice(remainingTasks, needsAttentionTasks.length)
+    : getStagePrimaryAdvice(remainingTasks, needsAttentionTasks.length);
   const nextActions = pendingTasks.slice(0, 2);
   const greeting = getGreeting();
   const displayName = selectedChild?.name || user?.name || '家长';
@@ -912,7 +937,7 @@ export default function ParentDashboard() {
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950">今日概览</h1>
               <p className="truncate text-xs text-slate-500 sm:text-sm">
-                {greeting}，{displayName} · 坚持学习的每一天，都是成长的最好见证
+                {greeting}，{displayName} · {getEducationStageLabel(selectedEducationStage)} · 坚持学习的每一天，都是成长的最好见证
               </p>
             </div>
           </div>
@@ -1072,11 +1097,7 @@ export default function ParentDashboard() {
               AI 今日建议
             </h2>
             <p className="mt-5 text-sm leading-6 text-slate-600">
-              {needsAttentionTasks.length > 0
-                ? `今天有 ${needsAttentionTasks.length} 项需要处理，建议先确认原因，再安排补做或调整。`
-                : remainingTasks > 0
-                  ? `今天还有 ${remainingTasks} 项待处理，建议先完成预计时间较短的任务。`
-                  : '今天状态未记录，AI 暂无个性化建议。完成学习任务后，会为你生成专属建议哦。'}
+              {stageAdviceText}
             </p>
             <Button variant="outline" onClick={handleAIAnalysis} className="mt-5 rounded-lg">
               查看分析
@@ -1128,19 +1149,25 @@ export default function ParentDashboard() {
           <div className="mt-4 space-y-4">
             {[
               {
-                title: needsAttentionTasks.length > 0 ? '先处理卡点' : '继续保持',
-                desc: needsAttentionTasks.length > 0
-                  ? `有 ${needsAttentionTasks.length} 项任务需要复盘，建议先确认未完成原因。`
-                  : '今日任务推进稳定，可以延续当前学习节奏。',
+                title: needsAttentionTasks.length > 0
+                  ? (selectedEducationStage === 'middle' ? '先看薄弱项' : '先处理卡点')
+                  : '继续保持',
+                desc: stageAdviceText,
                 icon: Lightbulb,
                 bg: 'bg-amber-50',
                 color: 'text-amber-500',
               },
               {
-                title: remainingTasks > 0 ? '注意节奏' : '安排复盘',
+                title: remainingTasks > 0
+                  ? (selectedEducationStage === 'middle' ? '按学科排优先级' : '放进时间块')
+                  : '安排复盘',
                 desc: remainingTasks > 0
-                  ? `剩余任务预计还需 ${remainingMinutes} 分钟，可优先完成短任务。`
-                  : '今日任务基本完成后，可以安排 5 分钟复盘和阅读记录。',
+                  ? (selectedEducationStage === 'middle'
+                    ? `剩余任务预计还需 ${remainingMinutes} 分钟，优先处理薄弱学科和错题关联任务。`
+                    : `剩余任务预计还需 ${remainingMinutes} 分钟，可优先安排阅读、专注或短任务。`)
+                  : (selectedEducationStage === 'middle'
+                    ? '今日任务基本完成后，可以整理错题和明日复习顺序。'
+                    : '今日任务基本完成后，可以安排 5 分钟亲子复盘和阅读记录。'),
                 icon: Clock,
                 bg: 'bg-blue-50',
                 color: 'text-blue-500',

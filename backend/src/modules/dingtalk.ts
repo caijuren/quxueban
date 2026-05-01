@@ -37,6 +37,39 @@ function appendSignatureToUrl(webhookUrl: string, secret: string): string {
   return `${webhookUrl}${separator}timestamp=${timestamp}&sign=${sign}`
 }
 
+function getEducationStageLabel(stage?: string): string {
+  return stage === 'middle' ? '初中阶段' : '小学阶段'
+}
+
+function getStageDashboardAdvice(stage: string | undefined, completionRate: number, partialTasks: number, todayStudyMinutes: number): string[] {
+  const advice: string[] = []
+  const isMiddle = stage === 'middle'
+
+  if (completionRate < 60) {
+    advice.push(isMiddle
+      ? '建议先确认薄弱学科和错题来源，避免问题累积到周末。'
+      : '建议先确认孩子卡点，必要时把任务拆小，放进固定时间块。')
+  } else {
+    advice.push(isMiddle
+      ? '今天整体节奏稳定，明天可继续按学科优先级推进。'
+      : '今天整体节奏稳定，明天可继续保持阅读、专注和习惯节奏。')
+  }
+
+  if (partialTasks > 0) {
+    advice.push(isMiddle
+      ? '部分完成的任务建议明天优先补齐，并记录错因或薄弱点。'
+      : '部分完成的任务建议明天优先补齐，同时记录孩子状态和家长观察。')
+  }
+
+  if (todayStudyMinutes < 60) {
+    advice.push(isMiddle
+      ? '今日学习时长偏少，建议明天预留复习和错题整理时间。'
+      : '今日学习时长偏少，建议明天预留晨读、睡前阅读或放学后时间块。')
+  }
+
+  return advice
+}
+
 function getAssignedDaysForPlan(plan: any): number[] {
   let assignedDays: number[] = []
   if (plan.assignedDays) {
@@ -462,6 +495,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   // Generate dashboard message
   const message = generateDashboardMessage(
     child.name,
+    child.educationStage,
     totalTasks,
     completedTasks,
     partialTasks,
@@ -649,6 +683,7 @@ function generateWeeklyPlanMessage(childName: string, plans: any[], weekStart: D
 // Helper function to generate dashboard message
 function generateDashboardMessage(
   childName: string,
+  educationStage: string | undefined,
   totalTasks: number,
   completedTasks: number,
   partialTasks: number,
@@ -668,6 +703,7 @@ function generateDashboardMessage(
   let message = `# ${childName}的今日学习情况
 `
   message += `> 时间：${targetDate.getFullYear()}年${targetDate.getMonth() + 1}月${targetDate.getDate()}日\n\n`
+  message += `> 学习阶段：${getEducationStageLabel(educationStage)}\n\n`
   message += `## 今日摘要\n`
   message += `- **今日应做**：${actionableTasks}项\n`
   message += `- **已完成**：${completedTasks}项\n`
@@ -716,17 +752,10 @@ function generateDashboardMessage(
   }
 
   message += `### 建议\n`
-  if (completionRate < 60) {
-    message += `- 建议优先完成校内巩固类任务，避免基础任务继续积压。\n`
-  } else {
-    message += `- 今天整体节奏稳定，明天可继续保持当前完成顺序。\n`
-  }
-  if (partialTasks > 0) {
-    message += `- 部分完成的任务建议明天优先补齐，减少反复中断。\n`
-  }
-  if (todayStudyMinutes < 60) {
-    message += `- 今日学习时长偏少，建议明天预留固定学习时间段。\n`
-  }
+  getStageDashboardAdvice(educationStage, completionRate, partialTasks, todayStudyMinutes)
+    .forEach((item) => {
+      message += `- ${item}\n`
+    })
 
   return message
 }
