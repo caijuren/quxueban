@@ -9,6 +9,7 @@
 - 工作区状态：等待统一构建验证、提交和发布
 - 新主计划：`docs/STABILITY_AND_ROADMAP_2026.md`
 - 协作与发布规范：`docs/WORKFLOW_CONVENTIONS.md`
+- 技术健康基线：`docs/STABILITY_BASELINE_1_7_7.md`
 
 ## 最近已经完成
 
