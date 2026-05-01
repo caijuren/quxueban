@@ -14,6 +14,7 @@
 - 已新增协作与发布规范：`docs/WORKFLOW_CONVENTIONS.md`。
 - 已新增技术健康基线：`docs/STABILITY_BASELINE_1_7_7.md`。
 - 已新增阶段化能力模型设计：`docs/EDUCATION_STAGE_MODEL.md`。
+- 已新增 1.8 阶段化 ToDo：`docs/TODO_1_8_STAGE_MODEL.md`。
 - 已新增学习时长诊断脚本：`pnpm run script:check-daily-study-minutes`。
 
 接下来不急着直接进入 AI 大版本。先把系统稳定性、数据口径和发布流程打牢，再分阶段进入 1.8、2.0、3.0。
@@ -46,6 +47,7 @@
 
 - 建立 `educationStage`，支持小学/初中双轨能力模型。
 - 能力模型和执行目标解耦，小学偏过程习惯，初中偏学科结果。
+- 1.8 具体执行范围以 `docs/TODO_1_8_STAGE_MODEL.md` 为准，完整知识图谱、目标校差距、AI 规划后移。
 - 今日概览、任务、计划、阅读、钉钉的业务口径一致。
 - 家长能清楚知道今天做了什么、哪里没做、下一步怎么调整。
 - 阅读系统从“记录”升级为“成长档案”。

@@ -11,6 +11,7 @@
 - 协作与发布规范：`docs/WORKFLOW_CONVENTIONS.md`
 - 技术健康基线：`docs/STABILITY_BASELINE_1_7_7.md`
 - 阶段化能力模型：`docs/EDUCATION_STAGE_MODEL.md`
+- 1.8 阶段化 ToDo：`docs/TODO_1_8_STAGE_MODEL.md`
 
 ## 最近已经完成
 
