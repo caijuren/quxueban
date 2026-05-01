@@ -1,20 +1,24 @@
 # 趣学伴当前进度盘点
 
-更新时间：2026-04-30
+更新时间：2026-05-01
 
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：`1.7.7` 稳定增强版实现中，发布脚本化、重复打卡治理、学习时长共享口径和节假日检查已完成代码改造
-- 工作区状态：等待统一构建验证、提交和发布
+- 当前阶段：`1.8.0` 阶段化能力模型基础版已完成代码准备
+- 工作区状态：等待用户推送、服务器发布和生产验收
 - 新主计划：`docs/STABILITY_AND_ROADMAP_2026.md`
 - 协作与发布规范：`docs/WORKFLOW_CONVENTIONS.md`
 - 技术健康基线：`docs/STABILITY_BASELINE_1_7_7.md`
 - 阶段化能力模型：`docs/EDUCATION_STAGE_MODEL.md`
 - 1.8 阶段化 ToDo：`docs/TODO_1_8_STAGE_MODEL.md`
+- 1.8.0 发布记录：`docs/RELEASE_1_8_0.md`
 
 ## 最近已经完成
 
+- 完成 1.8.0 阶段化能力模型基础版：孩子教育阶段、阶段能力配置、任务目标类型、初中学科、小学时间块、今日概览和钉钉轻量阶段化。
+- 新增数据库迁移 `20260501020000_add_user_education_stage`。
+- 版本号更新到 `1.8.0`。
 - 新增 `docs/RELEASE_1_7_4.md`，记录 1.7.4 发版范围、数据库迁移、脚本和上线步骤。
 - 新增 `docs/NEXT_IMPROVEMENTS_1_7_5.md`，整理 1.7.5 下一轮改进清单。
 - 图书馆阅读记录、封面展示、卡片排序、最近在读逻辑和详情页操作完成修复。
@@ -48,6 +52,8 @@
 
 ## 当前未完成
 
+- 1.8.0 尚未推送到远端，尚未发布到服务器。
+- 1.8.0 发布后需要重点验证孩子阶段保存、任务表单阶段切换、今日概览建议和钉钉推送。
 - 正式环境还需要执行 1.7.4 migration。
 - 正式环境还需要执行《封神演义》状态修复脚本。
 - 后端调试日志仍偏多，建议放入 1.7.5 清理。
@@ -60,6 +66,11 @@
 
 ## 已验证
 
+- `pnpm run check:versions`：通过。
+- `backend pnpm build`：通过。
+- `frontend pnpm build`：通过。
+- `backend pnpm lint`：通过。
+- `frontend pnpm lint`：通过，保留 2 个既有 warning。
 - `frontend pnpm build`：通过。
 - `backend pnpm build`：通过。
 - 本地 `/api/health`：正常。
