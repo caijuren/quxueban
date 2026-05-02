@@ -6,10 +6,10 @@
 
 ## 服务器目录
 
-- Git 根目录：`/home/ubuntu`
-- 后端目录：`/home/ubuntu/backend`
-- 前端目录：`/home/ubuntu/frontend`
-- Nginx 静态目录：`/var/www/study-planner`
+- Git 根目录：`/srv/apps/quxueban`
+- 后端目录：`/srv/apps/quxueban/backend`
+- 前端目录：`/srv/apps/quxueban/frontend`
+- Nginx 静态目录：`/srv/www/quxueban`
 - 后端 PM2 应用：`study-planner-api`
 
 ## 后端发布
@@ -17,14 +17,14 @@
 推荐使用脚本：
 
 ```bash
-cd /home/ubuntu
+cd /srv/apps/quxueban
 ./scripts/release-production.sh backend
 ```
 
 手动命令保留用于脚本异常时排查：
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 git pull
 cat package.json | grep version
 pnpm install
@@ -47,19 +47,19 @@ curl http://127.0.0.1:3001/api/version
 推荐使用脚本：
 
 ```bash
-cd /home/ubuntu
+cd /srv/apps/quxueban
 ./scripts/release-production.sh frontend
 ```
 
 手动命令保留用于脚本异常时排查：
 
 ```bash
-cd /home/ubuntu/frontend
+cd /srv/apps/quxueban/frontend
 git pull
 pnpm install
 pnpm build
 grep -R "批量操作" -n dist || true
-sudo rsync -av --delete dist/ /var/www/study-planner/
+sudo rsync -av --delete dist/ /srv/www/quxueban/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -76,28 +76,28 @@ sudo systemctl reload nginx
 发布状态检查：
 
 ```bash
-cd /home/ubuntu
+cd /srv/apps/quxueban
 ./scripts/release-production.sh check
 ```
 
 查询某天某孩子学习时长：
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 FAMILY_ID=1 CHILD_ID=24 CHECK_DATE=2026-04-30 pnpm run script:check-daily-study-minutes
 ```
 
 修复某本书为在读中：
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 FAMILY_ID=1 CHILD_ID=24 BOOK_NAME=封神演义 pnpm run script:set-book-reading
 ```
 
 检查下一年节假日数据：
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 pnpm run script:check-next-year-holidays
 ```
 
@@ -135,7 +135,7 @@ FAMILY_ID=1 CHILD_ID=24 START_DATE=2026-04-01 END_DATE=2026-05-01 APPLY=true pnp
 
 ## 注意事项
 
-- 不要在本地 Mac 执行服务器路径命令，例如 `/home/ubuntu/backend`、`pm2 restart`。
+- 不要在本地 Mac 执行服务器路径命令，例如 `/srv/apps/quxueban/backend`、`pm2 restart`。
 - 本地 Mac 只负责提交和 `git push`。
 - 服务器负责 `git pull`、构建、迁移、重启和 Nginx 静态资源发布。
-- 后端更新不等于前端已发布；前端必须单独构建并同步到 `/var/www/study-planner`。
+- 后端更新不等于前端已发布；前端必须单独构建并同步到 `/srv/www/quxueban`。

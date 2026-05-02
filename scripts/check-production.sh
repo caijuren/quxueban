@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/home/ubuntu}"
-WEB_DIR="${WEB_DIR:-/var/www/study-planner}"
+APP_DIR="${APP_DIR:-/srv/apps/quxueban}"
+WEB_DIR="${WEB_DIR:-/srv/www/quxueban}"
 PNPM_BIN="${PNPM_BIN:-pnpm}"
 
 export COREPACK_ENABLE_PROJECT_SPEC="${COREPACK_ENABLE_PROJECT_SPEC:-0}"
@@ -50,4 +50,4 @@ curl -sS http://localhost/ | grep -o 'assets/[^"]*' | head || true
 
 echo "== nginx =="
 sudo nginx -t
-sudo nginx -T 2>/dev/null | grep -n "location \\^~ /api/uploads/\\|location /api\\|root /var/www/study-planner" | head -20 || true
+sudo nginx -T 2>/dev/null | grep -n "location \\^~ /api/uploads/\\|location /api\\|root /srv/www/quxueban\\|root /var/www/study-planner" | head -20 || true

@@ -1,8 +1,12 @@
+const appDir = process.env.APP_DIR || "/srv/apps/quxueban";
+const backendDir = process.env.BACKEND_DIR || `${appDir}/backend`;
+const pm2App = process.env.PM2_APP || "study-planner-api";
+
 module.exports = {
   apps: [{
-    name: "study-planner-api",
+    name: pm2App,
     script: "./dist/index.js",
-    cwd: "/home/ubuntu/backend",
+    cwd: backendDir,
     instances: 1,
     exec_mode: "fork",
     autorestart: true,
@@ -17,8 +21,8 @@ module.exports = {
       API_PREFIX: "/api",
       LOG_LEVEL: "info"
     },
-    error_file: "/home/ubuntu/backend/logs/err.log",
-    out_file: "/home/ubuntu/backend/logs/out.log",
+    error_file: `${backendDir}/logs/err.log`,
+    out_file: `${backendDir}/logs/out.log`,
     log_date_format: "YYYY-MM-DD HH:mm:ss Z"
   }]
 };

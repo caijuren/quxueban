@@ -7,10 +7,10 @@ Usage:
   ./scripts/release-production.sh <backend|frontend|full|check>
 
 Environment:
-  APP_DIR=/home/ubuntu
-  BACKEND_DIR=/home/ubuntu/backend
-  FRONTEND_DIR=/home/ubuntu/frontend
-  WEB_DIR=/var/www/study-planner
+  APP_DIR=/srv/apps/quxueban
+  BACKEND_DIR=/srv/apps/quxueban/backend
+  FRONTEND_DIR=/srv/apps/quxueban/frontend
+  WEB_DIR=/srv/www/quxueban
   PM2_APP=study-planner-api
   API_BASE=http://127.0.0.1:3001
   PNPM_BIN=pnpm
@@ -38,10 +38,10 @@ case "$MODE" in
     ;;
 esac
 
-APP_DIR="${APP_DIR:-/home/ubuntu}"
+APP_DIR="${APP_DIR:-/srv/apps/quxueban}"
 BACKEND_DIR="${BACKEND_DIR:-$APP_DIR/backend}"
 FRONTEND_DIR="${FRONTEND_DIR:-$APP_DIR/frontend}"
-WEB_DIR="${WEB_DIR:-/var/www/study-planner}"
+WEB_DIR="${WEB_DIR:-/srv/www/quxueban}"
 PM2_APP="${PM2_APP:-study-planner-api}"
 API_BASE="${API_BASE:-http://127.0.0.1:3001}"
 PNPM_BIN="${PNPM_BIN:-pnpm}"

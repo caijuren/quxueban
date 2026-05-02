@@ -81,39 +81,36 @@ git diff --check
 
 ## 四、生产发布规范
 
-生产服务器发布统一在 `/home/ubuntu` 执行。
+生产服务器发布统一在 `/srv/apps/quxueban` 执行。
 
 ### 发布全部
 
 ```bash
-cd /home/ubuntu
-git fetch origin
-git reset --hard origin/main
+cd /srv/apps/quxueban
+git pull --ff-only
 ./scripts/release-production.sh full
 ```
 
 ### 只发布后端
 
 ```bash
-cd /home/ubuntu
-git fetch origin
-git reset --hard origin/main
+cd /srv/apps/quxueban
+git pull --ff-only
 ./scripts/release-production.sh backend
 ```
 
 ### 只发布前端
 
 ```bash
-cd /home/ubuntu
-git fetch origin
-git reset --hard origin/main
+cd /srv/apps/quxueban
+git pull --ff-only
 ./scripts/release-production.sh frontend
 ```
 
 ### 只检查生产状态
 
 ```bash
-cd /home/ubuntu
+cd /srv/apps/quxueban
 ./scripts/release-production.sh check
 ```
 
@@ -157,28 +154,28 @@ pm2 status
 ### 学习时长诊断
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 FAMILY_ID=1 CHILD_ID=24 CHECK_DATE=2026-04-30 pnpm run script:check-daily-study-minutes
 ```
 
 ### 重复打卡预览
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 FAMILY_ID=1 CHILD_ID=24 START_DATE=2026-04-01 END_DATE=2026-05-01 pnpm run script:cleanup-duplicate-checkins
 ```
 
 ### 重复打卡清理
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 FAMILY_ID=1 CHILD_ID=24 START_DATE=2026-04-01 END_DATE=2026-05-01 APPLY=true pnpm run script:cleanup-duplicate-checkins
 ```
 
 ### 书籍状态修复
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 FAMILY_ID=1 CHILD_ID=24 BOOK_NAME=封神演义 pnpm run script:set-book-reading
 ```
 
@@ -192,7 +189,7 @@ FAMILY_ID=1 CHILD_ID=24 BOOK_NAME=封神演义 pnpm run script:set-book-reading
 检查命令：
 
 ```bash
-cd /home/ubuntu/backend
+cd /srv/apps/quxueban/backend
 HOLIDAY_CHECK_YEAR=2027 HOLIDAY_MIN_DAYS=20 pnpm run script:check-next-year-holidays
 ```
 
@@ -224,8 +221,8 @@ HOLIDAY_CHECK_YEAR=2027 HOLIDAY_MIN_DAYS=20 HOLIDAY_CHECK_STRICT=true pnpm run s
 ## 九、当前固定路径
 
 - 本地仓库：`/Users/grubby/Desktop/quxueban`
-- 生产 Git 根目录：`/home/ubuntu`
-- 生产后端目录：`/home/ubuntu/backend`
-- 生产前端目录：`/home/ubuntu/frontend`
-- Nginx 静态目录：`/var/www/study-planner`
+- 生产 Git 根目录：`/srv/apps/quxueban`
+- 生产后端目录：`/srv/apps/quxueban/backend`
+- 生产前端目录：`/srv/apps/quxueban/frontend`
+- Nginx 静态目录：`/srv/www/quxueban`
 - PM2 应用名：`study-planner-api`

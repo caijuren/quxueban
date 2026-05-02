@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/home/ubuntu}"
-WEB_DIR="${WEB_DIR:-/var/www/study-planner}"
+APP_DIR="${APP_DIR:-/srv/apps/quxueban}"
+WEB_DIR="${WEB_DIR:-/srv/www/quxueban}"
 PM2_APP="${PM2_APP:-study-planner-api}"
 PNPM_BIN="${PNPM_BIN:-pnpm}"
 
