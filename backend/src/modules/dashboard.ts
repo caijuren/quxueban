@@ -567,20 +567,9 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
   const childId = childIdParam ? parseInt(childIdParam as string) : null
   const { date } = req.query
 
-  // Get checkins for specified date or today
-  // Use local time to match frontend date handling
-  let checkDate: Date
-  if (date) {
-    // Parse date string as local time
-    const [year, month, day] = (date as string).split('-').map(Number)
-    checkDate = new Date(year, month - 1, day)
-  } else {
-    checkDate = new Date()
-  }
-  // Set to start of day in local time
-  checkDate.setHours(0, 0, 0, 0)
-  const checkDateEnd = new Date(checkDate)
-  checkDateEnd.setHours(23, 59, 59, 999)
+  const targetDate = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? date
+    : new Date().toLocaleDateString('en-CA')
 
   const todayCheckins = await prisma.$queryRawUnsafe(
     `SELECT DISTINCT ON (COALESCE(wp.task_id, dc.task_id))
@@ -605,10 +594,9 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
     LEFT JOIN tasks t ON t.id = COALESCE(wp.task_id, dc.task_id)
     WHERE dc.family_id = $1
       ${childId !== null ? 'AND dc.child_id = $2' : ''}
-      AND dc.check_date >= $${childId !== null ? 3 : 2}
-      AND dc.check_date <= $${childId !== null ? 4 : 3}
+      AND (dc.check_date + INTERVAL '8 hours')::date = $${childId !== null ? 3 : 2}::date
     ORDER BY COALESCE(wp.task_id, dc.task_id), dc.created_at DESC, dc.id DESC`,
-    ...(childId !== null ? [familyId, childId, checkDate, checkDateEnd] : [familyId, checkDate, checkDateEnd])
+    ...(childId !== null ? [familyId, childId, targetDate] : [familyId, targetDate])
   ) as any[]
 
   // Format checkins for frontend
@@ -635,7 +623,7 @@ dashboardRouter.get('/today-checkins', async (req: AuthRequest, res: Response) =
     data: formattedCheckins,
     meta: {
       childId,
-      date: checkDate.toLocaleDateString('en-CA')
+      date: targetDate
     }
   })
 })

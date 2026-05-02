@@ -2161,7 +2161,7 @@ export default function LibraryPage() {
             <div className="border-t border-gray-100 bg-gray-50 p-6">
               <div className="flex gap-3">
                 <Button type="button" variant="outline" onClick={closeForm} className="h-12 flex-1 rounded-xl">取消</Button>
-                <Button type="submit" form="book-form" className="h-12 flex-1 rounded-xl bg-primary text-primary-foreground" disabled={createMutation.isPending || updateMutation.isPending}>
+                <Button type="submit" form="book-form" className="h-12 flex-1 rounded-xl" disabled={createMutation.isPending || updateMutation.isPending}>
                   {createMutation.isPending || updateMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : editingBook ? '保存修改' : '添加图书'}
                 </Button>
               </div>

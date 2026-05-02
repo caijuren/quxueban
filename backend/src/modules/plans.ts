@@ -415,7 +415,7 @@ plansRouter.post('/checkin', async (req: AuthRequest, res: Response) => {
 
   const result = await prisma.$transaction(async (tx) => {
     const lockKey = `${targetChildId}:${parsedTaskId}:${checkDate.toISOString().slice(0, 10)}`
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${familyId}, hashtext(${lockKey})::int)`
+    await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock($1::int, hashtext($2)::int)', familyId, lockKey)
 
     const existingCheckins = await tx.dailyCheckin.findMany({
       where: {

@@ -39,6 +39,7 @@ import {
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getReadinessLayerByText } from '@/lib/readiness-model';
 import {
   difficultyReverseMap,
   NO_ABILITY_POINT,
@@ -333,6 +334,14 @@ export default function TaskDetail() {
   const tags = normalizeTags(task.tags);
   const issues = getTaskConfigIssues(task);
   const scheduleRule = getScheduleRule(task);
+  const readinessLayer = getReadinessLayerByText(
+    tags.abilityCategory,
+    tags.abilityPoint,
+    tags.targetType,
+    task.category,
+    task.name
+  );
+  const ReadinessIcon = readinessLayer.icon;
 
   return (
     <div className="mx-auto max-w-[1360px] space-y-5 pb-24">
@@ -376,14 +385,15 @@ export default function TaskDetail() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="flex flex-wrap gap-2">
-                  <Chip tone="blue">{getSubjectLabel(tags.subject)}</Chip>
-                  <Chip>{task.category}</Chip>
-                  <Chip>{scheduleRuleLabels[scheduleRule]}</Chip>
-                  <Chip>{getTargetTypeLabel(tags.targetType)}</Chip>
+                  <Chip tone="blue">层级：{readinessLayer.label}</Chip>
+                  <Chip>学科：{getSubjectLabel(tags.subject)}</Chip>
+                  <Chip>分类：{task.category}</Chip>
+                  <Chip>规则：{scheduleRuleLabels[scheduleRule]}</Chip>
+                  <Chip tone="green">目标：{getTargetTypeLabel(tags.targetType)}</Chip>
                   {tags.timeBlock ? <Chip tone="green">{tags.timeBlock}</Chip> : null}
                 </div>
                 <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-500">
-                  任务详情页现在作为统一入口承接查看、编辑、推送和删除。列表页只负责筛选和进入详情。
+                  这个任务当前归入{readinessLayer.label}，用于回答“{readinessLayer.question}”。任务详情页承接能力、目标、记录和回流说明。
                 </p>
               </div>
               <div className={cn(
@@ -393,6 +403,57 @@ export default function TaskDetail() {
                 {issues.length > 0 ? `还有 ${issues.length} 项配置可补齐：${issues.join('、')}` : '配置完整'}
               </div>
             </div>
+          </section>
+
+          <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-5 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className={cn('flex size-11 shrink-0 items-center justify-center rounded-lg ring-1', readinessLayer.softTone)}>
+                  <ReadinessIcon className="size-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-950">1.9 回流说明：{readinessLayer.label} · {readinessLayer.english}</h2>
+                  <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{readinessLayer.description}</p>
+                </div>
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:w-[420px]">
+                <div className="rounded-lg bg-white px-3 py-2">
+                  <p className="text-slate-400">能力点</p>
+                  <p className="mt-1 font-semibold text-slate-900">{tags.abilityPoint || '未设置'}</p>
+                </div>
+                <div className="rounded-lg bg-white px-3 py-2">
+                  <p className="text-slate-400">目标</p>
+                  <p className="mt-1 truncate font-semibold text-slate-900">{tags.linkedGoal || '未关联'}</p>
+                </div>
+                <div className="rounded-lg bg-white px-3 py-2">
+                  <p className="text-slate-400">证据</p>
+                  <p className="mt-1 font-semibold text-slate-900">{task.trackingType === 'simple' ? '完成记录' : '结构化记录'}</p>
+                </div>
+              </div>
+            </div>
+            {readinessLayer.id === 'cognition' ? (
+              <div className="mt-4 rounded-lg border border-violet-100 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-950">认知层采集建议</p>
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+                  <div className="rounded-lg bg-violet-50 px-3 py-2">
+                    <p className="font-semibold text-violet-700">尝试次数</p>
+                    <p className="mt-1 text-slate-500">第几次能正确应用规则</p>
+                  </div>
+                  <div className="rounded-lg bg-blue-50 px-3 py-2">
+                    <p className="font-semibold text-blue-700">提示使用</p>
+                    <p className="mt-1 text-slate-500">是否依赖提示完成</p>
+                  </div>
+                  <div className="rounded-lg bg-amber-50 px-3 py-2">
+                    <p className="font-semibold text-amber-700">主要错因</p>
+                    <p className="mt-1 text-slate-500">漏读、规则、计算或推理</p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 px-3 py-2">
+                    <p className="font-semibold text-emerald-700">复盘质量</p>
+                    <p className="mt-1 text-slate-500">能否复述规则并迁移</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -158,17 +158,22 @@ model WeeklyPlan {
 }
 
 model DailyCheckin {
-  id        Int         @id @default(autoincrement())
-  familyId  Int         @map("family_id")
-  childId   Int         @map("child_id")
-  taskId    Int         @map("task_id")
-  planId    Int?        @map("plan_id")
-  status    String      @db.VarChar(20)
-  value     Int?
-  checkDate DateTime    @map("check_date")
-  createdAt DateTime    @default(now()) @map("created_at")
-  child     User        @relation(fields: [childId], references: [id])
-  plan      WeeklyPlan? @relation(fields: [planId], references: [id])
+  id             Int         @id @default(autoincrement())
+  familyId       Int         @map("family_id")
+  childId        Int         @map("child_id")
+  taskId         Int         @map("task_id")
+  planId         Int?        @map("plan_id")
+  status         String      @db.VarChar(20)
+  value          Int?
+  checkDate      DateTime    @map("check_date")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  completedValue Int?        @map("completed_value")
+  focusMinutes   Int?        @map("focus_minutes")
+  notes          String?     @map("notes") @db.VarChar(500)
+  metadata       Json        @default("{}")
+  evidenceUrl    String      @default("") @map("evidence_url") @db.VarChar(255)
+  child          User        @relation(fields: [childId], references: [id])
+  plan           WeeklyPlan? @relation(fields: [planId], references: [id])
 
   @@map("daily_checkins")
 }

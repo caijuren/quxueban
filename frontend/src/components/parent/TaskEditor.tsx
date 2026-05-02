@@ -11,6 +11,7 @@ import {
   primaryTimeBlockOptions,
   targetTypeOptions,
 } from '@/lib/education-stage';
+import { getReadinessLayerByText } from '@/lib/readiness-model';
 import { cn } from '@/lib/utils';
 
 export type TaskCategory = '校内巩固' | '校内拔高' | '课外课程' | '英语阅读' | '体育运动' | '中文阅读';
@@ -76,7 +77,7 @@ const typeOptions: TaskType[] = ['固定', '灵活', '跟随学校'];
 const taskKindOptions = ['学习', '阅读', '运动', '习惯', '生活', '情绪', '社交'];
 const primaryLevelOptions = ['L1 一年级', 'L2 二年级', 'L3 三年级', 'L4 四年级', 'L5 五年级'];
 const middleLevelOptions = ['L6 六年级', 'L7 初一', 'L8 初二', 'L9 初三'];
-const abilityCategoryOptions = ['阶段能力', '学科能力', '习惯过程', '阅读表达', '身心生活'];
+const abilityCategoryOptions = ['交付层', '认知层', '稳定性层'];
 const linkedGoalOptions = ['不关联目标', '语文阅读理解', '数学计算稳定性', '每日固定学习时段', '错题复盘', '每周运动达标'];
 const primarySubjectOptions = ['语文', '数学', '英语', '体育'];
 
@@ -153,7 +154,7 @@ export function createDefaultTaskEditorFormData(stage?: string): TaskEditorFormD
     difficulty: '基础',
     taskKind: '学习',
     level,
-    abilityCategory: '阶段能力',
+    abilityCategory: '交付层',
     abilityPoint: NO_ABILITY_POINT,
     linkedGoal: '不关联目标',
     targetType: getDefaultTargetType(stage),
@@ -183,7 +184,7 @@ export function taskToTaskEditorFormData(task: TaskEditorTask, stage?: string): 
     difficulty: tags.difficulty ? difficultyReverseMap[tags.difficulty] || '基础' : '基础',
     taskKind: tags.taskKind || '学习',
     level: currentLevelOptions.includes(level) ? level : currentLevelOptions[0],
-    abilityCategory: tags.abilityCategory || '阶段能力',
+    abilityCategory: abilityCategoryOptions.includes(tags.abilityCategory || '') ? tags.abilityCategory || '交付层' : '交付层',
     abilityPoint: tags.abilityPoint || NO_ABILITY_POINT,
     linkedGoal: tags.linkedGoal || '不关联目标',
     targetType: tags.targetType || getDefaultTargetType(stage),
@@ -311,6 +312,14 @@ export function TaskEditor({
   const currentSubjectOptions = educationStage === 'middle' ? middleSubjectOptions : primarySubjectOptions;
   const currentLevelOptions = educationStage === 'middle' ? middleLevelOptions : primaryLevelOptions;
   const currentAbilityPointOptions = getAbilityDimensions(educationStage).map((dimension) => dimension.label);
+  const readinessLayer = getReadinessLayerByText(
+    value.abilityCategory,
+    value.abilityPoint,
+    value.targetType,
+    value.category,
+    value.name
+  );
+  const ReadinessIcon = readinessLayer.icon;
 
   const setValue = (updates: Partial<TaskEditorFormData>) => onChange({ ...value, ...updates });
 
@@ -322,38 +331,31 @@ export function TaskEditor({
             <Label>任务名称</Label>
             <Input value={value.name} onChange={(event) => setValue({ name: event.target.value })} />
           </div>
-          <div className="space-y-2">
-            <Label>任务分类</Label>
-            <ChoiceGrid value={value.category} options={categoryOptions} onChange={(category) => setValue({ category })} columns="grid-cols-2 sm:grid-cols-3" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>任务分类</Label>
+              <ChoiceGrid value={value.category} options={categoryOptions} onChange={(category) => setValue({ category })} columns="grid-cols-2 sm:grid-cols-3" />
+            </div>
+            <div className="space-y-2">
+              <Label>任务性质</Label>
+              <ChoiceGrid value={value.type} options={typeOptions} onChange={(type) => setValue({ type })} columns="grid-cols-3" />
+            </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>任务类型</Label>
-              <ChoiceGrid value={value.type} options={typeOptions} onChange={(type) => setValue({ type })} columns="grid-cols-3" />
+              <Label>单次时长（分钟）</Label>
+              <Input type="number" value={value.timePerUnit} onChange={(event) => setValue({ timePerUnit: parseInt(event.target.value, 10) || 30 })} />
             </div>
             <div className="space-y-2">
-              <Label>难度</Label>
-              <ChoiceGrid value={value.difficulty} options={['基础', '提高', '挑战']} onChange={(difficulty) => setValue({ difficulty })} columns="grid-cols-3" />
+              <Label>分配规则</Label>
+              <ChoiceGrid
+                value={value.scheduleRule}
+                options={['daily', 'school', 'flexible', 'weekend']}
+                onChange={(scheduleRule) => setValue({ scheduleRule })}
+                getLabel={(scheduleRule) => scheduleRuleLabels[scheduleRule]}
+                columns="grid-cols-2"
+              />
             </div>
-          </div>
-        </div>
-      </FormSection>
-
-      <FormSection title="安排规则" description="决定任务如何进入周计划和今日概览。">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>分配规则</Label>
-            <ChoiceGrid
-              value={value.scheduleRule}
-              options={['daily', 'school', 'flexible', 'weekend']}
-              onChange={(scheduleRule) => setValue({ scheduleRule })}
-              getLabel={(scheduleRule) => scheduleRuleLabels[scheduleRule]}
-              columns="grid-cols-2"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>单次时长（分钟）</Label>
-            <Input type="number" value={value.timePerUnit} onChange={(event) => setValue({ timePerUnit: parseInt(event.target.value, 10) || 30 })} />
           </div>
           {value.scheduleRule === 'flexible' ? (
             <div className="space-y-2">
@@ -361,25 +363,17 @@ export function TaskEditor({
               <Input type="number" value={value.weeklyFrequency} onChange={(event) => setValue({ weeklyFrequency: parseInt(event.target.value, 10) || 1 })} />
             </div>
           ) : null}
-          <div className="space-y-2">
-            <Label>完成方式</Label>
-            <ChoiceGrid value={value.parentRole} options={['独立完成', '家长陪伴', '家长主导']} onChange={(parentRole) => setValue({ parentRole })} columns="grid-cols-3" />
-          </div>
         </div>
       </FormSection>
 
-      <FormSection title="阶段能力" description="字段会跟随当前孩子的小学/初中阶段变化。">
+      <FormSection title="三层归属" description="这里决定任务进入交付层、认知层还是稳定性层。">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>学科</Label>
-            <ChoiceGrid value={value.subject} options={currentSubjectOptions} onChange={(subject) => setValue({ subject })} columns="grid-cols-2 sm:grid-cols-3" />
-          </div>
-          <div className="space-y-2">
-            <Label>目标类型</Label>
-            <Select value={value.targetType} onValueChange={(targetType) => setValue({ targetType })}>
+            <Label>归属层级</Label>
+            <Select value={value.abilityCategory} onValueChange={(abilityCategory) => setValue({ abilityCategory })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {targetTypeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                {abilityCategoryOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -393,23 +387,90 @@ export function TaskEditor({
               </SelectContent>
             </Select>
           </div>
+        </div>
+        <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+          <div className="flex items-start gap-3">
+            <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg ring-1', readinessLayer.softTone)}>
+              <ReadinessIcon className="size-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">当前归属：{readinessLayer.label} · {readinessLayer.english}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-600">{readinessLayer.question}。{readinessLayer.description}</p>
+            </div>
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="目标连接" description="把任务挂到目标体系里，方便后续看目标进度。">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>能力分类</Label>
-            <Select value={value.abilityCategory} onValueChange={(abilityCategory) => setValue({ abilityCategory })}>
+            <Label>目标类型</Label>
+            <Select value={value.targetType} onValueChange={(targetType) => setValue({ targetType })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {abilityCategoryOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                {targetTypeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>任务类型标签</Label>
-            <Select value={value.taskKind} onValueChange={(taskKind) => setValue({ taskKind })}>
+            <Label>关联目标</Label>
+            <Select value={value.linkedGoal} onValueChange={(linkedGoal) => setValue({ linkedGoal })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {taskKindOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                {linkedGoalOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="执行设置" description="决定孩子怎么完成、难度如何，以及完成时怎么记录。">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label>完成方式</Label>
+            <ChoiceGrid value={value.parentRole} options={['独立完成', '家长陪伴', '家长主导']} onChange={(parentRole) => setValue({ parentRole })} columns="grid-cols-3" />
+          </div>
+          <div className="space-y-2">
+            <Label>难度</Label>
+            <ChoiceGrid value={value.difficulty} options={['基础', '提高', '挑战']} onChange={(difficulty) => setValue({ difficulty })} columns="grid-cols-3" />
+          </div>
+          <div className="space-y-2">
+            <Label>记录类型</Label>
+            <ChoiceGrid
+              value={value.trackingType}
+              options={['simple', 'numeric', 'progress']}
+              onChange={(trackingType) => setValue({ trackingType, trackingUnit: trackingType === 'simple' ? '' : value.trackingUnit })}
+              getLabel={(trackingType) => trackingTypeLabels[trackingType]}
+              columns="grid-cols-3"
+            />
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {value.trackingType !== 'simple' ? (
+            <>
+              <div className="space-y-2">
+                <Label>计量单位</Label>
+                <Select value={value.trackingUnit} onValueChange={(trackingUnit) => setValue({ trackingUnit })}>
+                  <SelectTrigger><SelectValue placeholder="选择单位" /></SelectTrigger>
+                  <SelectContent>
+                    {['页', '次', '分钟', '道', '篇', '个', '组', '字', '词', '句', '段', '章', '本', '套', '卷'].map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>目标值</Label>
+                <Input type="number" value={value.targetValue || ''} onChange={(event) => setValue({ targetValue: parseInt(event.target.value, 10) || 0 })} />
+              </div>
+            </>
+          ) : null}
+        </div>
+      </FormSection>
+
+      <FormSection title="额外字段" description="学科、年级、时间块和任务标签用于筛选与展示。">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>学科</Label>
+            <ChoiceGrid value={value.subject} options={currentSubjectOptions} onChange={(subject) => setValue({ subject })} columns="grid-cols-2 sm:grid-cols-3" />
           </div>
           <div className="space-y-2">
             <Label>适用年级</Label>
@@ -433,46 +494,14 @@ export function TaskEditor({
             </div>
           ) : null}
           <div className="space-y-2">
-            <Label>关联目标</Label>
-            <Select value={value.linkedGoal} onValueChange={(linkedGoal) => setValue({ linkedGoal })}>
+            <Label>任务类型标签</Label>
+            <Select value={value.taskKind} onValueChange={(taskKind) => setValue({ taskKind })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {linkedGoalOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                {taskKindOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </FormSection>
-
-      <FormSection title="完成记录" description="决定孩子完成任务时填写什么。">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <Label>记录类型</Label>
-            <ChoiceGrid
-              value={value.trackingType}
-              options={['simple', 'numeric', 'progress']}
-              onChange={(trackingType) => setValue({ trackingType, trackingUnit: trackingType === 'simple' ? '' : value.trackingUnit })}
-              getLabel={(trackingType) => trackingTypeLabels[trackingType]}
-              columns="grid-cols-3"
-            />
-          </div>
-          {value.trackingType !== 'simple' ? (
-            <>
-              <div className="space-y-2">
-                <Label>计量单位</Label>
-                <Select value={value.trackingUnit} onValueChange={(trackingUnit) => setValue({ trackingUnit })}>
-                  <SelectTrigger><SelectValue placeholder="选择单位" /></SelectTrigger>
-                  <SelectContent>
-                    {['页', '次', '分钟', '道', '篇', '个', '组', '字', '词', '句', '段', '章', '本', '套', '卷'].map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>目标值</Label>
-                <Input type="number" value={value.targetValue || ''} onChange={(event) => setValue({ targetValue: parseInt(event.target.value, 10) || 0 })} />
-              </div>
-            </>
-          ) : null}
         </div>
       </FormSection>
 

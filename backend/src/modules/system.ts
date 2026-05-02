@@ -3,7 +3,7 @@ import { prisma } from '../config/database'
 import { env } from '../config/env'
 
 export const systemRouter: Router = Router()
-const APP_VERSION = '1.8.0'
+const APP_VERSION = '1.9.0'
 
 // ============================================
 // System & Health Routes

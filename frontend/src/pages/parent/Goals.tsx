@@ -38,6 +38,7 @@ import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
+import { getReadinessLayerByText, readinessLayers } from '@/lib/readiness-model';
 
 type GoalStatus = 'on-track' | 'attention' | 'strong';
 
@@ -287,6 +288,9 @@ const categoryLabelMap: Record<string, string> = {
   thinking: '思维与认知',
   habit: '学习习惯',
   health: '体育与健康',
+  delivery: '交付层',
+  cognition: '认知层',
+  stability: '稳定性层',
 };
 
 const fallbackAbilityOptions: AbilityOption[] = goalSections.flatMap(section => (
@@ -448,6 +452,7 @@ function GoalCard({
   const status = statusStyles[goal.status];
   const tone = goal.status === 'strong' ? 'bg-emerald-500' : goal.status === 'attention' ? 'bg-amber-500' : 'bg-indigo-500';
   const latestReview = goal.reviewNotes?.[0];
+  const readinessLayer = getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description);
 
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
@@ -456,6 +461,7 @@ function GoalCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-slate-950">{goal.title}</h3>
             <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-indigo-600 ring-1 ring-indigo-100">{goal.level}</span>
+            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', readinessLayer.softTone)}>{readinessLayer.label}</span>
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-500">{goal.description}</p>
         </div>
@@ -479,7 +485,7 @@ function GoalCard({
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-lg bg-white p-3 text-xs">
           <p className="font-semibold text-slate-900">关联能力</p>
-          <p className="mt-1 text-slate-500">{goal.abilityCategory} · {goal.abilityPoint}</p>
+          <p className="mt-1 text-slate-500">{readinessLayer.label} · {goal.abilityPoint}</p>
         </div>
         <div className="rounded-lg bg-white p-3 text-xs">
           <p className="font-semibold text-slate-900">复盘节奏</p>
@@ -699,6 +705,10 @@ export default function GoalsPage() {
   });
   const abilityOptions = useMemo(() => buildAbilityOptions(savedAbilityModel), [savedAbilityModel]);
   const recommendedGoalTemplates = useMemo(() => goalSections.flatMap(section => section.items), []);
+  const recommendedGoalGroups = useMemo(() => readinessLayers.map((layer) => ({
+    layer,
+    goals: recommendedGoalTemplates.filter((goal) => getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description).id === layer.id),
+  })).filter((group) => group.goals.length > 0), [recommendedGoalTemplates]);
   const dynamicGoalSections = useMemo<GoalSection[]>(() => (
     goalDrafts.length > 0
       ? [
@@ -962,7 +972,7 @@ export default function GoalsPage() {
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950">目标管理</h1>
               <p className="truncate text-xs text-slate-500 sm:text-sm">
-                {selectedChild?.name || '当前孩子'}的能力目标、关联任务、阶段进度和复盘建议
+                {selectedChild?.name || '当前孩子'}的交付、认知、稳定性目标，关联任务、阶段进度和复盘建议
               </p>
             </div>
           </div>
@@ -1109,23 +1119,39 @@ export default function GoalsPage() {
                 <p className="mt-1 text-xs text-slate-500">模板不进入统计，确认后才成为真实目标</p>
               </div>
             </div>
-            <div className="max-h-80 space-y-2 overflow-auto pr-1">
-              {recommendedGoalTemplates.slice(0, 10).map((goal) => (
-                <button
-                  key={`${goal.abilityCategory}-${goal.title}`}
-                  type="button"
-                  onClick={() => openCreateGoalFromTemplate(goal)}
-                  className="w-full rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{goal.title}</p>
-                      <p className="mt-1 truncate text-xs text-slate-500">{goal.abilityCategory} · {goal.abilityPoint}</p>
+            <div className="max-h-80 space-y-4 overflow-auto pr-1">
+              {recommendedGoalGroups.map((group) => {
+                const Icon = group.layer.icon;
+                return (
+                  <div key={group.layer.id} className="space-y-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className={cn('flex size-7 items-center justify-center rounded-lg ring-1', group.layer.softTone)}>
+                        <Icon className="size-3.5" />
+                      </span>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">{group.layer.label}</p>
+                        <p className="text-[11px] text-slate-500">{group.layer.question}</p>
+                      </div>
                     </div>
-                    <Badge variant="outline" className="shrink-0 rounded-full bg-white text-indigo-700">使用</Badge>
+                    {group.goals.slice(0, 4).map((goal) => (
+                      <button
+                        key={`${goal.abilityCategory}-${goal.title}`}
+                        type="button"
+                        onClick={() => openCreateGoalFromTemplate(goal)}
+                        className="w-full rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{goal.title}</p>
+                            <p className="mt-1 truncate text-xs text-slate-500">{goal.abilityPoint}</p>
+                          </div>
+                          <Badge variant="outline" className="shrink-0 rounded-full bg-white text-indigo-700">使用</Badge>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </Panel>
 

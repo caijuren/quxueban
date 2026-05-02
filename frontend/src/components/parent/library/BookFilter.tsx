@@ -233,7 +233,7 @@ export function BookFilter({
               {onAddClick && (
                 <Button
                   onClick={onAddClick}
-                  className="h-10 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm min-w-20"
+                  className="h-10 rounded-lg min-w-20"
                 >
                   <Plus className="size-4 mr-1.5" />
                   <span className="text-sm">添加图书</span>

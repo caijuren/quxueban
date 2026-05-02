@@ -16,16 +16,32 @@ interface ChildSwitcherProps {
 export function ChildSwitcher({ className }: ChildSwitcherProps) {
   const { children, selectedChild, selectedChildId, selectChild, isLoading } = useSelectedChild();
 
-  // 只有一个孩子时不显示切换器
-  if (children.length <= 1) {
-    return null;
-  }
-
   if (isLoading) {
     return (
       <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg", className)}>
         <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
         <div className="w-16 h-4 bg-gray-200 rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  if (children.length === 0) {
+    return null;
+  }
+
+  if (children.length === 1) {
+    const child = selectedChild || children[0];
+    return (
+      <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl", className)}>
+        <Avatar className="w-8 h-8 ring-2 ring-white shadow-sm">
+          <AvatarImage src={child.avatar} />
+          <AvatarFallback className="bg-primary text-white text-xs font-medium">
+            {child.name.charAt(0)}
+          </AvatarFallback>
+        </Avatar>
+        <span className="font-medium text-sm text-gray-700 hidden sm:inline">
+          {child.name}
+        </span>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 # 趣学伴文档索引
 
-更新时间：2026-05-01
+更新时间：2026-05-02
 
 ## 当前主文档
 
@@ -10,11 +10,14 @@
 - `version-roadmap.md`：当前唯一版本迭代计划。
 - `documentation-guide.md`：文档命名、撰写和归档规范。
 - `design-education-stage-model.md`：小学/初中阶段化设计。
+- `design-1.9-ability-goal-engine.md`：1.9 三层准备度模型与诊断引擎设计方案。
 - `draft-ability-model-1.8.md`：能力模型工作底稿。
 - `design-reading-data-flow.md`：图书馆和阅读数据闭环。
 - `workflow-conventions.md`：协作和发布规范。
 - `production-release-checklist.md`：生产发布检查清单。
 - `deployment.md`：生产部署流程。
+- `checks/regression-1.9-ui.md`：1.9 UI 首轮回归记录。
+- `releases/release-1.9.0.md`：1.9.0 发布记录。
 
 ## 产品背景
 

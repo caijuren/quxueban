@@ -49,7 +49,14 @@ apiClient.interceptors.request.use(
     const url = config.url || '';
     const contentType = config.headers?.['Content-Type'];
     const isFileUpload = typeof contentType === 'string' ? contentType.includes('multipart/form-data') : false;
-    if (selectedChildIdStr && selectedChildIdStr !== 'null' && !url.includes('/auth/') && !url.includes('/settings/') && !isFileUpload) {
+    const normalizedPath = url.split('?')[0].replace(/^\/api/, '');
+    const skipChildInjection =
+      normalizedPath === '/children' ||
+      normalizedPath === '/login' ||
+      normalizedPath === '/register' ||
+      normalizedPath.startsWith('/auth/') ||
+      normalizedPath.startsWith('/settings/');
+    if (selectedChildIdStr && selectedChildIdStr !== 'null' && !skipChildInjection && !isFileUpload) {
       const selectedChildId = parseInt(selectedChildIdStr);
       if (!isNaN(selectedChildId)) {
         if (config.method?.toLowerCase() === 'get') {

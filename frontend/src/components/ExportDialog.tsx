@@ -118,10 +118,10 @@ export function ExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-3xl border-0 shadow-2xl">
+      <DialogContent className="sm:max-w-md rounded-2xl border border-slate-200 shadow-xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Download className="w-5 h-5 text-purple-500" />
+            <Download className="w-5 h-5 text-primary" />
             {title}
           </DialogTitle>
           <DialogDescription className="text-gray-500">
@@ -142,7 +142,7 @@ export function ExportDialog({
                 <RadioGroupItem value="current" id="range-current" className="peer sr-only" />
                 <Label
                   htmlFor="range-current"
-                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
                 >
                   <span className="text-sm font-medium">当前视图</span>
                 </Label>
@@ -151,7 +151,7 @@ export function ExportDialog({
                 <RadioGroupItem value="week" id="range-week" className="peer sr-only" />
                 <Label
                   htmlFor="range-week"
-                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
                 >
                   <span className="text-sm font-medium">本周</span>
                 </Label>
@@ -160,7 +160,7 @@ export function ExportDialog({
                 <RadioGroupItem value="all" id="range-all" className="peer sr-only" />
                 <Label
                   htmlFor="range-all"
-                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
                 >
                   <span className="text-sm font-medium">全部</span>
                 </Label>
@@ -180,9 +180,9 @@ export function ExportDialog({
                 <RadioGroupItem value="png" id="format-png" className="peer sr-only" />
                 <Label
                   htmlFor="format-png"
-                  className="flex items-center gap-3 rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                  className="flex items-center gap-3 rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
                 >
-                  <ImageIcon className="w-5 h-5 text-purple-500" />
+                  <ImageIcon className="w-5 h-5 text-primary" />
                   <div>
                     <span className="text-sm font-medium block">PNG 图片</span>
                     <span className="text-xs text-gray-500">3倍高清、适合分享</span>
@@ -218,7 +218,7 @@ export function ExportDialog({
                   <RadioGroupItem value="viewport" id="view-viewport" className="peer sr-only" />
                   <Label
                     htmlFor="view-viewport"
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                    className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
                   >
                     <span className="text-sm font-medium">当前视图</span>
                     <span className="text-xs text-gray-500">仅可见区域</span>
@@ -228,7 +228,7 @@ export function ExportDialog({
                   <RadioGroupItem value="full" id="view-full" className="peer sr-only" />
                   <Label
                     htmlFor="view-full"
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-purple-500 peer-data-[state=checked]:bg-purple-50 cursor-pointer transition-all"
+                    className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-3 hover:bg-gray-50 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
                   >
                     <span className="text-sm font-medium">完整长图</span>
                     <span className="text-xs text-gray-500">包含所有内容</span>
@@ -252,7 +252,7 @@ export function ExportDialog({
           <Button
             onClick={handleExport}
             disabled={isExporting}
-            className="flex-1 rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+            className="flex-1 rounded-xl h-11"
           >
             {isExporting ? (
               <>

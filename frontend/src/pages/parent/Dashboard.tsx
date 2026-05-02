@@ -421,6 +421,49 @@ const blockerOptions = [
   { value: 'external', label: '外部原因' },
 ];
 
+const moodOptions = [
+  { value: '', label: '未记录' },
+  { value: 'stable', label: '稳定' },
+  { value: 'tired', label: '疲惫' },
+  { value: 'anxious', label: '焦虑' },
+  { value: 'resistant', label: '抗拒' },
+  { value: 'positive', label: '积极' },
+];
+
+const externalLoadOptions = [
+  { value: '', label: '无明显外部负载' },
+  { value: 'exam_week', label: '学校考试周' },
+  { value: 'sick', label: '生病/恢复期' },
+  { value: 'travel', label: '旅行/外出' },
+  { value: 'teacher_change', label: '换老师/换班' },
+  { value: 'family_schedule', label: '家庭节奏异常' },
+];
+
+const moodLabelMap = Object.fromEntries(moodOptions.map((option) => [option.value, option.label]));
+const externalLoadLabelMap = Object.fromEntries(externalLoadOptions.map((option) => [option.value, option.label]));
+
+const cognitiveErrorOptions = [
+  { value: '', label: '未记录' },
+  { value: 'missed_condition', label: '漏读条件' },
+  { value: 'rule_misuse', label: '规则用错' },
+  { value: 'calculation', label: '计算错误' },
+  { value: 'logic_gap', label: '推理断点' },
+  { value: 'strategy', label: '策略不当' },
+  { value: 'careless', label: '粗心' },
+];
+
+const reviewQualityOptions = [
+  { value: '', label: '未记录' },
+  { value: 'none', label: '未复盘' },
+  { value: 'surface', label: '只知道答案' },
+  { value: 'cause', label: '能说出错因' },
+  { value: 'rule', label: '能复述规则' },
+  { value: 'transfer', label: '能完成变式迁移' },
+];
+
+const cognitiveErrorLabelMap = Object.fromEntries(cognitiveErrorOptions.map((option) => [option.value, option.label]));
+const reviewQualityLabelMap = Object.fromEntries(reviewQualityOptions.map((option) => [option.value, option.label]));
+
 function getCategoryLabel(category: string, subject?: string) {
   return categoryLabelMap[subject || ''] || categoryLabelMap[category] || category || '未分类';
 }
@@ -459,6 +502,13 @@ export default function ParentDashboard() {
     difficulty: '',
     blocker: '',
     childFeedback: '',
+    sleepHours: '',
+    mood: '',
+    externalLoad: '',
+    attemptCount: '',
+    usedHint: '',
+    cognitiveError: '',
+    reviewQuality: '',
     notes: '',
     date: getLocalDateString(new Date()),
     evidence: null as File | null,
@@ -621,7 +671,7 @@ export default function ParentDashboard() {
     },
     onError: (error: Error) => {
       console.error('任务完成失败:', error);
-      toast.error('任务完成失败，请稍后重试');
+      toast.error(getErrorMessage(error) || '任务完成失败，请稍后重试');
     },
   });
   
@@ -643,6 +693,13 @@ export default function ParentDashboard() {
         difficulty: metadata.difficulty || '',
         blocker: metadata.blocker || '',
         childFeedback: metadata.childFeedback || '',
+        sleepHours: metadata.sleepHours ? String(metadata.sleepHours) : '',
+        mood: metadata.mood || '',
+        externalLoad: metadata.externalLoad || '',
+        attemptCount: metadata.attemptCount ? String(metadata.attemptCount) : '',
+        usedHint: typeof metadata.usedHint === 'boolean' ? (metadata.usedHint ? 'yes' : 'no') : '',
+        cognitiveError: metadata.cognitiveError || '',
+        reviewQuality: metadata.reviewQuality || '',
         notes: checkin.notes || '',
         date: selectedDate,
         evidence: null,
@@ -658,6 +715,13 @@ export default function ParentDashboard() {
         difficulty: '',
         blocker: '',
         childFeedback: '',
+        sleepHours: '',
+        mood: '',
+        externalLoad: '',
+        attemptCount: '',
+        usedHint: '',
+        cognitiveError: '',
+        reviewQuality: '',
         notes: '',
         date: selectedDate,
         evidence: null,
@@ -695,6 +759,13 @@ export default function ParentDashboard() {
       difficulty: '',
       blocker: '',
       childFeedback: '',
+      sleepHours: '',
+      mood: '',
+      externalLoad: '',
+      attemptCount: '',
+      usedHint: '',
+      cognitiveError: '',
+      reviewQuality: '',
       notes: '',
       date: selectedDate,
       evidence: null,
@@ -801,6 +872,13 @@ export default function ParentDashboard() {
             difficulty: completionData.difficulty,
             blocker: completionData.blocker,
             childFeedback: completionData.childFeedback,
+            sleepHours: completionData.sleepHours !== '' ? Number(completionData.sleepHours) : undefined,
+            mood: completionData.mood,
+            externalLoad: completionData.externalLoad,
+            attemptCount: completionData.attemptCount !== '' ? Number(completionData.attemptCount) : undefined,
+            usedHint: completionData.usedHint === '' ? undefined : completionData.usedHint === 'yes',
+            cognitiveError: completionData.cognitiveError,
+            reviewQuality: completionData.reviewQuality,
             abilityCategory: selectedTask.abilityCategory || '',
             abilityPoint: selectedTask.abilityPoint || '',
           },
@@ -837,6 +915,13 @@ export default function ParentDashboard() {
           difficulty: '',
           blocker: '',
           childFeedback: '',
+          sleepHours: '',
+          mood: '',
+          externalLoad: '',
+          attemptCount: '',
+          usedHint: '',
+          cognitiveError: '',
+          reviewQuality: '',
           notes: '',
           date: selectedDate,
           evidence: null,
@@ -846,7 +931,7 @@ export default function ParentDashboard() {
         toast.success('任务完成');
       } catch (error) {
         console.error('任务完成失败:', error);
-        toast.error('任务完成失败，请稍后重试');
+        toast.error(getErrorMessage(error) || '任务完成失败，请稍后重试');
       }
     }
   };
@@ -923,8 +1008,74 @@ export default function ParentDashboard() {
   const todayStudyMinutes = stats?.todayStudyMinutes || 0;
   const readingPages = stats?.readingPerformance?.pages || 0;
   const totalFocusMinutes = todayCheckins.reduce((sum: number, checkin: Checkin) => sum + (checkin.focusMinutes || 0), 0);
+  const stabilityRecords = todayCheckins
+    .map((checkin: Checkin) => checkin.metadata || {})
+    .filter((metadata: Record<string, any>) => metadata.sleepHours || metadata.mood || metadata.externalLoad);
+  const latestStabilityRecord = stabilityRecords[stabilityRecords.length - 1] as Record<string, any> | undefined;
+  const averageSleepHours = stabilityRecords
+    .map((metadata: Record<string, any>) => Number(metadata.sleepHours))
+    .filter((value: number) => Number.isFinite(value) && value > 0);
+  const sleepSummary = averageSleepHours.length > 0
+    ? `${(averageSleepHours.reduce((sum: number, value: number) => sum + value, 0) / averageSleepHours.length).toFixed(1)}h`
+    : '未记录';
+  const moodSummary = latestStabilityRecord?.mood ? moodLabelMap[latestStabilityRecord.mood] || latestStabilityRecord.mood : '未记录';
+  const externalLoadSummary = latestStabilityRecord?.externalLoad ? externalLoadLabelMap[latestStabilityRecord.externalLoad] || latestStabilityRecord.externalLoad : '无明显外部负载';
+  const cognitiveRecords = todayCheckins
+    .map((checkin: Checkin) => checkin.metadata || {})
+    .filter((metadata: Record<string, any>) => metadata.attemptCount || metadata.usedHint !== undefined || metadata.cognitiveError || metadata.reviewQuality);
+  const latestCognitiveRecord = cognitiveRecords[cognitiveRecords.length - 1] as Record<string, any> | undefined;
+  const attemptValues = cognitiveRecords
+    .map((metadata: Record<string, any>) => Number(metadata.attemptCount))
+    .filter((value: number) => Number.isFinite(value) && value > 0);
+  const attemptSummary = attemptValues.length > 0
+    ? `${(attemptValues.reduce((sum: number, value: number) => sum + value, 0) / attemptValues.length).toFixed(1)} 次`
+    : '未记录';
+  const hintSummary = latestCognitiveRecord?.usedHint === undefined
+    ? '未记录'
+    : latestCognitiveRecord.usedHint ? '使用提示' : '未用提示';
+  const reviewSummary = latestCognitiveRecord?.reviewQuality ? reviewQualityLabelMap[latestCognitiveRecord.reviewQuality] || latestCognitiveRecord.reviewQuality : '未记录';
   const yesterdayDelta = formatMinuteDelta(todayStudyMinutes, yesterdayStats?.todayStudyMinutes);
   const lastWeekDelta = formatMinuteDelta(todayStudyMinutes, lastWeekStats?.todayStudyMinutes);
+  const readinessSuggestions = (() => {
+    const suggestions: Array<{ title: string; desc: string; icon: ReactNode; tone: string; action: string }> = [];
+    if (needsAttentionTasks.length > 0) {
+      suggestions.push({
+        title: '修复执行断裂',
+        desc: `今天有 ${needsAttentionTasks.length} 项部分完成、未完成或推迟，先缩小任务颗粒度，恢复完成节奏。`,
+        icon: <AlertCircle className="h-4 w-4" />,
+        tone: 'bg-amber-50 text-amber-700 ring-amber-100',
+        action: '修复',
+      });
+    }
+    if (completionRate >= 85 && totalTasksForRate >= 4) {
+      suggestions.push({
+        title: '维持当前节奏',
+        desc: '今日完成率稳定，建议保留核心任务，不急着继续加量。',
+        icon: <CheckCircle2 className="h-4 w-4" />,
+        tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+        action: '维持',
+      });
+    }
+    if (remainingMinutes >= 90) {
+      suggestions.push({
+        title: '检查今日负荷',
+        desc: `剩余预计 ${remainingMinutes} 分钟，若孩子状态一般，优先保交付层核心任务。`,
+        icon: <HeartPulse className="h-4 w-4" />,
+        tone: 'bg-rose-50 text-rose-700 ring-rose-100',
+        action: '减压',
+      });
+    }
+    if (suggestions.length === 0) {
+      suggestions.push({
+        title: '证据继续积累',
+        desc: '当前没有明显风险，继续记录完成质量、复盘和孩子反馈，后续用于判断趋势。',
+        icon: <Lightbulb className="h-4 w-4" />,
+        tone: 'bg-blue-50 text-blue-700 ring-blue-100',
+        action: '观察',
+      });
+    }
+    return suggestions.slice(0, 3);
+  })();
 
   return (
     <div className="mx-auto max-w-[1360px] space-y-5" ref={pageRef}>
@@ -956,6 +1107,67 @@ export default function ParentDashboard() {
           </>
         }
       />
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">今日状态总览</h2>
+            <p className="mt-1 text-sm text-slate-500">三层准备度只做摘要提示，今日任务仍是主工作区。</p>
+          </div>
+          <Button variant="outline" onClick={() => navigate('/parent/ability-model')} className="h-9 rounded-lg bg-white">
+            查看三层模型
+            <ArrowRight className="ml-1.5 h-4 w-4" />
+          </Button>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                交付层
+              </span>
+              <span className="text-xs font-medium text-blue-600">{completionRate}%</span>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-950">任务交付</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">已完成 {completedCount}/{totalTasksForRate} 项，剩余 {remainingTasks} 项。</p>
+          </div>
+          <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
+                <Brain className="h-3.5 w-3.5" />
+                认知层
+              </span>
+              <span className="text-xs font-medium text-violet-600">{cognitiveRecords.length} 条证据</span>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-950">认知证据</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">尝试 {attemptSummary}，提示：{hintSummary}，复盘：{reviewSummary}。</p>
+          </div>
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                <HeartPulse className="h-3.5 w-3.5" />
+                稳定性层
+              </span>
+              <span className="text-xs font-medium text-emerald-600">{stabilityRecords.length} 条证据</span>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-950">状态证据</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">睡眠 {sleepSummary}，情绪：{moodSummary}，负载：{externalLoadSummary}。</p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          {readinessSuggestions.map((item) => (
+            <div key={item.title} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2">
+              <span className={cn('mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1', item.tone)}>
+                {item.icon}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-slate-900">{item.title}</p>
+                <p className="truncate text-xs text-slate-500">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)_minmax(260px,0.82fr)]">
         <section className="relative min-h-[214px] overflow-hidden rounded-xl border border-violet-100 bg-gradient-to-br from-blue-50 via-violet-50 to-fuchsia-50 p-5 shadow-sm">
@@ -1463,6 +1675,107 @@ export default function ParentDashboard() {
                   </select>
                 </div>
               )}
+
+              <details className="group rounded-xl border border-emerald-100 bg-emerald-50/30 p-3" open>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                  <span>
+                    <span className="block text-sm font-medium text-slate-700">状态记录（可选）</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">睡眠、情绪和外部负载，用于判断稳定性层状态。</span>
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-700 group-open:hidden">展开</span>
+                  <span className="text-xs font-semibold text-emerald-700 hidden group-open:inline">收起</span>
+                </summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">昨晚睡眠时长（小时）</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={completionData.sleepHours}
+                      onChange={(e) => setCompletionData({ ...completionData, sleepHours: e.target.value })}
+                      placeholder="例如 9 或 8.5"
+                      className="rounded-lg border-slate-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">情绪状态</Label>
+                    <select
+                      value={completionData.mood}
+                      onChange={(e) => setCompletionData({ ...completionData, mood: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      {moodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">外部负载</Label>
+                    <select
+                      value={completionData.externalLoad}
+                      onChange={(e) => setCompletionData({ ...completionData, externalLoad: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      {externalLoadOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </details>
+
+              <details className="group rounded-xl border border-violet-100 bg-violet-50/30 p-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                  <span>
+                    <span className="block text-sm font-medium text-slate-700">认知记录（可选）</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">尝试、提示、错因和复盘质量，适合新规则题和讲题复盘。</span>
+                  </span>
+                  <span className="text-xs font-semibold text-violet-700 group-open:hidden">展开</span>
+                  <span className="text-xs font-semibold text-violet-700 hidden group-open:inline">收起</span>
+                </summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">尝试次数</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={completionData.attemptCount}
+                      onChange={(e) => setCompletionData({ ...completionData, attemptCount: e.target.value })}
+                      placeholder="第几次做对"
+                      className="rounded-lg border-slate-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">是否使用提示</Label>
+                    <select
+                      value={completionData.usedHint}
+                      onChange={(e) => setCompletionData({ ...completionData, usedHint: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">未记录</option>
+                      <option value="no">未使用提示</option>
+                      <option value="yes">使用提示</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">主要错因</Label>
+                    <select
+                      value={completionData.cognitiveError}
+                      onChange={(e) => setCompletionData({ ...completionData, cognitiveError: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      {cognitiveErrorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-600">复盘质量</Label>
+                    <select
+                      value={completionData.reviewQuality}
+                      onChange={(e) => setCompletionData({ ...completionData, reviewQuality: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    >
+                      {reviewQualityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </details>
 
               {/* 备注 */}
               {!['not_involved'].includes(completionStatus) && (

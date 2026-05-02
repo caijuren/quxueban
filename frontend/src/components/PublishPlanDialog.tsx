@@ -273,7 +273,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
         className='bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden'
       >
         {/* Header */}
-        <div className='px-6 py-5 bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-between'>
+        <div className='px-6 py-5 bg-gradient-to-r from-primary to-secondary flex items-center justify-between'>
           <div>
             <h2 className='text-xl font-semibold text-white'>发布下周学习计划</h2>
             <div className='flex items-center gap-2 mt-2'>
@@ -281,7 +281,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                 <div key={i} className='flex items-center'>
                   <div className={cn(
                     'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                    step > i + 1 ? 'bg-white text-purple-600' : step === i + 1 ? 'bg-white text-purple-600' : 'bg-white/30 text-white'
+                    step > i + 1 ? 'bg-white text-primary' : step === i + 1 ? 'bg-white text-primary' : 'bg-white/30 text-white'
                   )}>
                     {step > i + 1 ? <Check className='w-4 h-4' /> : i + 1}
                   </div>
@@ -305,7 +305,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <button 
                       onClick={() => setSelectedWeek('this')} 
                       className={cn('p-6 rounded-xl border-2 text-left transition-all', 
-                        selectedWeek === 'this' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                        selectedWeek === 'this' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                       )}
                     >
                       <div className='text-3xl mb-2'>📅</div>
@@ -317,7 +317,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <button 
                       onClick={() => setSelectedWeek('next')} 
                       className={cn('p-6 rounded-xl border-2 text-left transition-all', 
-                        selectedWeek === 'next' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                        selectedWeek === 'next' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                       )}
                     >
                       <div className='text-3xl mb-2'>📆</div>
@@ -329,7 +329,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <button 
                       onClick={() => setSelectedWeek('custom')} 
                       className={cn('p-6 rounded-xl border-2 text-left transition-all', 
-                        selectedWeek === 'custom' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                        selectedWeek === 'custom' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                       )}
                     >
                       <div className='text-3xl mb-2'>🗓️</div>
@@ -368,7 +368,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                       {tasks.map(task => (
                         <label key={task.id} className={cn(
                           'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
-                          selectedTasks.includes(task.id) ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                          selectedTasks.includes(task.id) ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                         )}>
                           <Checkbox checked={selectedTasks.includes(task.id)} onCheckedChange={() => toggleTask(task.id)} />
                           <div className='flex-1'>
@@ -398,9 +398,9 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                         </Button>
                       )}
                     </div>
-                    <div className='mb-3 rounded-xl border border-purple-200 bg-purple-50 px-3 py-3'>
+                    <div className='mb-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3'>
                       <div className='flex items-center gap-2 text-sm font-medium text-gray-900'>
-                        <User className='w-4 h-4 text-purple-600' />
+                        <User className='w-4 h-4 text-primary' />
                         发布对象：{selectedChildName || '当前孩子'}
                       </div>
                       <p className='mt-1 text-xs text-gray-500'>计划会直接发布到当前孩子，不需要额外选择。</p>
@@ -432,7 +432,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                                 <select 
                                   value={currentRule} 
                                   onChange={(e) => setTaskRules(prev => ({ ...prev, [taskId]: e.target.value }))}
-                                  className='px-2 py-1 border border-gray-200 rounded-lg bg-white text-xs focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 outline-none w-full'
+                                  className='px-2 py-1 border border-gray-200 rounded-lg bg-white text-xs focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none w-full'
                                 >
                                   {RULE_OPTIONS.map(r => (
                                     <option key={r.id} value={r.id}>{r.label}</option>
@@ -461,7 +461,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
               <motion.div key='step3' initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                 <div className='flex items-center justify-between mb-3'>
                   <h3 className='font-medium text-gray-700'>{selectedWeek === 'this' ? '本周' : selectedWeek === 'next' ? '下周' : '自定义周'}预览（{format(getSelectedWeekStart(), 'MM月dd日', { locale: zhCN })} 起）</h3>
-                  <button onClick={() => setShuffleSeed(s => s + 1)} className='flex items-center gap-1.5 text-sm text-purple-600 hover:text-purple-700 font-medium px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors'>
+                  <button onClick={() => setShuffleSeed(s => s + 1)} className='flex items-center gap-1.5 text-sm text-primary hover:text-primary/85 font-medium px-3 py-1.5 rounded-lg hover:bg-primary/5 transition-colors'>
                     <RefreshCw className='w-4 h-4' />
                     重新生成排期
                   </button>
@@ -513,7 +513,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                       )}
                       <div className='space-y-1'>
                         {day.tasks.slice(0, 3).map((task, j) => (
-                          <div key={j} className='text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded truncate'>{task}</div>
+                          <div key={j} className='text-xs bg-primary/10 text-primary px-2 py-1 rounded truncate'>{task}</div>
                         ))}
                         {day.tasks.length > 3 && (
                           <div className='text-xs text-gray-400 text-center'>+{day.tasks.length - 3}个</div>
@@ -544,12 +544,12 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
           </Button>
           {step < 3 ? (
             <Button onClick={() => setStep(step + 1)} disabled={!canProceed()}
-              className='bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl px-5'>
+              className='rounded-xl px-5'>
               下一步
             </Button>
           ) : (
             <Button onClick={handlePublish} disabled={publishMutation.isPending}
-              className='bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl px-5'>
+              className='rounded-xl px-5'>
               <Send className='w-4 h-4 mr-2' />
               {publishMutation.isPending ? '发布中...' : '确认发布'}
             </Button>

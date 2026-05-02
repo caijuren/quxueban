@@ -81,7 +81,11 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
   // 获取孩子列表
   const refreshChildren = useCallback(async () => {
     const auth = getParentAuth();
-    if (!auth) return;
+    if (!auth) {
+      setChildrenList([]);
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -116,6 +120,9 @@ export function SelectedChildProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (authReady) {
       refreshChildren();
+    } else {
+      setChildrenList([]);
+      setIsLoading(false);
     }
   }, [authReady, refreshChildren]);
 

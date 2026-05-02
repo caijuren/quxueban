@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ExportDialog } from '@/components/ExportDialog';
 import { middleSubjectOptions, targetTypeOptions } from '@/lib/education-stage';
+import { getReadinessLayerByText, readinessLayers } from '@/lib/readiness-model';
+import type { ReadinessLayerId } from '@/lib/readiness-model';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { EmptyPanel, FilterBar, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 import {
@@ -182,9 +184,9 @@ export default function TasksPage() {
   const { selectedChildId, selectedChild } = useSelectedChild();
   const [formData, setFormData] = useState<TaskEditorFormData>(() => createDefaultTaskEditorFormData(selectedChild?.educationStage));
   // 使用localStorage存储当前选中的选项卡
-  const [activeTab, setActiveTab] = useState<'all' | 'subject' | 'type' | 'completion' | 'schedule'>(() => {
+  const [activeTab, setActiveTab] = useState<'all' | 'readiness' | 'subject' | 'type' | 'completion' | 'schedule'>(() => {
     const savedTab = localStorage.getItem('tasksActiveTab');
-    return (savedTab as 'all' | 'subject' | 'type' | 'completion' | 'schedule') || 'all';
+    return (savedTab as 'all' | 'readiness' | 'subject' | 'type' | 'completion' | 'schedule') || 'all';
   });
 
   // 当选项卡变化时，保存到localStorage
@@ -311,6 +313,12 @@ export default function TasksPage() {
       return { rule: scheduleRuleMap[rule], tasks: ruleTasks };
     }).filter(group => group.tasks.length > 0);
   };
+  const getReadinessGroups = () => {
+    return readinessLayers.map(layer => {
+      const layerTasks = tasks.filter(task => getTaskReadinessLayer(task).id === layer.id);
+      return { layer, tasks: layerTasks };
+    }).filter(group => group.tasks.length > 0);
+  };
 
   const handlePushTaskToDingtalk = (taskId: number) => {
     if (!selectedChildId) {
@@ -384,6 +392,13 @@ export default function TasksPage() {
   const getSubjectLabel = (task: Task) => task.tags?.subject ? subjectReverseMap[task.tags.subject] || task.tags.subject : '未标学科';
   const getParentRoleLabel = (task: Task) => task.tags?.parentRole ? parentRoleReverseMap[task.tags.parentRole] || task.tags.parentRole : '未设方式';
   const getScheduleLabel = (task: Task) => scheduleLabelMap[(task.scheduleRule || task.tags?.scheduleRule || 'daily') as ScheduleRule] || '每日任务';
+  const getTaskReadinessLayer = (task: Task) => getReadinessLayerByText(
+    task.tags?.abilityCategory,
+    task.tags?.abilityPoint,
+    task.tags?.targetType,
+    task.category,
+    task.name
+  );
 
   const getOperationalScore = (task: Task) => {
     let score = 42;
@@ -462,8 +477,14 @@ export default function TasksPage() {
     return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
   }).join(' ');
 
+  const layerCounts = readinessLayers.reduce((acc, layer) => {
+    acc[layer.id] = tasks.filter(task => getTaskReadinessLayer(task).id === layer.id).length;
+    return acc;
+  }, {} as Record<ReadinessLayerId, number>);
+
   const tabItems: Array<{ key: typeof activeTab; label: string }> = [
     { key: 'all', label: '全部任务' },
+    { key: 'readiness', label: '按层级' },
     { key: 'subject', label: '按学科' },
     { key: 'type', label: '按类型' },
     { key: 'completion', label: '完成方式' },
@@ -472,8 +493,7 @@ export default function TasksPage() {
 
   const renderTaskCard = (task: Task) => {
     const visual = getTaskVisual(task);
-    const score = getOperationalScore(task);
-    const issues = getTaskConfigIssues(task);
+    const layer = getTaskReadinessLayer(task);
     const Icon = visual.Icon;
     return (
       <motion.div
@@ -481,7 +501,7 @@ export default function TasksPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={() => navigate(`/parent/tasks/${task.id}`)}
-        className="group min-h-[172px] cursor-pointer rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+        className="group cursor-pointer rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -490,72 +510,75 @@ export default function TasksPage() {
             </div>
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-slate-950">{task.name}</h3>
-              <p className="mt-1 truncate text-xs font-medium text-slate-500">{task.category} · {getSubjectLabel(task)}</p>
+              <p className="mt-1 truncate text-xs font-medium text-slate-500">{getSubjectLabel(task)}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              navigate(`/parent/tasks/${task.id}`);
-            }}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-100 transition-colors hover:bg-slate-50 hover:text-slate-700 lg:opacity-0 lg:group-hover:opacity-100"
-            aria-label="进入任务详情"
-            title="进入详情"
-          >
-            <ArrowRight className="size-4" />
-          </button>
+          <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1', layer.softTone)}>{layer.label}</span>
         </div>
 
-        <div className="mt-5 space-y-2.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-slate-600">运营健康度</span>
-            <span className="font-semibold text-slate-900">{score}%</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-            <div className={cn('h-full rounded-full transition-all', visual.bar)} style={{ width: `${score}%` }} />
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-md bg-slate-50 px-2.5 py-2">
-            <p className="text-slate-400">预计时长</p>
-            <p className="mt-1 font-semibold text-slate-800">{task.timePerUnit || 30} 分钟</p>
-          </div>
-          <div className="rounded-md bg-slate-50 px-2.5 py-2">
-            <p className="text-slate-400">分配规则</p>
-            <p className="mt-1 font-semibold text-slate-800">{getScheduleLabel(task)}</p>
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
-            <CalendarDays className="size-3" />
-            <span className="truncate">{getParentRoleLabel(task)}</span>
-          </span>
-          <span className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-            issues.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-          )}>
-            {issues.length > 0 ? <AlertTriangle className="size-3" /> : <TrendingUp className="size-3" />}
-            {issues.length > 0 ? `${issues.length} 项待补` : '配置完整'}
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          {task.tags?.abilityPoint ? (
+            <span className="inline-flex min-w-0 max-w-full items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-100">
+              <span className="truncate">{task.tags.abilityPoint}</span>
+            </span>
+          ) : null}
+          <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-100">
+            {task.category}
           </span>
         </div>
-        {issues.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {issues.slice(0, 3).map((issue) => (
-              <span key={issue} className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                {issue}
-              </span>
-            ))}
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays className="size-3.5" />
+            {getScheduleLabel(task)}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Clock3 className="size-3.5" />
+            {task.timePerUnit || 30} 分钟
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="size-3.5" />
+            {task.appliesTo?.length ? `${task.appliesTo.length} 个孩子` : selectedChild?.name || '当前孩子'}
+          </span>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <span className="truncate text-xs text-slate-500">{getParentRoleLabel(task)}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                handlePushTaskToDingtalk(task.id);
+              }}
+              className="h-8 rounded-lg bg-white px-2.5 text-xs"
+            >
+              <Send className="mr-1 size-3.5" />
+              钉钉
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/parent/tasks/${task.id}`);
+              }}
+              className="h-8 rounded-lg bg-white px-2.5 text-xs"
+            >
+              详情
+              <ArrowRight className="ml-1 size-3.5" />
+            </Button>
           </div>
-        )}
+        </div>
       </motion.div>
     );
   };
 
   const renderTaskCollection = (items: Task[]) => (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">{items.map(renderTaskCard)}</div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{items.map(renderTaskCard)}</div>
   );
 
 	  return (
@@ -683,6 +706,29 @@ export default function TasksPage() {
             </div>
           </div>
         </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          {readinessLayers.map((layer) => {
+            const Icon = layer.icon;
+            return (
+              <button
+                key={layer.id}
+                type="button"
+                onClick={() => setActiveTab('readiness')}
+                className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/30"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className={cn('flex size-10 items-center justify-center rounded-lg ring-1', layer.softTone)}>
+                    <Icon className="size-5" />
+                  </div>
+                  <span className="text-2xl font-semibold text-slate-950">{layerCounts[layer.id] || 0}</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-slate-950">{layer.label}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{layer.question}</p>
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       <FilterBar>
@@ -721,6 +767,22 @@ export default function TasksPage() {
           ) : (
             <>
               {activeTab === 'all' && renderTaskCollection(tasks)}
+              {activeTab === 'readiness' && (
+                <div className="space-y-7">
+                  {getReadinessGroups().map(group => (
+                    <section key={group.layer.id} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-base font-semibold text-slate-950">{group.layer.label} · {group.layer.english}</h2>
+                          <p className="mt-1 text-xs text-slate-500">{group.layer.description}</p>
+                        </div>
+                        <span className="text-xs font-medium text-slate-400">{group.tasks.length} 个任务</span>
+                      </div>
+                      {renderTaskCollection(group.tasks)}
+                    </section>
+                  ))}
+                </div>
+              )}
               {activeTab === 'subject' && (
                 <div className="space-y-7">
                   {getSubjectGroups().map(group => (

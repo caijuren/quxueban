@@ -17,7 +17,6 @@ import {
   Dumbbell,
   FileText,
   Flag,
-  GraduationCap,
   Lightbulb,
   ListChecks,
   PenLine,
@@ -49,6 +48,8 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
+import { readinessAbilityPoints, readinessLayers } from '@/lib/readiness-model';
+import type { ReadinessLayerId } from '@/lib/readiness-model';
 
 const levels = [
   {
@@ -113,20 +114,23 @@ const levelStats: Record<LevelId, { mastered: number; progressing: number; pendi
   L5: { mastered: 7, progressing: 5, pending: 4, progress: 48 },
 };
 
-const categoryTabs = [
-  { id: 'subject', label: '学科能力', desc: '语数英基础、知识理解和学科表达', icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { id: 'thinking', label: '思维与认知', desc: '问题理解、逻辑推理和表达输出', icon: Brain, color: 'text-violet-600', bg: 'bg-violet-50' },
-  { id: 'habit', label: '学习习惯', desc: '计划、时间、作业、复盘和专注', icon: ClipboardCheck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-  { id: 'health', label: '体育与健康', desc: '体能、作息、情绪恢复和健康节奏', icon: Dumbbell, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+const categoryTabs: Array<{ id: ReadinessLayerId; label: string; desc: string; icon: ElementType; color: string; bg: string; question: string; english: string }> = [
+  { id: 'delivery', label: '交付层', english: 'Delivery', question: '现在够不够强', desc: '英语、数理、大语文、项目成果和临场应变', icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { id: 'cognition', label: '认知层', english: 'Cognition', question: '为什么能变强', desc: '信息处理、规则内化、逻辑深度、批判思维和迁移应用', icon: Brain, color: 'text-violet-600', bg: 'bg-violet-50' },
+  { id: 'stability', label: '稳定性层', english: 'Stability', question: '能不能持续变强', desc: '睡眠、运动、情绪、完成率、延期率和复盘频率', icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
 ] as const;
 
 type CategoryId = typeof categoryTabs[number]['id'];
 const categoryLabelToId: Record<string, CategoryId> = {
-  学科能力: 'subject',
-  思维与认知: 'thinking',
-  学习习惯: 'habit',
-  体育与健康: 'health',
+  交付层: 'delivery',
+  认知层: 'cognition',
+  稳定性层: 'stability',
+  学科能力: 'delivery',
+  思维与认知: 'cognition',
+  学习习惯: 'stability',
+  体育与健康: 'stability',
 };
+
 type Status = 'mastered' | 'progressing' | 'pending';
 
 const statusMeta: Record<Status, { label: string; className: string; dot: string }> = {
@@ -161,7 +165,7 @@ type AbilityRow = {
 type EditableAbilityRow = Omit<AbilityRow, 'icon' | 'iconClass'>;
 type AbilityFormState = EditableAbilityRow & { categoryId: CategoryId; originalPoint?: string };
 
-const abilityData: Record<CategoryId, AbilityRow[]> = {
+const legacyAbilityData: Record<string, AbilityRow[]> = {
   subject: [
     {
       point: '语文能力',
@@ -334,6 +338,39 @@ const resources = [
   { title: '专注力训练游戏', type: '互动', icon: Sparkles, tone: 'text-amber-600 bg-amber-50' },
 ];
 
+const abilityData: Record<CategoryId, AbilityRow[]> = {
+  delivery: readinessAbilityPoints.delivery.map(({ point, icon, iconClass, desc, indicators, tasks, status, mastery }) => ({
+    point,
+    icon,
+    iconClass,
+    desc,
+    indicators,
+    tasks,
+    status,
+    mastery,
+  })),
+  cognition: readinessAbilityPoints.cognition.map(({ point, icon, iconClass, desc, indicators, tasks, status, mastery }) => ({
+    point,
+    icon,
+    iconClass,
+    desc,
+    indicators,
+    tasks,
+    status,
+    mastery,
+  })),
+  stability: readinessAbilityPoints.stability.map(({ point, icon, iconClass, desc, indicators, tasks, status, mastery }) => ({
+    point,
+    icon,
+    iconClass,
+    desc,
+    indicators,
+    tasks,
+    status,
+    mastery,
+  })),
+};
+
 function serializeAbilityData(data: Record<CategoryId, AbilityRow[]>): Record<CategoryId, EditableAbilityRow[]> {
   return Object.fromEntries(
     Object.entries(data).map(([categoryId, rows]) => [
@@ -343,13 +380,19 @@ function serializeAbilityData(data: Record<CategoryId, AbilityRow[]>): Record<Ca
   ) as Record<CategoryId, EditableAbilityRow[]>;
 }
 
-function mergeEditableAbilityData(saved: Record<CategoryId, EditableAbilityRow[]> | null): Record<CategoryId, AbilityRow[]> {
+function mergeEditableAbilityData(saved: Record<string, EditableAbilityRow[]> | null): Record<CategoryId, AbilityRow[]> {
   if (!saved) return abilityData;
+
+  const legacyFallback: Record<CategoryId, EditableAbilityRow[]> = {
+    delivery: saved.delivery || saved.subject || legacyAbilityData.subject || [],
+    cognition: saved.cognition || saved.thinking || legacyAbilityData.thinking || [],
+    stability: saved.stability || saved.habit || saved.health || legacyAbilityData.habit || [],
+  };
 
   return Object.fromEntries(
     categoryTabs.map((category) => {
       const defaultRows = abilityData[category.id];
-      const editableRows = saved[category.id] || [];
+      const editableRows = saved[category.id] || legacyFallback[category.id] || [];
       const rows = editableRows.length > 0
         ? editableRows.map((row, index) => {
             const fallback = defaultRows[index % defaultRows.length] || defaultRows[0];
@@ -394,7 +437,7 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-async function getAbilityModel(): Promise<Record<CategoryId, EditableAbilityRow[]> | null> {
+async function getAbilityModel(): Promise<Record<string, EditableAbilityRow[]> | null> {
   const response = await apiClient.get('/settings/ability-model');
   return response.data.data || null;
 }
@@ -485,7 +528,7 @@ export default function AbilityModel() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [activeLevel, setActiveLevel] = useState<LevelId>('L1');
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('subject');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>('delivery');
   const [modelData, setModelData] = useState<Record<CategoryId, AbilityRow[]>>(abilityData);
   const [editingRow, setEditingRow] = useState<AbilityFormState | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -520,7 +563,7 @@ export default function AbilityModel() {
   });
 
   const currentLevel = levels.find((level) => level.id === activeLevel) || levels[2];
-  const stats = levelStats[activeLevel];
+  const levelStatsForActive = levelStats[activeLevel];
   const activeCategoryMeta = categoryTabs.find((tab) => tab.id === activeCategory) || categoryTabs[2];
   const ActiveCategoryIcon = activeCategoryMeta.icon;
   const focusPoint = searchParams.get('point') || '';
@@ -536,6 +579,11 @@ export default function AbilityModel() {
       return aMatch - bMatch;
     });
   }, [focusPoint, visibleRows]);
+
+  const activeProgress = sortedVisibleRows.length > 0
+    ? Math.round(sortedVisibleRows.reduce((sum, row) => sum + row.mastery, 0) / sortedVisibleRows.length)
+    : 0;
+  const stats = { ...levelStatsForActive, progress: activeProgress };
 
   const statusCounts = useMemo(() => {
     return sortedVisibleRows.reduce<Record<Status, number>>(
@@ -642,9 +690,9 @@ export default function AbilityModel() {
         left={
           <PageToolbarTitle
             icon={Brain}
-            title="能力模型"
-            description="按一年级到五年级梳理能力要求，观察掌握状态和下一步建议。"
-            badge={<span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">L1-L5</span>}
+            title="三层准备度模型"
+            description="交付层看竞争力，认知层看增长倍率，稳定性层看持续运转能力。"
+            badge={<span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">1.9</span>}
           />
         }
         right={
@@ -689,31 +737,34 @@ export default function AbilityModel() {
         }
       />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-4">
-          {categoryTabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeCategory === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveCategory(tab.id)}
-                className={cn(
-                  'flex items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-semibold transition',
-                  isActive
-                    ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-sm'
-                    : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50'
-                )}
-              >
-                <span className={cn('flex size-8 items-center justify-center rounded-lg', tab.bg, tab.color)}>
-                  <Icon className="size-4" />
-                </span>
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+      <section className="grid gap-3 md:grid-cols-3">
+        {readinessLayers.map((layer) => {
+          const Icon = layer.icon;
+          const rows = modelData[layer.id] || [];
+          const avg = rows.length > 0 ? Math.round(rows.reduce((sum, row) => sum + row.mastery, 0) / rows.length) : 0;
+          const isActive = activeCategory === layer.id;
+          return (
+            <button
+              key={layer.id}
+              type="button"
+              onClick={() => setActiveCategory(layer.id)}
+              className={cn(
+                'rounded-lg border bg-white p-4 text-left shadow-sm transition hover:border-indigo-200',
+                isActive && 'border-indigo-200 bg-indigo-50/40 ring-1 ring-indigo-100'
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className={cn('flex size-10 items-center justify-center rounded-lg ring-1', layer.softTone)}>
+                  <Icon className="size-5" />
+                </div>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-100">{avg}%</span>
+              </div>
+              <p className="mt-3 text-sm font-semibold text-slate-950">{layer.label} · {layer.english}</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">{layer.question}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{layer.description}</p>
+            </button>
+          );
+        })}
       </section>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_250px]">
@@ -729,7 +780,7 @@ export default function AbilityModel() {
                     {activeCategoryMeta.label}（{currentLevel.shortName} {currentLevel.name}）
                   </h2>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                    {currentLevel.summary} 当前分类聚焦：{activeCategoryMeta.desc}。建议单次学习时长 {currentLevel.time}，家长角色：{currentLevel.parentRole}。
+                    {currentLevel.summary} 当前层级聚焦：{activeCategoryMeta.desc}。这里按三层模型展示能力树，建议单次学习时长 {currentLevel.time}。
                   </p>
                 </div>
               </div>
@@ -753,8 +804,8 @@ export default function AbilityModel() {
           <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-semibold text-slate-950">L1-L5 能力发展路径</h2>
-                <p className="mt-1 text-sm text-slate-500">当前按小学一年级到五年级划分，后续可补充幼小衔接、六年级和更高年级。</p>
+                <h2 className="text-base font-semibold text-slate-950">L1-L5 三公准备路径</h2>
+                <p className="mt-1 text-sm text-slate-500">当前按小学一年级到五年级划分，每个阶段都从交付、认知、稳定性三层观察。</p>
               </div>
               <Button variant="ghost" className="self-start rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700 sm:self-auto">
                 查看指标对比表
@@ -799,15 +850,15 @@ export default function AbilityModel() {
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-slate-600"><span className="size-2 rounded-full bg-emerald-500" />已掌握</span>
-                <span className="font-semibold text-slate-900">{stats.mastered} 个</span>
+                <span className="font-semibold text-slate-900">{statusCounts.mastered} 个</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-slate-600"><span className="size-2 rounded-full bg-amber-500" />进行中</span>
-                <span className="font-semibold text-slate-900">{stats.progressing} 个</span>
+                <span className="font-semibold text-slate-900">{statusCounts.progressing} 个</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-slate-600"><span className="size-2 rounded-full bg-slate-400" />未开始</span>
-                <span className="font-semibold text-slate-900">{stats.pending} 个</span>
+                <span className="font-semibold text-slate-900">{statusCounts.pending} 个</span>
               </div>
             </div>
             <Button className="mt-4 w-full rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" variant="ghost">
