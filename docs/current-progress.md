@@ -17,6 +17,7 @@
 ## 最近已经完成
 
 - 1.9 首轮功能验收完成，记录见 `docs/checks/regression-1.9-ui.md`。
+- 1.9 生产迁移后检查完成，记录见 `docs/checks/regression-1.9-postdeploy.md`。
 - 1.9.0 已发布到生产，线上 API 版本返回 `1.9.0`。
 - 生产部署目录已迁移到多应用结构：代码仓库 `/srv/apps/quxueban`，前端静态目录 `/srv/www/quxueban`，PM2 后端运行目录 `/srv/apps/quxueban/backend`。
 - nginx 已切换到 `/srv/www/quxueban`，旧 `/var/www/study-planner` 不再作为当前站点根目录。
@@ -67,8 +68,8 @@
 ## 当前未完成
 
 - 1.9.0 不再继续扩范围，后续新需求进入 1.9.x 或 UI 收口版本。
-- `/home/ubuntu` 旧仓库先保留观察，不再用于生产部署；确认稳定后再归档清理。
-- 还没有完成浏览器内逐页视觉走查；UI 弹窗和按钮统一作为单独 UI 版本处理。
+- `/home/ubuntu` 旧仓库已停用并归档到 `/srv/legacy`，后续只需观察期后确认是否压缩长期保存。
+- 还没有完成截图级逐页视觉走查；UI 弹窗和按钮统一作为单独 UI 版本处理。
 - 1.9 还没有后端 schema 迁移；稳定性层和数理认知试点目前先写入现有 `checkin.metadata`。
 - 目标校适配权重、置信度、Velocity、余力指数和跨学科交叉验证仍在 1.9.x。
 - 正式环境还需要执行 1.7.4 migration。
@@ -89,6 +90,7 @@
 - `frontend pnpm build`：通过。
 - `pnpm run check:versions`：通过。
 - 生产发布检查：`/api/version` 返回 `1.9.0`，PM2 `study-planner-api` online，运行目录为 `/srv/apps/quxueban/backend`，nginx root 为 `/srv/www/quxueban`。
+- 生产旧目录清理：`/home/ubuntu` 不再是 Git 仓库，旧内容已备份到 `/srv/legacy/quxueban-home-repo-20260502-141758`。
 - `backend pnpm build`：通过。
 - `frontend pnpm build`：通过。
 - `backend pnpm lint`：通过。
@@ -108,7 +110,7 @@
 ## 建议下一步
 
 1. 在生产环境观察 1.9.0 核心链路：登录、孩子切换、今日概览、任务完成、目标页、能力模型页和图书馆。
-2. 清理服务器旧 `/home/ubuntu` 仓库：先打包备份，再移出 Git 工作目录，保留 `.env`、上传文件和必要运维脚本。
-3. 启动本地前端，逐页走查 1.9 核心页面和弹窗。
-4. 修正页面视觉、交互和字段文案问题，作为 1.9.x/UI 收口版本。
-5. 再评估是否进入后端数据模型和配置层迁移。
+2. 完成截图级逐页视觉走查，重点覆盖今日概览、任务完成弹窗、任务列表、任务编辑器、任务详情、目标管理和能力模型。
+3. 修正页面视觉、交互和字段文案问题，作为 1.9.x/UI 收口版本。
+4. 进入 1.9.x 规则层：数据质量轻量版、学制配置、规则版诊断引擎、置信度、Velocity、余力指数和目标校权重。
+5. 再评估是否进入后端独立 schema 和统计 API 迁移。
