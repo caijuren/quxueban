@@ -527,18 +527,18 @@ export default function TasksPage() {
           </span>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5">
+        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50/70 p-3 text-xs text-slate-500">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
             <CalendarDays className="size-3.5" />
-            {getScheduleLabel(task)}
+            <span className="truncate">{getScheduleLabel(task)}</span>
           </span>
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
             <Clock3 className="size-3.5" />
-            {task.timePerUnit || 30} 分钟
+            <span className="truncate">{task.timePerUnit || 30} 分钟</span>
           </span>
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
             <Users className="size-3.5" />
-            {task.appliesTo?.length ? `${task.appliesTo.length} 个孩子` : selectedChild?.name || '当前孩子'}
+            <span className="truncate">{task.appliesTo?.length ? `${task.appliesTo.length} 个孩子` : selectedChild?.name || '当前孩子'}</span>
           </span>
         </div>
 
@@ -620,10 +620,9 @@ export default function TasksPage() {
                     <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', metric.tone)}>
                       <Icon className="size-5" />
                     </div>
-                    <span className="text-xs font-medium text-slate-400">运营</span>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-slate-600">{metric.label}</p>
-                  <p className="mt-1 text-3xl font-semibold text-slate-950">{metric.value}</p>
+                  <p className="mt-4 text-xs font-medium text-slate-500">{metric.label}</p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-950">{metric.value}</p>
                   <p className="mt-1 text-xs text-slate-400">{metric.helper}</p>
                 </div>
               );
@@ -632,7 +631,7 @@ export default function TasksPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">健康趋势</p>
-                  <p className="mt-1 text-xs text-slate-500">基于配置完整度估算</p>
+                  <p className="mt-1 text-xs text-slate-500">配置完整度估算</p>
                 </div>
                 <BarChart3 className="size-5 text-indigo-500" />
               </div>

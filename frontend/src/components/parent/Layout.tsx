@@ -23,6 +23,7 @@ import {
   Target,
   Brain,
   HelpCircle,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,7 @@ const navGroups = [
     label: '复盘分析',
     items: [
       { path: '/parent/growth-dashboard', label: '仪表盘', icon: ChartNoAxesCombined },
+      { path: '/parent/data-quality', label: '数据体检', icon: ClipboardCheck },
       { path: '/parent/reports', label: '学习报告', icon: FileText },
       { path: '/parent/achievements', label: '成就', icon: Trophy },
     ],
@@ -97,6 +99,7 @@ const pageTitleMap: Record<string, string> = {
   '/parent/library': '图书馆',
   '/parent/achievements': '成就系统',
   '/parent/growth-dashboard': '仪表盘',
+  '/parent/data-quality': '数据体检',
   '/parent/ability-model': '能力模型',
   '/parent/goals': '目标',
   '/parent/children': '孩子管理',

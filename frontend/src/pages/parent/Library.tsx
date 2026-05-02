@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod/v4';
 import { motion } from 'framer-motion';
@@ -520,7 +520,8 @@ export default function LibraryPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    getValues,
+    control,
     reset,
     formState: { errors },
   } = useForm<BookFormData>({
@@ -537,8 +538,8 @@ export default function LibraryPage() {
     },
   });
 
-  const selectedTypeValue = watch('type');
-  const coverUrl = watch('coverUrl');
+  const selectedTypeValue = useWatch({ control, name: 'type' });
+  const coverUrl = useWatch({ control, name: 'coverUrl' });
 
   const { data: persistedBookLists = [] } = useQuery({
     queryKey: ['library-book-lists', selectedChildId],
@@ -965,8 +966,8 @@ export default function LibraryPage() {
     setIsSearching(true);
     try {
       const results = await searchBooksByTitle(titleSearch.trim(), {
-        author: watch('author') || undefined,
-        publisher: watch('publisher') || undefined,
+        author: getValues('author') || undefined,
+        publisher: getValues('publisher') || undefined,
       });
       setSearchResults(results);
       if (results.length === 0) {

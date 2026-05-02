@@ -1108,11 +1108,11 @@ export default function ParentDashboard() {
         }
       />
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-950">今日状态总览</h2>
-            <p className="mt-1 text-sm text-slate-500">三层准备度只做摘要提示，今日任务仍是主工作区。</p>
+            <p className="mt-1 text-sm text-slate-500">先看任务交付，再参考认知和状态证据。</p>
           </div>
           <Button variant="outline" onClick={() => navigate('/parent/ability-model')} className="h-9 rounded-lg bg-white">
             查看三层模型
@@ -1120,38 +1120,38 @@ export default function ParentDashboard() {
           </Button>
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+          <div className="rounded-lg border border-blue-100 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 交付层
               </span>
-              <span className="text-xs font-medium text-blue-600">{completionRate}%</span>
+              <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{completionRate}%</span>
             </div>
-            <p className="mt-3 text-sm font-semibold text-slate-950">任务交付</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">已完成 {completedCount}/{totalTasksForRate} 项，剩余 {remainingTasks} 项。</p>
+            <p className="mt-3 text-sm font-semibold text-slate-950">{completedCount}/{totalTasksForRate} 项完成</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">剩余 {remainingTasks} 项，优先处理今日任务。</p>
           </div>
-          <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+          <div className="rounded-lg border border-violet-100 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700">
                 <Brain className="h-3.5 w-3.5" />
                 认知层
               </span>
-              <span className="text-xs font-medium text-violet-600">{cognitiveRecords.length} 条证据</span>
+              <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">{cognitiveRecords.length} 条</span>
             </div>
-            <p className="mt-3 text-sm font-semibold text-slate-950">认知证据</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">尝试 {attemptSummary}，提示：{hintSummary}，复盘：{reviewSummary}。</p>
+            <p className="mt-3 text-sm font-semibold text-slate-950">尝试 {attemptSummary}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">提示：{hintSummary}，复盘：{reviewSummary}。</p>
           </div>
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+          <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
                 <HeartPulse className="h-3.5 w-3.5" />
                 稳定性层
               </span>
-              <span className="text-xs font-medium text-emerald-600">{stabilityRecords.length} 条证据</span>
+              <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">{stabilityRecords.length} 条</span>
             </div>
-            <p className="mt-3 text-sm font-semibold text-slate-950">状态证据</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">睡眠 {sleepSummary}，情绪：{moodSummary}，负载：{externalLoadSummary}。</p>
+            <p className="mt-3 text-sm font-semibold text-slate-950">睡眠 {sleepSummary}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">情绪：{moodSummary}，负载：{externalLoadSummary}。</p>
           </div>
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -1676,11 +1676,11 @@ export default function ParentDashboard() {
                 </div>
               )}
 
-              <details className="group rounded-xl border border-emerald-100 bg-emerald-50/30 p-3" open>
+              <details className="group rounded-xl border border-emerald-100 bg-emerald-50/30 p-3">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
                   <span>
                     <span className="block text-sm font-medium text-slate-700">状态记录（可选）</span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">睡眠、情绪和外部负载，用于判断稳定性层状态。</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">睡眠、情绪和外部负载。</span>
                   </span>
                   <span className="text-xs font-semibold text-emerald-700 group-open:hidden">展开</span>
                   <span className="text-xs font-semibold text-emerald-700 hidden group-open:inline">收起</span>

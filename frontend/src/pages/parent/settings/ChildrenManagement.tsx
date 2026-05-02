@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -415,11 +415,11 @@ export default function ChildrenManagement({
     },
   });
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setChildName('');
     setChildAvatar('🐶');
     setChildEducationStage('primary');
-  };
+  }, []);
 
   const updateLocalSettings = (patch: Partial<LocalChildSettings>) => {
     setLocalSettings((current) => ({ ...current, ...patch }));
@@ -532,15 +532,15 @@ export default function ChildrenManagement({
     onOpenChildHandled?.();
   }, [openChildId, children, onOpenChildHandled]);
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = useCallback(() => {
     resetForm();
     setIsAddDialogOpen(true);
-  };
+  }, [resetForm]);
 
   useEffect(() => {
     if (!openAddRequest) return;
     handleOpenAdd();
-  }, [openAddRequest]);
+  }, [openAddRequest, handleOpenAdd]);
 
   const handleOpenEdit = () => {
     if (selectedChild) {

@@ -38,6 +38,12 @@ pnpm --dir frontend build
   - `Library.tsx` React Hook Form `watch()` incompatible-library。
   - `ChildrenManagement.tsx` `handleOpenAdd` exhaustive-deps。
 
+2026-05-02 复查：
+
+- `frontend lint` 已通过，未再输出上述 2 个 warning。
+- `frontend build` 已通过。
+- 项目内误生成的 `.claude/` 本地配置已删除，并加入 `.gitignore`。
+
 本地服务检查：
 
 - 本地已有后端监听 `3001`，`/api/health` 正常。
@@ -60,4 +66,3 @@ pnpm --dir frontend build
 - 任务详情：1.9 回流说明、认知层采集建议。
 - 目标管理：三层分组、目标卡片、编辑弹窗。
 - 能力模型：三层总览、阶段切换、旧数据兼容展示。
-

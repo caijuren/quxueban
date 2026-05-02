@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  AlertTriangle,
+  ArrowRight,
   BarChart3,
   BookOpen,
+  Brain,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -503,6 +506,56 @@ type ReadingRadarItem = {
 };
 
 type DateRange = { startDate: string; endDate: string };
+type DashboardTask = {
+  id: number;
+  name: string;
+  category?: string;
+  tags?: Record<string, unknown> | string | null;
+};
+type DashboardCheckin = {
+  id: number;
+  taskId: number;
+  status?: string;
+  focusMinutes?: number | null;
+  notes?: string | null;
+  metadata?: Record<string, unknown> | null;
+  date: string;
+};
+type ReadinessDiagnosticSummary = {
+  readinessRisk: 'stable' | 'watch' | 'risk';
+  readinessLabel: string;
+  readinessDescription: string;
+  completionRate: number;
+  velocity4w: number;
+  stabilityVolatility: number;
+  capacityIndex: number;
+  sampleCount: number;
+  topRisk: string;
+  nextAction: string;
+  evidence: string[];
+};
+type SubjectSummary = {
+  key: string;
+  label: string;
+  score: number;
+  samples: number;
+  completionRate: number;
+  negativeRate: number;
+  cognitiveRate: number;
+  qualityRate: number;
+};
+type MoodSummary = {
+  interestScore: number;
+  initiativeScore: number;
+  focusScore: number;
+  motivationScore: number;
+  moodLabel: string;
+  preferenceRows: Array<[string, number, string]>;
+  topTags: string[];
+  focusRows: Array<[string, number, string]>;
+  mindsetNotes: string[];
+  suggestions: Array<{ title: string; desc: string; icon: React.ElementType; bg: string; color: string }>;
+};
 type SemesterConfig = {
   schoolYear: string;
   term: 'first' | 'second';
@@ -546,14 +599,344 @@ function getMonday(date: Date): Date {
   return next;
 }
 
+function getDateWindow(endDate: string, days: number) {
+  const [year, month, day] = endDate.split('-').map(Number);
+  const end = new Date(year, month - 1, day);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(end);
+    date.setDate(end.getDate() - (days - 1 - index));
+    return formatLocalDate(date);
+  });
+}
+
+function hasDashboardValue(value: unknown) {
+  return typeof value === 'string' ? value.trim().length > 0 && value.trim() !== '__none__' : value !== null && value !== undefined;
+}
+
+function normalizeDashboardTags(tags: DashboardTask['tags']): Record<string, unknown> {
+  let normalized: Record<string, unknown> = {};
+  if (!tags) return {};
+  if (typeof tags === 'string') {
+    try {
+      const parsed = JSON.parse(tags);
+      normalized = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  } else {
+    normalized = tags;
+  }
+  const metadata = normalized.metadata && typeof normalized.metadata === 'object' && !Array.isArray(normalized.metadata)
+    ? normalized.metadata as Record<string, unknown>
+    : {};
+  return { ...metadata, ...normalized };
+}
+
+function getDashboardText(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
+function getTaskSubjectKey(task: DashboardTask): string {
+  const tags = normalizeDashboardTags(task.tags);
+  const text = [
+    task.name,
+    task.category,
+    getDashboardText(tags.subject),
+    getDashboardText(tags.abilityPoint),
+    getDashboardText(tags.abilityCategory),
+  ].join(' ');
+  if (/english|英语|英文|RAZ|自然拼读/i.test(text)) return 'english';
+  if (/math|数学|数理|口算|计算|逻辑|几何/i.test(text)) return 'math';
+  if (/science|科学|物理|化学|生物|实验/i.test(text)) return 'science';
+  if (/chinese|语文|中文|大语文|阅读理解|古文|写作|表达/i.test(text)) return 'chinese';
+  return 'general';
+}
+
+function buildSubjectSummaries(tasks: DashboardTask[] = [], checkins: DashboardCheckin[] = []): SubjectSummary[] {
+  const completedStatuses = new Set(['completed', 'partial']);
+  const negativeStatuses = new Set(['not_completed', 'postponed']);
+  const subjectConfig = [
+    { key: 'chinese', label: '语文', icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { key: 'math', label: '数学', icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { key: 'english', label: '英语', icon: ListChecks, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { key: 'science', label: '科学', icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
+    { key: 'general', label: '综合素养', icon: ShieldCheck, color: 'text-rose-500', bg: 'bg-rose-50' },
+  ];
+  const subjectByTask = new Map<number, string>();
+  tasks.forEach((task) => subjectByTask.set(task.id, getTaskSubjectKey(task)));
+  const actionableRows = checkins.filter((checkin) => checkin.status !== 'pending' && checkin.status !== 'not_involved');
+
+  return subjectConfig.map((subject) => {
+    const rows = actionableRows.filter((checkin) => subjectByTask.get(Number(checkin.taskId)) === subject.key);
+    const completedRows = rows.filter((checkin) => completedStatuses.has(checkin.status || ''));
+    const negativeRows = rows.filter((checkin) => negativeStatuses.has(checkin.status || ''));
+    const cognitiveRows = rows.filter((checkin) => {
+      const metadata = checkin.metadata || {};
+      return hasDashboardValue(metadata.attemptCount) || hasDashboardValue(metadata.cognitiveError) || hasDashboardValue(metadata.reviewQuality);
+    });
+    const qualityRows = rows.filter((checkin) => hasDashboardValue(checkin.metadata?.quality) || hasDashboardValue(checkin.notes));
+    const completionRate = rows.length ? Math.round((completedRows.length / rows.length) * 100) : 0;
+    const negativeRate = rows.length ? Math.round((negativeRows.length / rows.length) * 100) : 0;
+    const cognitiveRate = rows.length ? Math.round((cognitiveRows.length / rows.length) * 100) : 0;
+    const qualityRate = rows.length ? Math.round((qualityRows.length / rows.length) * 100) : 0;
+    const score = rows.length
+      ? Math.max(0, Math.min(100, Math.round(completionRate * 0.65 + qualityRate * 0.2 + cognitiveRate * 0.15 - negativeRate * 0.25)))
+      : 0;
+    return {
+      key: subject.key,
+      label: subject.label,
+      score,
+      samples: rows.length,
+      completionRate,
+      negativeRate,
+      cognitiveRate,
+      qualityRate,
+    };
+  });
+}
+
+function buildMoodSummary(tasks: DashboardTask[] = [], checkins: DashboardCheckin[] = [], diagnosticSummary?: ReadinessDiagnosticSummary): MoodSummary {
+  const completedStatuses = new Set(['completed', 'partial']);
+  const actionableRows = checkins.filter((checkin) => checkin.status !== 'pending' && checkin.status !== 'not_involved');
+  const completedRows = actionableRows.filter((checkin) => completedStatuses.has(checkin.status || ''));
+  const completionRate = actionableRows.length ? Math.round((completedRows.length / actionableRows.length) * 100) : 0;
+  const metadataRows = actionableRows.map((checkin) => checkin.metadata || {});
+  const moodRows = metadataRows.filter((metadata) => hasDashboardValue(metadata.mood));
+  const stableMoodRows = moodRows.filter((metadata) => ['stable', 'happy', 'good', 'calm'].includes(String(metadata.mood)));
+  const lowMoodRows = moodRows.filter((metadata) => ['tired', 'anxious', 'frustrated', 'low'].includes(String(metadata.mood)));
+  const sleepValues = metadataRows.map((metadata) => Number(metadata.sleepHours)).filter((value) => Number.isFinite(value) && value > 0);
+  const averageSleep = sleepValues.length ? sleepValues.reduce((sum, value) => sum + value, 0) / sleepValues.length : 0;
+  const loadRows = metadataRows.filter((metadata) => hasDashboardValue(metadata.externalLoad) && metadata.externalLoad !== 'none');
+  const focusValues = actionableRows.map((checkin) => Number(checkin.focusMinutes)).filter((value) => Number.isFinite(value) && value > 0);
+  const averageFocus = focusValues.length ? focusValues.reduce((sum, value) => sum + value, 0) / focusValues.length : 0;
+  const taskCategoryCounts = tasks.reduce<Record<string, number>>((acc, task) => {
+    const label = task.category || '未分类';
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+  const taskTotal = Object.values(taskCategoryCounts).reduce((sum, value) => sum + value, 0);
+  const palette = ['bg-indigo-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-400', 'bg-rose-500', 'bg-purple-500'];
+  const preferenceRows = Object.entries(taskCategoryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, count], index) => [label, taskTotal ? Math.round((count / taskTotal) * 100) : 0, palette[index % palette.length]] as [string, number, string]);
+  const topTags = preferenceRows.map(([label]) => label);
+  const moodStability = moodRows.length ? Math.round((stableMoodRows.length / moodRows.length) * 100) : 0;
+  const sleepScore = sleepValues.length ? Math.max(0, Math.min(100, Math.round((averageSleep / 8) * 100))) : 0;
+  const loadScore = actionableRows.length ? Math.max(0, 100 - Math.round((loadRows.length / actionableRows.length) * 100)) : 0;
+  const focusScore = averageFocus > 0 ? Math.max(0, Math.min(100, Math.round((averageFocus / 35) * 100))) : Math.round((completionRate + loadScore) / 2);
+  const interestScore = Math.round(completionRate * 0.45 + moodStability * 0.25 + Math.min(topTags.length * 12, 30));
+  const initiativeScore = Math.round(completionRate * 0.65 + (diagnosticSummary?.capacityIndex || 0) * 0.35);
+  const motivationScore = Math.round(moodStability * 0.35 + sleepScore * 0.25 + loadScore * 0.2 + (diagnosticSummary?.capacityIndex || 0) * 0.2);
+  const moodLabel = moodRows.length === 0
+    ? '未记录'
+    : lowMoodRows.length > stableMoodRows.length
+      ? '需关注'
+      : '平稳';
+  const focusRows = [
+    ['情绪稳定', moodStability, 'bg-indigo-500'],
+    ['睡眠恢复', sleepScore, 'bg-blue-500'],
+    ['负载控制', loadScore, 'bg-emerald-500'],
+    ['专注表现', focusScore, 'bg-amber-400'],
+  ] as Array<[string, number, string]>;
+  const mindsetNotes = [
+    moodRows.length > 0 ? `情绪记录 ${moodRows.length} 条，稳定占比 ${moodStability}%。` : '情绪记录不足，建议在打卡时补充。',
+    sleepValues.length > 0 ? `平均睡眠 ${averageSleep.toFixed(1)} 小时。` : '睡眠记录不足，稳定性判断置信度有限。',
+    loadRows.length > 0 ? `外部负载 ${loadRows.length} 条，需要观察是否影响完成节奏。` : '外部负载记录较少，当前未形成明显压力信号。',
+    topTags.length > 0 ? `任务偏好集中在 ${topTags.slice(0, 2).join('、')}。` : '任务分类样本不足，暂不判断兴趣偏好。',
+  ];
+  const suggestions = [
+    {
+      title: loadRows.length >= 3 ? '先降负载' : '保持兴趣入口',
+      desc: loadRows.length >= 3
+        ? '近期外部负载偏多，建议减少非关键任务，保留一个孩子更愿意开始的任务。'
+        : topTags.length > 0 ? `可以用 ${topTags[0]} 作为启动任务，再进入短板任务。` : '先补充任务分类和打卡观察，再判断兴趣入口。',
+      icon: Lightbulb,
+      bg: 'bg-amber-50',
+      color: 'text-amber-500',
+    },
+    {
+      title: moodRows.length === 0 ? '补情绪记录' : '补稳定性证据',
+      desc: moodRows.length === 0
+        ? '完成任务时顺手记录情绪，后续才能区分不会做和不想做。'
+        : '继续记录睡眠、外部负载和专注分钟，提升心态判断可靠性。',
+      icon: HeartPulse,
+      bg: 'bg-blue-50',
+      color: 'text-blue-500',
+    },
+  ];
+
+  return {
+    interestScore: Math.max(0, Math.min(100, interestScore)),
+    initiativeScore: Math.max(0, Math.min(100, initiativeScore)),
+    focusScore: Math.max(0, Math.min(100, focusScore)),
+    motivationScore: Math.max(0, Math.min(100, motivationScore)),
+    moodLabel,
+    preferenceRows,
+    topTags,
+    focusRows,
+    mindsetNotes,
+    suggestions,
+  };
+}
+
+async function fetchDashboardTasks(childId?: number): Promise<DashboardTask[]> {
+  if (!childId) return [];
+  const response = await apiClient.get('/tasks', { params: { childId } });
+  return response.data.data || [];
+}
+
+async function fetchDashboardRecentCheckins(childId?: number, endDate?: string): Promise<DashboardCheckin[]> {
+  if (!childId || !endDate) return [];
+  const dates = getDateWindow(endDate, 56);
+  const batches = await Promise.all(
+    dates.map(async (date) => {
+      const response = await apiClient.get('/dashboard/today-checkins', { params: { childId, date } });
+      return (response.data.data || []).map((checkin: Omit<DashboardCheckin, 'date'>) => ({ ...checkin, date }));
+    })
+  );
+  return batches.flat();
+}
+
+function buildReadinessDiagnosticSummary(tasks: DashboardTask[] = [], checkins: DashboardCheckin[] = [], endDate: string): ReadinessDiagnosticSummary {
+  const completedStatuses = new Set(['completed', 'partial']);
+  const negativeStatuses = new Set(['not_completed', 'postponed']);
+  const recent28Start = getDateWindow(endDate, 28)[0];
+  const weekStarts = getDateWindow(endDate, 56).filter((_, index) => index % 7 === 0);
+  const actionableAll = checkins.filter((checkin) => checkin.status !== 'pending' && checkin.status !== 'not_involved');
+  const recentRows = actionableAll.filter((checkin) => checkin.date >= recent28Start);
+  const previousRows = actionableAll.filter((checkin) => checkin.date < recent28Start);
+  const completedRecent = recentRows.filter((checkin) => completedStatuses.has(checkin.status || ''));
+  const completedPrevious = previousRows.filter((checkin) => completedStatuses.has(checkin.status || ''));
+  const negativeRecent = recentRows.filter((checkin) => negativeStatuses.has(checkin.status || ''));
+  const completionRate = recentRows.length ? Math.round((completedRecent.length / recentRows.length) * 100) : 0;
+  const previousCompletionRate = previousRows.length ? Math.round((completedPrevious.length / previousRows.length) * 100) : 0;
+  const velocity4w = completionRate - previousCompletionRate;
+  const negativeRate = recentRows.length ? Math.round((negativeRecent.length / recentRows.length) * 100) : 0;
+  const metadataRows = recentRows.map((checkin) => checkin.metadata || {});
+  const lowSleepRows = metadataRows.filter((metadata) => Number(metadata.sleepHours) > 0 && Number(metadata.sleepHours) < 7);
+  const externalLoadRows = metadataRows.filter((metadata) => hasDashboardValue(metadata.externalLoad) && metadata.externalLoad !== 'none');
+  const qualityRows = recentRows.filter((checkin) => hasDashboardValue(checkin.metadata?.quality) || hasDashboardValue(checkin.notes));
+  const weeklyNegativeRates = weekStarts.map((start, index) => {
+    const end = weekStarts[index + 1] || '9999-12-31';
+    const rows = actionableAll.filter((checkin) => checkin.date >= start && checkin.date < end);
+    return rows.length ? rows.filter((checkin) => negativeStatuses.has(checkin.status || '')).length / rows.length : 0;
+  });
+  const weeklyAverage = weeklyNegativeRates.length ? weeklyNegativeRates.reduce((sum, value) => sum + value, 0) / weeklyNegativeRates.length : 0;
+  const stabilityVolatility = weeklyNegativeRates.length
+    ? Math.round(Math.sqrt(weeklyNegativeRates.reduce((sum, value) => sum + Math.pow(value - weeklyAverage, 2), 0) / weeklyNegativeRates.length) * 100)
+    : 0;
+  const overloadSignals = lowSleepRows.length + externalLoadRows.length;
+  const evidenceCoverage = completedRecent.length ? Math.round((qualityRows.length / completedRecent.length) * 100) : 0;
+  const capacityIndex = Math.max(0, Math.min(100, Math.round(
+    70 + velocity4w * 0.35 - negativeRate * 0.35 - stabilityVolatility * 0.25 - overloadSignals * 2 + Math.min(evidenceCoverage, 60) * 0.15
+  )));
+  const readinessRisk = capacityIndex < 45 || negativeRate >= 35 || velocity4w <= -25
+    ? 'risk'
+    : capacityIndex < 70 || negativeRate >= 20 || velocity4w <= -10
+      ? 'watch'
+      : 'stable';
+  const topRisk = readinessRisk === 'risk'
+    ? '先减压并修复执行节奏'
+    : readinessRisk === 'watch'
+      ? '维持核心任务，补齐质量证据'
+      : '保持节奏，小幅补短板';
+
+  return {
+    readinessRisk,
+    readinessLabel: readinessRisk === 'risk' ? '风险' : readinessRisk === 'watch' ? '关注' : '稳定',
+    readinessDescription: readinessRisk === 'risk'
+      ? '三层准备度出现明显压力信号，建议先恢复完成节奏和稳定性。'
+      : readinessRisk === 'watch'
+        ? '准备度整体可用，但仍有执行、证据或稳定性缺口。'
+        : '近期完成趋势和余力指数较稳，可以维持当前节奏。',
+    completionRate,
+    velocity4w,
+    stabilityVolatility,
+    capacityIndex,
+    sampleCount: actionableAll.length,
+    topRisk,
+    nextAction: tasks.length === 0
+      ? '先补任务配置'
+      : readinessRisk === 'risk'
+        ? '减少非关键任务'
+        : readinessRisk === 'watch'
+          ? '补质量评价和观察'
+          : '安排一个短板任务',
+    evidence: [
+      `近 8 周有效打卡 ${actionableAll.length} 条。`,
+      `最近 4 周完成率 ${completionRate}%，4 周 Velocity ${velocity4w >= 0 ? '+' : ''}${velocity4w}%。`,
+      `负向状态 ${negativeRate}%，稳定性波动 ${stabilityVolatility}%，余力指数 ${capacityIndex}/100。`,
+    ],
+  };
+}
+
+function ReadinessSummaryPanel({ summary }: { summary?: ReadinessDiagnosticSummary }) {
+  const navigate = useNavigate();
+  const riskTone = summary?.readinessRisk === 'risk'
+    ? 'border-red-100 bg-red-50 text-red-700'
+    : summary?.readinessRisk === 'watch'
+      ? 'border-amber-100 bg-amber-50 text-amber-700'
+      : 'border-emerald-100 bg-emerald-50 text-emerald-700';
+
+  return (
+    <DashboardCard>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={cn('flex h-9 w-9 items-center justify-center rounded-lg border', riskTone)}>
+              {summary?.readinessRisk === 'risk' ? <AlertTriangle className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-950">三层准备度诊断</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{summary?.readinessDescription || '正在汇总近 8 周数据。'}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            {(summary?.evidence || ['等待数据加载', '暂无诊断证据', '请稍后刷新']).map((item) => (
+              <div key={item} className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid min-w-[280px] gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          <div className={cn('rounded-lg border px-3 py-2', riskTone)}>
+            <p className="text-xs opacity-80">状态</p>
+            <p className="mt-1 text-lg font-semibold">{summary?.readinessLabel || '--'}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-xs text-slate-500">余力指数</p>
+            <p className="mt-1 text-lg font-semibold text-slate-950">{summary?.capacityIndex ?? '--'}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-xs text-slate-500">下一步</p>
+            <p className="mt-1 truncate text-sm font-semibold text-slate-950">{summary?.nextAction || '--'}</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-slate-500">{summary?.topRisk || '诊断会随任务、打卡和稳定性记录自动更新。'}</p>
+        <Button variant="outline" className="h-9 rounded-lg bg-white" onClick={() => navigate('/parent/data-quality')}>
+          查看完整诊断
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </DashboardCard>
+  );
+}
+
 function TodayView({
   stats,
   readingStats,
   range,
+  diagnosticSummary,
 }: {
   stats?: DashboardStats;
   readingStats?: ReadingStats;
   range: DateRange;
+  diagnosticSummary?: ReadinessDiagnosticSummary;
 }) {
   const rangePlannedTasks = stats?.plannedTasks ?? 0;
   const rangeCompletedTasks = stats?.completedTasks ?? 0;
@@ -597,6 +980,8 @@ function TodayView({
 
   return (
     <>
+      <ReadinessSummaryPanel summary={diagnosticSummary} />
+
       <MetricGrid metrics={metricCards} />
 
       <div className="grid gap-5 xl:grid-cols-[1fr_1fr_0.9fr]">
@@ -713,13 +1098,62 @@ function TodayView({
   );
 }
 
-function ExecutionView() {
+function ExecutionView({
+  stats,
+  range,
+  diagnosticSummary,
+}: {
+  stats?: DashboardStats;
+  range: DateRange;
+  diagnosticSummary?: ReadinessDiagnosticSummary;
+}) {
+  const statusCounts = stats?.taskStatusCounts || {
+    completed: 0,
+    partial: 0,
+    notCompleted: 0,
+    postponed: 0,
+    notInvolved: 0,
+  };
+  const statusTotal = Object.values(statusCounts).reduce((sum, value) => sum + value, 0);
+  const completedTotal = statusCounts.completed + statusCounts.partial;
+  const completionRate = statusTotal ? Math.round((completedTotal / statusTotal) * 100) : 0;
+  const negativeTotal = statusCounts.notCompleted + statusCounts.postponed;
+  const negativeControl = statusTotal ? Math.max(0, 100 - Math.round((negativeTotal / statusTotal) * 100)) : 0;
+  const postponementControl = statusTotal ? Math.max(0, 100 - Math.round((statusCounts.postponed / statusTotal) * 100)) : 0;
+  const stabilityScore = Math.max(0, 100 - (diagnosticSummary?.stabilityVolatility || 0));
+  const executionScore = Math.round((
+    completionRate * 0.35 +
+    negativeControl * 0.25 +
+    postponementControl * 0.15 +
+    stabilityScore * 0.15 +
+    (diagnosticSummary?.capacityIndex || 0) * 0.10
+  ));
+  const scoreLabel = executionScore >= 80 ? '稳定' : executionScore >= 60 ? '关注' : '修复';
+  const focusTasks = stats?.focusTasks || [];
+  const executionSuggestions = [
+    {
+      title: diagnosticSummary?.readinessRisk === 'risk' ? '先减压' : '保持核心节奏',
+      desc: diagnosticSummary?.topRisk || '优先保障核心任务完成，再安排额外加码。',
+      icon: Lightbulb,
+      bg: 'bg-amber-50',
+      color: 'text-amber-500',
+    },
+    {
+      title: negativeTotal > 0 ? '修复负向状态' : '补齐证据',
+      desc: negativeTotal > 0
+        ? `当前范围有 ${negativeTotal} 次未完成或延期，建议拆小任务颗粒度。`
+        : '完成状态较稳，继续补质量评价和家长观察。',
+      icon: Clock3,
+      bg: 'bg-blue-50',
+      color: 'text-blue-500',
+    },
+  ];
   const metrics: MetricCardItem[] = [
-    { label: '综合评分', value: '85', suffix: '分', note: '执行力优秀', icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: '准时开始', value: '82', suffix: '%', note: '按计划启动', icon: Clock3, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: '独立完成', value: '76', suffix: '%', note: '少量陪伴', icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: '连续坚持', value: '88', suffix: '%', note: '稳定性较好', icon: TrendingUp, color: 'text-orange-500', bg: 'bg-orange-50' },
-    { label: '延期控制', value: '64', suffix: '%', note: '仍需关注', icon: CheckCircle2, color: 'text-rose-500', bg: 'bg-rose-50' },
+    { label: '综合评分', value: String(executionScore), suffix: '分', note: scoreLabel, icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: '完成率', value: String(completionRate), suffix: '%', note: '完成与部分完成', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: '负向控制', value: String(negativeControl), suffix: '%', note: '未完成和延期越少越高', icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: '稳定性', value: String(stabilityScore), suffix: '%', note: '基于近 8 周波动', icon: TrendingUp, color: 'text-orange-500', bg: 'bg-orange-50' },
+    { label: '样本数', value: String(diagnosticSummary?.sampleCount || 0), suffix: '条', note: '近 8 周有效打卡', icon: ListChecks, color: 'text-rose-500', bg: 'bg-rose-50' },
   ];
 
   return (
@@ -729,39 +1163,54 @@ function ExecutionView() {
       <div className="grid gap-5 xl:grid-cols-[0.8fr_1fr_1.2fr]">
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">综合执行评分</h2>
-          <div className="mt-5"><ScoreGauge score="85" label="优秀" /></div>
-          <p className="mt-4 text-center text-sm text-muted-foreground">超过了 85% 的同龄孩子</p>
+          <div className="mt-5"><ScoreGauge score={String(executionScore)} label={scoreLabel} /></div>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            {range.startDate} 至 {range.endDate} 的规则评分
+          </p>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">任务完成趋势</h2>
-          <LineChartMock />
+          <CompletionTrendChart data={stats?.completionTrend || []} />
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">执行力细分</h2>
           <div className="mt-5">
-            <BarRows rows={[['准时开始', 82, 'bg-indigo-500'], ['独立完成', 76, 'bg-emerald-500'], ['连续坚持', 88, 'bg-blue-500'], ['延期控制', 64, 'bg-amber-400']]} />
+            <BarRows rows={[
+              ['完成率', completionRate, 'bg-indigo-500'],
+              ['负向控制', negativeControl, 'bg-emerald-500'],
+              ['延期控制', postponementControl, 'bg-blue-500'],
+              ['稳定性', stabilityScore, 'bg-amber-400'],
+            ]} />
           </div>
         </DashboardCard>
       </div>
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <DashboardCard>
-          <h2 className="text-sm font-semibold text-slate-950">推迟任务列表</h2>
+          <h2 className="text-sm font-semibold text-slate-950">需要关注的任务</h2>
           <div className="mt-4 space-y-3">
-            {['英语阅读复盘', '数学错题整理', '古文背诵'].map((name, index) => (
-              <div key={name} className="flex items-center justify-between rounded-lg border border-border p-3">
+            {focusTasks.length > 0 ? focusTasks.map((task) => (
+              <div key={`${task.planId}-${task.taskId}`} className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-950">{name}</p>
-                  <p className="text-xs text-muted-foreground">截止时间 20:{index + 1}0</p>
+                  <p className="text-sm font-semibold text-slate-950">{task.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    已完成 {task.completed}/{task.planned} · 未完成 {task.notCompleted} · 延期 {task.postponed}
+                  </p>
                 </div>
-                <Button variant="outline" size="sm" className="rounded-lg">查看详情</Button>
+                <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
+                  关注度 {task.riskScore}
+                </span>
               </div>
-            ))}
+            )) : (
+              <div className="rounded-lg border border-dashed border-border bg-slate-50 p-8 text-center text-sm text-muted-foreground">
+                当前范围暂无未完成或延期集中的任务
+              </div>
+            )}
           </div>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">改进建议</h2>
           <div className="mt-4 space-y-4">
-            {suggestions.map((item) => {
+            {executionSuggestions.map((item) => {
               const Icon = item.icon;
               return <div key={item.title} className="flex gap-3"><div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', item.bg, item.color)}><Icon className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-slate-950">{item.title}</p><p className="text-sm text-muted-foreground">{item.desc}</p></div></div>;
             })}
@@ -772,14 +1221,52 @@ function ExecutionView() {
   );
 }
 
-function SubjectView() {
-  const metrics: MetricCardItem[] = [
-    { label: '语文', value: '85', suffix: '分', note: '能力分', icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: '数学', value: '82', suffix: '分', note: '能力分', icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: '英语', value: '78', suffix: '分', note: '能力分', icon: ListChecks, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: '科学', value: '76', suffix: '分', note: '能力分', icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
-    { label: '综合素养', value: '80', suffix: '分', note: '能力分', icon: ShieldCheck, color: 'text-rose-500', bg: 'bg-rose-50' },
-  ];
+function SubjectView({
+  tasks,
+  checkins,
+  stats,
+}: {
+  tasks: DashboardTask[];
+  checkins: DashboardCheckin[];
+  stats?: DashboardStats;
+}) {
+  const subjectSummaries = buildSubjectSummaries(tasks, checkins);
+  const strongestSubject = subjectSummaries.reduce<SubjectSummary | null>((best, item) => {
+    if (item.samples === 0) return best;
+    if (!best) return item;
+    return item.score > best.score ? item : best;
+  }, null);
+  const weakestSubject = subjectSummaries.reduce<SubjectSummary | null>((worst, item) => {
+    if (item.samples === 0) return worst;
+    if (!worst) return item;
+    return item.score < worst.score ? item : worst;
+  }, null);
+  const totalSubjectSamples = subjectSummaries.reduce((sum, item) => sum + item.samples, 0);
+  const metricTone: Record<string, Pick<MetricCardItem, 'icon' | 'color' | 'bg'>> = {
+    chinese: { icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    math: { icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    english: { icon: ListChecks, color: 'text-blue-600', bg: 'bg-blue-50' },
+    science: { icon: BarChart3, color: 'text-orange-500', bg: 'bg-orange-50' },
+    general: { icon: ShieldCheck, color: 'text-rose-500', bg: 'bg-rose-50' },
+  };
+  const metrics: MetricCardItem[] = subjectSummaries.map((subject) => ({
+    label: subject.label,
+    value: subject.samples > 0 ? String(subject.score) : '--',
+    suffix: subject.samples > 0 ? '分' : '',
+    note: subject.samples > 0 ? `${subject.samples} 条样本` : '暂无样本',
+    ...metricTone[subject.key],
+  }));
+  const barRows: Array<[string, number, string]> = subjectSummaries.map((subject, index) => [
+    subject.label,
+    subject.score,
+    ['bg-indigo-500', 'bg-emerald-500', 'bg-blue-500', 'bg-amber-400', 'bg-rose-500'][index],
+  ]);
+  const evidenceRows = [
+    ['完成率', weakestSubject?.completionRate || 0, 'bg-indigo-500'],
+    ['质量证据', weakestSubject?.qualityRate || 0, 'bg-emerald-500'],
+    ['认知记录', weakestSubject?.cognitiveRate || 0, 'bg-blue-500'],
+    ['负向控制', weakestSubject ? Math.max(0, 100 - weakestSubject.negativeRate) : 0, 'bg-amber-400'],
+  ] as Array<[string, number, string]>;
 
   return (
     <>
@@ -788,40 +1275,64 @@ function SubjectView() {
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr_1.2fr]">
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">综合能力评分</h2>
-          <div className="mt-5"><ScoreGauge score="85" label="语文" /></div>
+          <div className="mt-5"><ScoreGauge score={String(strongestSubject?.score || 0)} label={strongestSubject?.label || '暂无'} /></div>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            当前样本最多支持轻量横向比较
+          </p>
         </DashboardCard>
         <DashboardCard>
-          <h2 className="text-sm font-semibold text-slate-950">能力维度分布</h2>
-          <RadarChartMock />
+          <h2 className="text-sm font-semibold text-slate-950">学科能力分布</h2>
+          <div className="mt-5">
+            <BarRows rows={barRows} />
+          </div>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">任务表现趋势</h2>
-          <LineChartMock />
+          <CompletionTrendChart data={stats?.completionTrend || []} />
         </DashboardCard>
       </div>
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <DashboardCard>
-          <h2 className="text-sm font-semibold text-slate-950">能力维度详情</h2>
+          <h2 className="text-sm font-semibold text-slate-950">弱项证据拆解</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {weakestSubject ? `${weakestSubject.label} 当前分数最低，优先看证据覆盖和负向状态。` : '暂无可用于学科比较的样本。'}
+          </p>
           <div className="mt-4">
-            <BarRows rows={[['基础知识', 82, 'bg-indigo-500'], ['阅读理解', 86, 'bg-blue-500'], ['写作表达', 78, 'bg-emerald-500'], ['文字积累', 80, 'bg-amber-400'], ['古诗文', 88, 'bg-purple-500']]} />
+            <BarRows rows={evidenceRows} />
           </div>
         </DashboardCard>
         <DashboardCard>
-          <h2 className="text-sm font-semibold text-slate-950">知识点掌握情况</h2>
-          <div className="mt-5"><DonutChart value="78%" label="掌握率" /></div>
+          <h2 className="text-sm font-semibold text-slate-950">横向结论</h2>
+          <div className="mt-5"><DonutChart value={`${strongestSubject?.score || 0}`} label="最高分" /></div>
+          <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+            {totalSubjectSamples === 0
+              ? '近 8 周暂无可归类到学科的任务打卡。'
+              : weakestSubject && strongestSubject && strongestSubject.score - weakestSubject.score >= 25
+                ? `${weakestSubject.label} 明显低于 ${strongestSubject.label}，更像专项问题，先补 ${weakestSubject.label} 的任务质量证据。`
+                : '各学科差异不大，若整体分不高，更可能是通用执行或认知方法问题。'}
+          </div>
         </DashboardCard>
       </div>
     </>
   );
 }
 
-function MoodView() {
+function MoodView({
+  tasks,
+  checkins,
+  diagnosticSummary,
+}: {
+  tasks: DashboardTask[];
+  checkins: DashboardCheckin[];
+  diagnosticSummary?: ReadinessDiagnosticSummary;
+}) {
+  const moodSummary = buildMoodSummary(tasks, checkins, diagnosticSummary);
   const metrics: MetricCardItem[] = [
-    { label: '学习兴趣', value: '87', suffix: '分', note: '兴趣指数', icon: HeartPulse, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: '主动性', value: '8.2', suffix: '/10', note: '学习主动', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: '专注度', value: '8.5', suffix: '/10', note: '状态稳定', icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: '学习动力', value: '8.0', suffix: '/10', note: '动力良好', icon: ShieldCheck, color: 'text-orange-500', bg: 'bg-orange-50' },
-    { label: '情绪状态', value: '良好', note: '整体平稳', icon: CheckCircle2, color: 'text-rose-500', bg: 'bg-rose-50' },
+    { label: '学习兴趣', value: String(moodSummary.interestScore), suffix: '分', note: '任务偏好 + 完成意愿', icon: HeartPulse, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: '主动性', value: String(Math.round(moodSummary.initiativeScore / 10)), suffix: '/10', note: '完成率与余力', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: '专注度', value: String(Math.round(moodSummary.focusScore / 10)), suffix: '/10', note: '专注分钟与负载', icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: '学习动力', value: String(Math.round(moodSummary.motivationScore / 10)), suffix: '/10', note: '情绪睡眠和余力', icon: ShieldCheck, color: 'text-orange-500', bg: 'bg-orange-50' },
+    { label: '情绪状态', value: moodSummary.moodLabel, note: '来自打卡记录', icon: CheckCircle2, color: 'text-rose-500', bg: 'bg-rose-50' },
   ];
 
   return (
@@ -832,33 +1343,35 @@ function MoodView() {
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">兴趣偏好分布</h2>
           <div className="mt-4">
-            <BarRows rows={[['阅读', 90, 'bg-indigo-500'], ['数学思维', 78, 'bg-blue-500'], ['科学探索', 85, 'bg-emerald-500'], ['英语表达', 70, 'bg-amber-400']]} />
+            <BarRows rows={moodSummary.preferenceRows.length > 0 ? moodSummary.preferenceRows : [['暂无样本', 0, 'bg-slate-300']]} />
           </div>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">任务偏好 TOP6</h2>
           <div className="mt-5 flex min-h-40 flex-wrap items-center justify-center gap-3">
-            {['课外阅读', '思维训练', '英语听说', '古诗文', '科学实验', '错题复盘'].map((tag, index) => (
+            {(moodSummary.topTags.length > 0 ? moodSummary.topTags : ['暂无偏好样本']).map((tag, index) => (
               <span key={tag} className={cn('rounded-full px-4 py-2 text-sm font-medium', ['bg-rose-50 text-rose-600', 'bg-indigo-50 text-indigo-600', 'bg-emerald-50 text-emerald-600', 'bg-amber-50 text-amber-600'][index % 4])}>{tag}</span>
             ))}
           </div>
         </DashboardCard>
         <DashboardCard>
-          <h2 className="text-sm font-semibold text-slate-950">专注度趋势</h2>
-          <LineChartMock />
+          <h2 className="text-sm font-semibold text-slate-950">稳定性拆解</h2>
+          <div className="mt-4">
+            <BarRows rows={moodSummary.focusRows} />
+          </div>
         </DashboardCard>
       </div>
       <div className="grid gap-5 xl:grid-cols-2">
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">学习心态分析</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {['成就感强', '抗挫能力稳定', '自信心良好', '学习期待积极'].map((text) => <div key={text} className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-700">{text}</div>)}
+            {moodSummary.mindsetNotes.map((text) => <div key={text} className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-700">{text}</div>)}
           </div>
         </DashboardCard>
         <DashboardCard>
           <h2 className="text-sm font-semibold text-slate-950">兴趣发展建议</h2>
           <div className="mt-4 space-y-4">
-            {suggestions.map((item) => {
+            {moodSummary.suggestions.map((item) => {
               const Icon = item.icon;
               return <div key={item.title} className="flex gap-3"><div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', item.bg, item.color)}><Icon className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-slate-950">{item.title}</p><p className="text-sm text-muted-foreground">{item.desc}</p></div></div>;
             })}
@@ -1028,6 +1541,24 @@ export default function GrowthDashboard() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const diagnosticEndDate = useMemo(() => formatLocalDate(today), [today]);
+  const { data: diagnosticTasks = [] } = useQuery({
+    queryKey: ['growth-dashboard-diagnostic-tasks', selectedChildId],
+    queryFn: () => fetchDashboardTasks(selectedChildId || undefined),
+    enabled: !!selectedChildId,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: diagnosticCheckins = [] } = useQuery({
+    queryKey: ['growth-dashboard-diagnostic-checkins', selectedChildId, diagnosticEndDate],
+    queryFn: () => fetchDashboardRecentCheckins(selectedChildId || undefined, diagnosticEndDate),
+    enabled: !!selectedChildId,
+    staleTime: 2 * 60 * 1000,
+  });
+  const diagnosticSummary = useMemo(
+    () => buildReadinessDiagnosticSummary(diagnosticTasks, diagnosticCheckins, diagnosticEndDate),
+    [diagnosticCheckins, diagnosticEndDate, diagnosticTasks]
+  );
+
   return (
     <div className="mx-auto max-w-[1360px] space-y-5">
       <PageToolbar
@@ -1122,10 +1653,10 @@ export default function GrowthDashboard() {
         }
       />
 
-      {activeTab === 'today' && <TodayView stats={stats} readingStats={readingStats} range={activeRange} />}
-      {activeTab === 'execution' && <ExecutionView />}
-      {activeTab === 'subject' && <SubjectView />}
-      {activeTab === 'mood' && <MoodView />}
+      {activeTab === 'today' && <TodayView stats={stats} readingStats={readingStats} range={activeRange} diagnosticSummary={diagnosticSummary} />}
+      {activeTab === 'execution' && <ExecutionView stats={stats} range={activeRange} diagnosticSummary={diagnosticSummary} />}
+      {activeTab === 'subject' && <SubjectView tasks={diagnosticTasks} checkins={diagnosticCheckins} stats={stats} />}
+      {activeTab === 'mood' && <MoodView tasks={diagnosticTasks} checkins={diagnosticCheckins} diagnosticSummary={diagnosticSummary} />}
       {activeTab === 'reading' && <ReadingView stats={stats} readingStats={readingStats} />}
 
     </div>

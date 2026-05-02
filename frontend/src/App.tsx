@@ -30,6 +30,7 @@ const BookInsights = lazy(() => import("./pages/parent/BookInsights"));
 const ParentAchievements = lazy(() => import("./pages/parent/Achievements"));
 const ParentStatistics = lazy(() => import("./pages/parent/Statistics"));
 const ReportsPage = lazy(() => import("./pages/parent/Reports"));
+const DataQuality = lazy(() => import("./pages/parent/DataQuality"));
 const SettingsPage = lazy(() => import("./pages/parent/Settings"));
 const HelpCenter = lazy(() => import("./pages/parent/HelpCenter"));
 
@@ -101,6 +102,7 @@ function App() {
                 <Route path="/parent" element={<LazyPage><ParentLayout /></LazyPage>}>
                   <Route index data-genie-title="Parent Dashboard" data-genie-key="ParentDashboard" element={page(<ParentDashboard />)} />
                   <Route path="growth-dashboard" data-genie-title="Growth Dashboard" data-genie-key="GrowthDashboard" element={page(<GrowthDashboard />)} />
+                  <Route path="data-quality" data-genie-title="Data Quality" data-genie-key="DataQuality" element={page(<DataQuality />)} />
                   <Route path="ability-model" data-genie-title="Ability Model" data-genie-key="AbilityModel" element={page(<AbilityModel />)} />
                   <Route path="goals" data-genie-title="Goals" data-genie-key="ParentGoals" element={page(<ParentGoals />)} />
                   <Route path="tasks" data-genie-title="Tasks" data-genie-key="ParentTasks" element={page(<ParentTasks />)} />
