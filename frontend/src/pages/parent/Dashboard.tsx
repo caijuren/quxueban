@@ -1007,7 +1007,7 @@ export default function ParentDashboard() {
             <p className="mt-2 min-h-10 text-sm leading-5 text-blue-700">{nextActionDesc}</p>
           </div>
           <Button
-            className="mt-4 h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            className="mt-4 h-11 w-full rounded-lg"
             onClick={() => {
               if (nextTask) handleStartFocus(nextTask);
               else if (totalTasksForRate > 0) navigate('/parent/reading');
@@ -1238,7 +1238,7 @@ export default function ParentDashboard() {
                   if (pomodoroRemaining <= 0) resetPomodoro();
                   setPomodoroRunning(true);
                 }}
-                className="h-11 rounded-xl bg-violet-600 text-white hover:bg-violet-700"
+                className="h-11 rounded-xl"
               >
                 <Play className="mr-1.5 size-4" />
                 开始
@@ -1318,7 +1318,7 @@ export default function ParentDashboard() {
                 <Button variant="outline" onClick={handleCancelFocus} className="h-11 rounded-xl">
                   放弃计时
                 </Button>
-                <Button onClick={handleStopFocus} className="h-11 rounded-xl bg-sky-600 text-white hover:bg-sky-700">
+                <Button onClick={handleStopFocus} className="h-11 rounded-xl">
                   <Square className="mr-1.5 size-4" />
                   结束并记录
                 </Button>

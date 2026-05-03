@@ -1446,7 +1446,7 @@ export default function GoalsPage() {
             <AlertDialogAction
               onClick={deleteGoal}
               disabled={saveGoalsMutation.isPending}
-              className="rounded-xl bg-red-600 text-white hover:bg-red-700"
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {saveGoalsMutation.isPending ? '删除中...' : '确认删除'}
             </AlertDialogAction>

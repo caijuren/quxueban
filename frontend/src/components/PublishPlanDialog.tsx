@@ -273,25 +273,25 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
         className='bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden'
       >
         {/* Header */}
-        <div className='px-6 py-5 bg-gradient-to-r from-primary to-secondary flex items-center justify-between'>
+        <div className='border-b border-border px-6 py-5 bg-white flex items-center justify-between'>
           <div>
-            <h2 className='text-xl font-semibold text-white'>发布下周学习计划</h2>
+            <h2 className='text-xl font-semibold text-slate-950'>发布下周学习计划</h2>
             <div className='flex items-center gap-2 mt-2'>
               {['选择时间', '选择任务', '预览发布'].map((s, i) => (
                 <div key={i} className='flex items-center'>
                   <div className={cn(
                     'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                    step > i + 1 ? 'bg-white text-primary' : step === i + 1 ? 'bg-white text-primary' : 'bg-white/30 text-white'
+                    step > i + 1 ? 'bg-primary text-primary-foreground' : step === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-slate-100 text-slate-500'
                   )}>
                     {step > i + 1 ? <Check className='w-4 h-4' /> : i + 1}
                   </div>
-                  <span className={cn('ml-1 text-sm', step === i + 1 ? 'text-white' : 'text-white/70')}>{s}</span>
-                  {i < 2 && <ChevronRight className='w-4 h-4 mx-2 text-white/50' />}
+                  <span className={cn('ml-1 text-sm', step === i + 1 ? 'font-medium text-primary' : 'text-slate-500')}>{s}</span>
+                  {i < 2 && <ChevronRight className='w-4 h-4 mx-2 text-slate-300' />}
                 </div>
               ))}
             </div>
           </div>
-          <Button variant='ghost' onClick={handleClose} className='text-white/80 hover:text-white hover:bg-white/20'>✕</Button>
+          <Button variant='ghost' onClick={handleClose} className='text-slate-500 hover:bg-slate-100 hover:text-slate-900'>✕</Button>
         </div>
 
         {/* Content */}

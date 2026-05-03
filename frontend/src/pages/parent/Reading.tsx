@@ -188,7 +188,7 @@ export default function ReadingPage() {
         right={
           <Button
             onClick={() => navigate('/parent/library')}
-            className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
+            className="h-11 rounded-xl"
           >
             <BookOpen className="w-4 h-4 mr-1.5" />
             <span className="text-sm">去图书馆选书</span>
@@ -394,7 +394,7 @@ export default function ReadingPage() {
             <AlertDialogAction
               onClick={handleSubmitProgress}
               disabled={progressMutation.isPending}
-              className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+              className="h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {progressMutation.isPending ? '更新中...' : '确认更新'}
             </AlertDialogAction>
@@ -416,7 +416,7 @@ export default function ReadingPage() {
             <AlertDialogCancel className="rounded-xl h-11">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmStop}
-              className="bg-red-500 hover:bg-red-600 rounded-xl h-11"
+              className="rounded-xl h-11"
             >
               确认停止
             </AlertDialogAction>

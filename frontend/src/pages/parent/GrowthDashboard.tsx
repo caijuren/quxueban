@@ -1854,7 +1854,7 @@ export default function GrowthDashboard() {
                   className={cn(
                     'flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
                     activeTab === tab.key
-                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
                   )}
                 >
@@ -1875,7 +1875,7 @@ export default function GrowthDashboard() {
                   className={cn(
                     'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
                     period === item
-                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
                   )}
                 >
@@ -1891,7 +1891,7 @@ export default function GrowthDashboard() {
                   className={cn(
                     'h-11 shrink-0 rounded-xl px-5 text-sm font-semibold transition-all duration-200',
                     period === '自定义'
-                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'
                   )}
                 >

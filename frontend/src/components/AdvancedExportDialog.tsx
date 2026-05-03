@@ -289,7 +289,7 @@ export function AdvancedExportDialog({
                                     locale={zhCN}
                                     className="p-3"
                                     classNames={{
-                                      day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
+                                      day_selected: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg",
                                       day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
                                       nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
                                     }}
@@ -316,7 +316,7 @@ export function AdvancedExportDialog({
                                     locale={zhCN}
                                     className="p-3"
                                     classNames={{
-                                      day_selected: "bg-gradient-to-br from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 rounded-lg",
+                                      day_selected: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg",
                                       day_today: "bg-purple-100 text-purple-700 font-bold rounded-lg",
                                       nav_button: "h-8 w-8 rounded-lg hover:bg-gray-100",
                                     }}
@@ -415,7 +415,7 @@ export function AdvancedExportDialog({
           <Button
             onClick={handleExport}
             disabled={isExporting}
-            className="flex-1 rounded-xl h-11 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/25"
+            className="flex-1 rounded-xl h-11"
           >
             {isExporting ? (
               <>

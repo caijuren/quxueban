@@ -872,7 +872,7 @@ export default function TaskTemplatesPage() {
                   deleteChildTaskMutation.mutate({ childId: selectedChildId, taskId: selectedTask.id });
                 }
               }}
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               删除
             </AlertDialogAction>

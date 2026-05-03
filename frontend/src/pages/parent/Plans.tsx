@@ -767,8 +767,9 @@ export default function PlansPage() {
 
 
             <Button
+              variant="outline"
               onClick={() => setAdvancedExportOpen(true)}
-              className="h-11 min-w-24 rounded-xl bg-emerald-500 text-white shadow-sm hover:bg-emerald-600"
+              className="h-11 min-w-24 rounded-xl border-emerald-200 text-emerald-600 hover:bg-emerald-50"
             >
               <Download className="w-4 h-4 mr-1.5" />
               <span className="text-sm">导出</span>
@@ -861,7 +862,7 @@ export default function PlansPage() {
                               className={cn(
                                 'rounded-lg px-3 py-2 text-center transition-all duration-300',
                                 isTodayDate
-                                  ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-200'
+                                  ? 'bg-primary text-primary-foreground shadow-sm'
                                   : isHoliday
                                     ? 'bg-rose-50 text-slate-900'
                                     : 'bg-slate-50 text-slate-900 hover:bg-slate-100'

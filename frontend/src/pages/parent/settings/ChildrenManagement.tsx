@@ -1082,12 +1082,12 @@ export default function ChildrenManagement({
                     </div>
                     <div className="mt-3 flex gap-2">
                       <Input value={newCustomTag} onChange={(e) => setNewCustomTag(e.target.value)} placeholder="添加蓝色自定义标签" onKeyDown={(event) => { if (event.key === 'Enter') addCustomTag(); }} />
-                      <Button type="button" className="bg-blue-600 hover:bg-blue-700" onClick={addCustomTag}>添加</Button>
+                      <Button type="button" onClick={addCustomTag}>添加</Button>
                     </div>
                   </div>
                   <div className="flex justify-end gap-3">
                     <Button variant="outline" onClick={() => setActiveDetailTab('overview')}>取消</Button>
-                    <Button className="bg-violet-600 hover:bg-violet-700" onClick={handleSaveBasicInfo} disabled={isSavingBasicInfo}>{isSavingBasicInfo ? '保存中...' : '保存更改'}</Button>
+                    <Button onClick={handleSaveBasicInfo} disabled={isSavingBasicInfo}>{isSavingBasicInfo ? '保存中...' : '保存更改'}</Button>
                   </div>
                   </div>
                 </section>
@@ -1205,7 +1205,7 @@ export default function ChildrenManagement({
                   </div>
                   <div className="flex justify-end gap-3">
                     <Button variant="outline" onClick={() => setActiveDetailTab('overview')}>取消</Button>
-                    <Button className="bg-violet-600 hover:bg-violet-700" onClick={handleSaveSemesterConfig} disabled={!selectedChild || saveSemesterMutation.isPending}>{saveSemesterMutation.isPending ? '保存中...' : '保存更改'}</Button>
+                    <Button onClick={handleSaveSemesterConfig} disabled={!selectedChild || saveSemesterMutation.isPending}>{saveSemesterMutation.isPending ? '保存中...' : '保存更改'}</Button>
                   </div>
                   </div>
                 </section>
@@ -1240,7 +1240,7 @@ export default function ChildrenManagement({
                     </div>
                     <div className="mt-3 flex gap-2">
                       <Input value={newInterestTag} onChange={(e) => setNewInterestTag(e.target.value)} placeholder="添加兴趣标签" onKeyDown={(event) => { if (event.key === 'Enter') addInterestTag(); }} />
-                      <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" onClick={addInterestTag}>添加</Button>
+                      <Button type="button" onClick={addInterestTag}>添加</Button>
                     </div>
                   </div>
                   <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
@@ -1257,7 +1257,7 @@ export default function ChildrenManagement({
                     ))}
                   </div>
                   <div className="flex justify-end">
-                    <Button className="bg-violet-600 hover:bg-violet-700" onClick={() => persistLocalSettings(localSettings)} disabled={saveProfileMutation.isPending}>{saveProfileMutation.isPending ? '保存中...' : '保存更改'}</Button>
+                    <Button onClick={() => persistLocalSettings(localSettings)} disabled={saveProfileMutation.isPending}>{saveProfileMutation.isPending ? '保存中...' : '保存更改'}</Button>
                   </div>
                   </div>
                 </section>
@@ -1323,7 +1323,7 @@ export default function ChildrenManagement({
                     <div className="space-y-2"><Label>加签 Secret</Label><Input value={dingtalkSecret} onChange={(e) => setDingtalkSecret(e.target.value)} placeholder="可选，若机器人开启加签请填写" /></div>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <Button className="bg-violet-600 hover:bg-violet-700" onClick={handleSaveDingTalkConfig} disabled={!selectedChild || saveDingTalkMutation.isPending}>{saveDingTalkMutation.isPending ? '保存中...' : '保存配置'}</Button>
+                    <Button onClick={handleSaveDingTalkConfig} disabled={!selectedChild || saveDingTalkMutation.isPending}>{saveDingTalkMutation.isPending ? '保存中...' : '保存配置'}</Button>
                     <Button variant="outline" onClick={() => selectedChild && testDingTalkMutation.mutate(selectedChild.id)} disabled={!selectedChild || !dingtalkConfig?.webhookUrl || testDingTalkMutation.isPending}>{testDingTalkMutation.isPending ? '测试中...' : '发送测试消息'}</Button>
                   </div>
                   </div>
@@ -1345,7 +1345,7 @@ export default function ChildrenManagement({
                       <Download className="h-8 w-8 rounded-lg bg-white p-2 text-blue-600 shadow-sm" />
                       <h4 className="mt-3 font-semibold text-blue-900">数据导出</h4>
                       <p className="mt-1 text-sm leading-6 text-blue-700/80">导出家庭设置、孩子、任务、计划、打卡、阅读和成就数据，用于备份和迁移。</p>
-                      <Button variant="outline" onClick={handleExportData} disabled={isExportingData} className="mt-3 border-blue-200 bg-white text-blue-700">
+                      <Button variant="outline" onClick={handleExportData} disabled={isExportingData} className="mt-3 border-emerald-200 bg-white text-emerald-600 hover:bg-emerald-50">
                         {isExportingData ? '导出中...' : '导出 JSON'}
                       </Button>
                     </div>
@@ -1371,7 +1371,7 @@ export default function ChildrenManagement({
                         <h4 className="font-semibold text-red-900">删除孩子</h4>
                         <p className="mt-1 text-sm leading-6 text-red-700/80">删除后该孩子的学习记录和配置将无法恢复，请谨慎操作。</p>
                       </div>
-                      <Button className="bg-red-500 hover:bg-red-600" onClick={handleOpenDelete}>进入删除确认</Button>
+                      <Button variant="destructive" onClick={handleOpenDelete}>进入删除确认</Button>
                     </div>
                   </div>
                   </div>

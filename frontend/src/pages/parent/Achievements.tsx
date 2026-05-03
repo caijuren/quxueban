@@ -394,7 +394,7 @@ export default function AchievementsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-3">
             <AlertDialogCancel className="rounded-xl h-11">取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={deleteMutation.isPending} className="bg-red-500 hover:bg-red-600 rounded-xl h-11">删除</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} disabled={deleteMutation.isPending} className="rounded-xl h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90">删除</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

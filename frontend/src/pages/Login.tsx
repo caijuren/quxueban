@@ -51,7 +51,7 @@ export default function Login() {
         <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-200">
+            <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
               <span className="text-2xl">🐛</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-800">欢迎回来</h1>
@@ -91,7 +91,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={isInitializing}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium shadow-lg shadow-purple-200 mt-2"
+              className="w-full h-12 rounded-xl mt-2"
             >
               {isInitializing ? '登录中...' : '登录'}
             </Button>

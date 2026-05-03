@@ -1036,7 +1036,7 @@ export default function AbilityModel() {
             <AlertDialogAction
               onClick={handleResetModel}
               disabled={resetAbilityModelMutation.isPending}
-              className="rounded-xl bg-red-600 text-white hover:bg-red-700"
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {resetAbilityModelMutation.isPending ? '恢复中...' : '确认恢复'}
             </AlertDialogAction>

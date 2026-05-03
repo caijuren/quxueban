@@ -607,11 +607,11 @@ export default function TasksPage() {
         }
         right={
           <>
-            <Button onClick={() => setExportDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-emerald-500 text-white shadow-sm hover:bg-emerald-600">
+            <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="h-11 min-w-28 rounded-xl border-emerald-200 text-emerald-600 hover:bg-emerald-50">
               <Download className="mr-1.5 size-4" />
               导出
             </Button>
-            <Button onClick={() => setUpdatePlanDialogOpen(true)} className="h-11 min-w-28 rounded-xl bg-blue-500 text-white shadow-sm hover:bg-blue-600">
+            <Button onClick={() => setUpdatePlanDialogOpen(true)} variant="secondary" className="h-11 min-w-28 rounded-xl">
               <RefreshCw className="mr-1.5 size-4" />
               同步计划
             </Button>
@@ -749,7 +749,7 @@ export default function TasksPage() {
                 className={cn(
                   'h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-all duration-200',
                   activeTab === item.key
-                    ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                 )}
               >
@@ -877,7 +877,7 @@ export default function TasksPage() {
             <AlertDialogCancel className="rounded-xl h-11 px-6">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => taskToDelete && selectedChildId && deleteMutation.mutate({ id: taskToDelete.id, childId: selectedChildId })}
-              className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-11 px-6"
+              className="rounded-xl h-11 px-6"
             >
               删除
             </AlertDialogAction>
@@ -918,7 +918,7 @@ export default function TasksPage() {
         <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-2xl">
           <DialogHeader className="pb-4">
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
                 <RefreshCw className="w-5 h-5 text-white" />
               </div>
               更新计划
@@ -998,7 +998,7 @@ export default function TasksPage() {
                   toast.error(getErrorMessage(error));
                 }
               }} 
-              className="h-11 px-6 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+              className="h-11 px-6 rounded-xl"
             >
               同步更新
             </Button>

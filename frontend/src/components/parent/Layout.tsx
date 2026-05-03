@@ -316,7 +316,7 @@ export default function ParentLayout() {
       <aside className="hidden lg:flex lg:flex-col w-[176px] bg-white border-r border-border flex-shrink-0">
         {/* Brand */}
         <div className="border-b border-border px-2.5 py-2.5 flex-shrink-0">
-          <div className="rounded-xl border border-border/70 bg-gradient-to-r from-slate-50 to-indigo-50/70 px-2 py-2 shadow-sm">
+          <div className="rounded-xl border border-border/70 bg-white px-2 py-2 shadow-sm">
             <div className="flex items-center gap-2">
               <img src="/logo.png" alt="趣学伴" className="h-7 w-7 rounded-lg object-cover shadow-sm" />
               <div className="min-w-0">
@@ -340,11 +340,11 @@ export default function ParentLayout() {
                   className={cn(
                     'group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all',
                     isActive
-                      ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
+                      ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
                       : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
                   )}
                 >
-                  {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
+                  {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-primary" /> : null}
                   <div className={cn(
                     'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-colors',
                     isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
@@ -362,11 +362,11 @@ export default function ParentLayout() {
         <div className="border-t border-border p-2.5 flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-gradient-to-r from-white to-slate-50 px-2 py-2 text-left shadow-sm transition-colors hover:border-indigo-200 hover:bg-slate-50">
+              <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-white px-2 py-2 text-left shadow-sm transition-colors hover:border-primary/20 hover:bg-slate-50">
                 <div className="relative flex-shrink-0">
                   <Avatar className="size-9 ring-1 ring-slate-200">
                     <AvatarImage src={user?.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-[11px] font-semibold">
+                    <AvatarFallback className="bg-primary text-white text-[11px] font-semibold">
                       {user?.name?.charAt(0) || 'P'}
                     </AvatarFallback>
                   </Avatar>
@@ -742,11 +742,11 @@ export default function ParentLayout() {
                         className={cn(
                           'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
                           isActive
-                            ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
+                            ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
                             : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
                         )}
                       >
-                        {isActive ? <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
+                        {isActive ? <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-primary" /> : null}
                         <div className={cn(
                           'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
                           isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
@@ -762,13 +762,13 @@ export default function ParentLayout() {
 
               {/* Mobile User Profile */}
               <div className="border-t border-border p-3 flex-shrink-0">
-                <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-slate-50 to-white p-3 shadow-sm">
+                <div className="rounded-2xl border border-border/70 bg-white p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative flex-shrink-0">
                       <Avatar className="size-10 flex-shrink-0 ring-1 ring-slate-200 shadow-sm">
                       <AvatarImage src={user?.avatar} />
-                        <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-sm font-semibold">
+                        <AvatarFallback className="bg-primary text-white text-sm font-semibold">
                         {user?.name?.charAt(0) || 'P'}
                       </AvatarFallback>
                     </Avatar>

@@ -38,7 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <button
               onClick={() => window.location.href = '/'}
-              className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-medium"
+              className="w-full rounded-xl bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90"
             >
               返回首页
             </button>

@@ -584,7 +584,7 @@ export default function TaskDetail() {
             <AlertDialogCancel className="h-11 rounded-xl px-6">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteTaskMutation.mutate()}
-              className="h-11 rounded-xl bg-red-500 px-6 text-white hover:bg-red-600"
+              className="h-11 rounded-xl px-6"
             >
               删除
             </AlertDialogAction>

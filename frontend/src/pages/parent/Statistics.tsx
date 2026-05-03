@@ -284,7 +284,7 @@ export default function StatisticsPage() {
                   onClick={() => setTimeFilter(filter.value)}
                   className={`h-9 rounded-lg px-4 text-sm font-semibold transition-all ${
                     timeFilter === filter.value
-                      ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
@@ -294,8 +294,9 @@ export default function StatisticsPage() {
             </div>
             <div className="relative">
               <Button
+                variant="outline"
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="h-11 rounded-xl bg-emerald-500 px-4 text-white shadow-sm hover:bg-emerald-600"
+                className="h-11 rounded-xl border-emerald-200 px-4 text-emerald-600 hover:bg-emerald-50"
               >
                 <Download className="w-4 h-4" />
                 <span>导出</span>

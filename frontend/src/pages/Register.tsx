@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 export default function Register() {
   const { register, isLoading } = useAuth();
@@ -54,7 +53,7 @@ export default function Register() {
         <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-200">
+            <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
               <span className="text-2xl">🐛</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-800">创建账号</h1>
@@ -102,7 +101,7 @@ export default function Register() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-medium shadow-lg shadow-purple-200 mt-2"
+              className="w-full h-12 rounded-xl mt-2"
             >
               {isLoading ? '注册中...' : '创建账号'}
             </Button>

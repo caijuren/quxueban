@@ -11,7 +11,7 @@ export function PageToolbar({
   className?: string;
 }) {
   return (
-    <section className={cn('w-full rounded-lg border border-violet-100 bg-gradient-to-r from-pink-50 via-violet-50 to-indigo-50 p-4 shadow-sm', className)}>
+    <section className={cn('w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm', className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 gap-4 overflow-x-auto pb-1 scrollbar-hide">
           {left}
