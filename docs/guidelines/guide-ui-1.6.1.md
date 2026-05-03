@@ -1,10 +1,14 @@
 # 趣学伴 UI 统一规范
 
-更新时间：2026-05-03
+更新时间：2026-05-04
 
 ## 版本定位
 
 本文档是趣学伴家长端 UI 统一规范，覆盖页面骨架、按钮、卡片、弹窗、输入框、状态标签、空状态、加载状态、错误状态和图标的使用规则。
+
+本轮 UI 收口先聚焦桌面端，移动端暂不作为改造和验收重点。
+
+页面改造按页面逐个推进。每个页面不只替换颜色和组件样式，还需要同步审视信息层级、排版密度、内容分组、操作区位置和数据展现形式，避免只做表层美化。
 
 ## 页面骨架
 
@@ -34,15 +38,44 @@
 
 统一使用 shadcn `Button` 组件。
 
+### 按钮视觉原则
+
+- 按钮禁止使用渐变色。要么无色、中性浅底，要么使用单一纯色。
+- 主按钮使用单一品牌色纯色，不使用 `bg-gradient-*`、`from-*`、`to-*` 组合。
+- 次操作按钮使用 `variant="secondary"`，保持克制的中性浅底。
+- 导出按钮参考今日概览：`Button variant="outline"` + `text-emerald-600 border-emerald-200 hover:bg-emerald-50`。
+- 钉钉、同步、推送类按钮参考今日概览钉钉按钮：`Button variant="secondary"`。
+- 危险操作只使用单一危险色，不使用渐变或高饱和装饰。
+- 渐变只允许用于少量非交互装饰或图表表达，不用于按钮、导航选中态、筛选选中态和弹窗确认按钮。
+
 ### 按钮分类
 
 | 类型 | 使用场景 | 样式 |
 |------|---------|------|
-| 主操作 | 新增、编辑、发布、创建 | `Button` (默认 variant，紫蓝渐变) |
+| 主操作 | 新增、编辑、发布、创建 | `Button` 默认 variant，单一品牌色纯色 |
 | 次操作 | 同步、推送、分析 | `Button variant="secondary"` |
-| 导出 | 导出报告、数据或图片 | `Button variant="outline"` + `text-emerald-600 border-emerald-200` |
+| 导出 | 导出报告、数据或图片 | `Button variant="outline"` + `text-emerald-600 border-emerald-200 hover:bg-emerald-50` |
 | 普通操作 | 筛选、日期、返回 | `Button variant="outline"` |
 | 危险操作 | 删除、重置、移除 | `Button variant="destructive"` |
+
+### 推荐按钮范式
+
+今日概览中的钉钉和导出按钮作为全站操作按钮参考：
+
+```tsx
+<Button variant="secondary">
+  <Send className="mr-1.5 h-4 w-4" />
+  钉钉
+</Button>
+
+<Button
+  variant="outline"
+  className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+>
+  <Download className="mr-1.5 h-4 w-4" />
+  导出
+</Button>
+```
 
 ### 按钮尺寸
 
