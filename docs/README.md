@@ -17,6 +17,7 @@
 - `deployment.md`：生产部署流程。
 - `checks/regression-1.9-ui.md`：1.9 UI 首轮回归记录。
 - `releases/release-1.9.0.md`：1.9.0 发布记录。
+- `releases/release-1.9.1.md`：1.9.1 技术债务清理版发布记录。
 
 ## 产品背景
 
