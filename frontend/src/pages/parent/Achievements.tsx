@@ -201,7 +201,6 @@ export default function AchievementsPage() {
         right={
           <Button
             onClick={openCreateDialog}
-            className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
           >
             <Plus className="size-4 mr-1.5" />
             <span className="text-sm">添加成就</span>
@@ -376,10 +375,10 @@ export default function AchievementsPage() {
 
               {/* Footer */}
               <div className="p-6 border-t border-gray-100 space-y-3">
-                <Button type="submit" form="achievement-form" disabled={createMutation.isPending || updateMutation.isPending} className="h-11 w-full rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-base font-semibold text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+                <Button type="submit" form="achievement-form" disabled={createMutation.isPending || updateMutation.isPending} className="w-full">
                   {editingAchievement ? '保存修改' : '创建成就'}
                 </Button>
-                <Button type="button" variant="outline" className="h-11 w-full rounded-xl" onClick={closeDialog}>取消</Button>
+                <Button type="button" variant="outline" className="w-full" onClick={closeDialog}>取消</Button>
               </div>
             </motion.div>
           </>

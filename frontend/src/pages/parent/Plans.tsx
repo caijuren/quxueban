@@ -706,7 +706,7 @@ export default function PlansPage() {
           <>
             {/* 推送按钮 - 只在有计划数据时显示 */}
             {displayPlan && displayPlan.childId !== "0" && (
-              <button
+              <Button
                 onClick={async () => {
                   try {
                     if (displayPlan && displayPlan.childId !== "0") {
@@ -721,18 +721,18 @@ export default function PlansPage() {
                     toast.error(error.response?.data?.message || '推送失败');
                   }
                 }}
-                className="flex h-11 items-center gap-2 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-600"
+                variant="secondary"
               >
                 <Send className="size-4" />
                 推送
-              </button>
+              </Button>
             )}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm transition-all duration-200 hover:shadow">
+                <Button variant="outline" className="gap-2">
                   <span className="text-sm font-semibold text-slate-900">{weekLabel}</span>
                   <ChevronDown className="size-4 text-muted-foreground" />
-                </button>
+                </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0 border border-border shadow-md rounded-lg" align="end">
                 <div className="p-3 border-b border-border">
@@ -775,7 +775,6 @@ export default function PlansPage() {
             </Button>
             <Button
               onClick={() => setPublishDialogOpen(true)}
-              className="h-11 min-w-28 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
             >
               <Plus className="size-4 mr-1.5" />
               <span className="text-sm">发布计划</span>
@@ -786,18 +785,14 @@ export default function PlansPage() {
 
       <FilterBar>
         {categories.map((category) => (
-          <button
+          <Button
             key={category.value}
+            variant={selectedCategory === category.value ? "default" : "outline"}
+            size="sm"
             onClick={() => setSelectedCategory(category.value)}
-            className={cn(
-              'h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-all duration-200',
-              selectedCategory === category.value
-                ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm'
-                : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-            )}
           >
             {category.label}
-          </button>
+          </Button>
         ))}
       </FilterBar>
 

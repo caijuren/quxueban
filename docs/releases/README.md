@@ -1,6 +1,6 @@
 # Releases
 
-历史发布记录目录。新 release 报告统一命名为 `release-<major>.<minor>.<patch>.md`。
+历史发布记录目录。新 release 报告统一命名为 `release-<major>.<minor>.<patch>.md`；同版本专项补充可使用 `release-<major>.<minor>.<patch>-<topic>.md`。
 
 ## 已归档版本
 
@@ -17,6 +17,8 @@
 - `release-1.7.7.md`
 - `release-1.8.0.md`
 - `release-1.9.0.md`
+- `release-1.9.1.md`
+- `release-1.9.1-ui.md`
 
 ## 维护规则
 

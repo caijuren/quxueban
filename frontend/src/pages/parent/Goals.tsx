@@ -986,7 +986,7 @@ export default function GoalsPage() {
                 }
                 queryClient.invalidateQueries({ queryKey: ['ability-model'] });
               }}
-              className="h-11 rounded-xl bg-blue-500 px-4 text-white shadow-sm hover:bg-blue-600"
+              variant="secondary"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               同步数据
@@ -994,7 +994,6 @@ export default function GoalsPage() {
             <Button
               onClick={() => abilityOptions[0] && openCreateGoal(abilityOptions[0])}
               disabled={isGoalsLoading || saveGoalsMutation.isPending}
-              className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 px-4 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600"
             >
               <PencilLine className="mr-2 h-4 w-4" />
               从能力点创建
@@ -1054,10 +1053,7 @@ export default function GoalsPage() {
                 <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
                   可以从右侧能力点或推荐模板创建目标。创建后目标会保存到当前孩子档案，并按关联任务打卡自动计算进度。
                 </p>
-                <Button
-                  onClick={() => abilityOptions[0] && openCreateGoal(abilityOptions[0])}
-                  className="mt-4 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
-                >
+                <Button onClick={() => abilityOptions[0] && openCreateGoal(abilityOptions[0])} className="mt-4">
                   从能力点创建
                 </Button>
               </div>
@@ -1271,7 +1267,7 @@ export default function GoalsPage() {
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
               <Button variant="outline" onClick={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }} className="rounded-xl bg-white">取消</Button>
-              <Button onClick={saveDraftGoal} disabled={saveGoalsMutation.isPending} className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+              <Button onClick={saveDraftGoal} disabled={saveGoalsMutation.isPending}>
                 {saveGoalsMutation.isPending ? '保存中...' : editingGoalId ? '保存修改' : '保存目标'}
               </Button>
             </div>
@@ -1303,7 +1299,7 @@ export default function GoalsPage() {
                 <Button
                   onClick={generateTasksForGoal}
                   disabled={createGoalTasksMutation.isPending || saveGoalsMutation.isPending}
-                  className="shrink-0 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+                  className="shrink-0"
                 >
                   {createGoalTasksMutation.isPending ? '生成中...' : '生成建议任务'}
                 </Button>
@@ -1364,8 +1360,8 @@ export default function GoalsPage() {
             <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 p-5">
               <p className="text-xs text-slate-500">已选择 {selectedTaskIds.length} 个任务</p>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }} className="rounded-xl bg-white">取消</Button>
-                <Button onClick={saveLinkedTasks} disabled={saveGoalsMutation.isPending} className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">
+                <Button variant="outline" onClick={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }}>取消</Button>
+                <Button onClick={saveLinkedTasks} disabled={saveGoalsMutation.isPending}>
                   {saveGoalsMutation.isPending ? '保存中...' : '保存关联'}
                 </Button>
               </div>
@@ -1428,8 +1424,8 @@ export default function GoalsPage() {
             </div>
 
             <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
-              <Button variant="outline" onClick={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }} className="rounded-xl bg-white">取消</Button>
-              <Button onClick={saveReviewNote} disabled={saveGoalsMutation.isPending} className="rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+              <Button variant="outline" onClick={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }}>取消</Button>
+              <Button onClick={saveReviewNote} disabled={saveGoalsMutation.isPending}>
                 {saveGoalsMutation.isPending ? '保存中...' : '保存复盘'}
               </Button>
             </div>

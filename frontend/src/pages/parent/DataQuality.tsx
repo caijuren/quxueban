@@ -818,7 +818,7 @@ export default function DataQualityPage() {
           <PageToolbarTitle
             icon={ClipboardCheck}
             title="数据体检"
-            description={`${selectedChild?.name || '当前孩子'}的数据缺口预检，用于 AI、报告和诊断之前的修复入口`}
+            description={`${selectedChild?.name || '当前孩子'}的数据缺口预检，用于后续报告和诊断之前的修复入口`}
           />
         }
         right={

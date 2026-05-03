@@ -699,7 +699,7 @@ export default function AbilityModel() {
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-11 min-w-[132px] justify-center rounded-xl border-indigo-100 bg-white px-3 text-center text-slate-700 hover:bg-indigo-50">
+                <Button variant="outline" className="min-w-[132px] justify-center px-3 text-center">
                   <span className="text-center whitespace-nowrap">
                     {currentLevel.shortName} {currentLevel.name}
                   </span>
@@ -721,15 +721,15 @@ export default function AbilityModel() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
+            <Button variant="outline" className="text-blue-600">
               <FileText className="mr-2 size-4" />
               导出报告
             </Button>
-            <Button variant="outline" onClick={openNewRow} disabled={isAbilityModelLoading || saveAbilityModelMutation.isPending} className="h-11 rounded-xl border-blue-100 bg-white text-blue-600 hover:bg-blue-50">
+            <Button variant="outline" onClick={openNewRow} disabled={isAbilityModelLoading || saveAbilityModelMutation.isPending} className="text-blue-600">
               <Plus className="mr-2 size-4" />
               新增能力点
             </Button>
-            <Button onClick={() => sortedVisibleRows[0] && openEditRow(sortedVisibleRows[0])} disabled={isAbilityModelLoading || saveAbilityModelMutation.isPending} className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-sm hover:from-indigo-700 hover:to-blue-700">
+            <Button onClick={() => sortedVisibleRows[0] && openEditRow(sortedVisibleRows[0])} disabled={isAbilityModelLoading || saveAbilityModelMutation.isPending}>
               <PenLine className="mr-2 size-4" />
               编辑模型
             </Button>
@@ -1007,14 +1007,14 @@ export default function AbilityModel() {
             <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 {editingRow.originalPoint ? (
-                  <Button type="button" variant="outline" onClick={handleDeleteEditingRow} className="rounded-xl border-red-100 bg-white text-red-600 hover:bg-red-50">
+                  <Button type="button" variant="destructive" onClick={handleDeleteEditingRow}>
                     删除能力点
                   </Button>
                 ) : null}
               </div>
               <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={() => setEditingRow(null)} className="rounded-xl bg-white">取消</Button>
-                <Button type="button" onClick={handleSaveEditingRow} disabled={saveAbilityModelMutation.isPending} className="rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
+                <Button type="button" variant="outline" onClick={() => setEditingRow(null)}>取消</Button>
+                <Button type="button" onClick={handleSaveEditingRow} disabled={saveAbilityModelMutation.isPending}>
                   {saveAbilityModelMutation.isPending ? '保存中...' : '保存'}
                 </Button>
               </div>

@@ -111,7 +111,7 @@ function App() {
                   <Route path="plans" data-genie-title="Plans" data-genie-key="ParentPlans" element={page(<ParentPlans />)} />
                   <Route path="library" data-genie-title="Library" data-genie-key="ParentLibrary" element={page(<ParentLibrary />)} />
                   <Route path="library/:id" data-genie-title="Book Detail" data-genie-key="BookDetail" element={page(<BookDetail />)} />
-                  <Route path="library/:id/insights" data-genie-title="AI Reading Insights" data-genie-key="BookInsights" element={page(<BookInsights />)} />
+                  <Route path="library/:id/insights" data-genie-title="Reading Insights" data-genie-key="BookInsights" element={page(<BookInsights />)} />
                   <Route path="reading" element={<Navigate to="/parent/library" replace />} />
                   <Route path="achievements" data-genie-title="Achievements" data-genie-key="ParentAchievements" element={page(<ParentAchievements />)} />
                   <Route path="children" data-genie-title="Children" data-genie-key="ParentChildren" element={<Navigate to="/parent/settings/children" replace />} />

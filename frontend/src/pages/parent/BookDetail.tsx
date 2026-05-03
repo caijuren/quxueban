@@ -332,12 +332,9 @@ export default function BookDetailPage() {
     queryKey: ['book', id, selectedChildId],
     queryFn: async () => {
       const bookId = Number(id);
-      console.log('[BookDetail] Fetching book with ID:', bookId, 'URL ID:', id);
       const data = await fetchBook(bookId, selectedChildId);
-      console.log('[BookDetail] Received book:', data);
       // 验证返回的数据 ID 是否匹配
       if (data.id !== bookId) {
-        console.error(`[BookDetail] ID mismatch! Expected ${bookId}, got ${data.id}`);
         throw new Error(`数据错误：请求的书籍ID(${bookId})与返回的ID(${data.id})不匹配`);
       }
       return data;
@@ -676,27 +673,27 @@ export default function BookDetailPage() {
               </div>
 
               <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <Button onClick={openAddReadingLog} className="h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm hover:from-indigo-600 hover:to-violet-600">
+                <Button onClick={openAddReadingLog}>
                   <Plus className="mr-2 size-4" /> 阅读记录
                 </Button>
                 {!isFinished && (
-                  <Button variant="outline" onClick={handleMarkFinished} disabled={finishMutation.isPending} className="h-11 rounded-xl bg-white">
+                  <Button variant="outline" onClick={handleMarkFinished} disabled={finishMutation.isPending}>
                     <CheckCircle2 className="mr-2 size-4" /> 标记已读完
                   </Button>
                 )}
-                <Button variant="outline" onClick={openEditBook} className="h-11 rounded-xl bg-white">
+                <Button variant="outline" onClick={openEditBook}>
                   <Edit3 className="mr-2 size-4" /> 编辑书籍
                 </Button>
-                <Button variant="outline" onClick={() => navigate(`/parent/library/${id}/insights`)} className="h-11 rounded-xl bg-white">
-                  <Brain className="mr-2 size-4" /> AI阅读洞察
+                <Button variant="outline" onClick={() => navigate(`/parent/library/${id}/insights`)}>
+                  <Brain className="mr-2 size-4" /> 阅读洞察
                 </Button>
-                <Button variant="outline" onClick={() => setShowChapterManager(true)} className="h-11 rounded-xl bg-white">
+                <Button variant="outline" onClick={() => setShowChapterManager(true)}>
                   <FileText className="mr-2 size-4" /> 章节目录
                 </Button>
-                <Button variant="outline" onClick={() => { setNotesInput(bookNotes); setShowNotesForm(true); }} className="h-11 rounded-xl bg-white">
+                <Button variant="outline" onClick={() => { setNotesInput(bookNotes); setShowNotesForm(true); }}>
                   <MessageSquare className="mr-2 size-4" /> 阅读笔记
                 </Button>
-                <Button variant="outline" onClick={() => setShowDeleteBookConfirm(true)} className="h-11 rounded-xl border-red-100 bg-white text-red-600 hover:bg-red-50 hover:text-red-700">
+                <Button variant="destructive" onClick={() => setShowDeleteBookConfirm(true)}>
                   <Trash2 className="mr-2 size-4" /> 删除图书
                 </Button>
               </div>
@@ -1109,8 +1106,8 @@ export default function BookDetailPage() {
               </label>
 
               <div className="sticky bottom-0 -mx-1 flex gap-3 bg-white/95 px-1 pt-2 backdrop-blur">
-                <Button type="button" variant="outline" onClick={() => { setShowAddForm(false); setEditingLog(null); }} className="h-11 flex-1 rounded-xl border-slate-200 text-slate-700">取消</Button>
-                <Button type="submit" disabled={addMutation.isPending || updateMutation.isPending} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">
+                <Button type="button" variant="outline" onClick={() => { setShowAddForm(false); setEditingLog(null); }} className="flex-1">取消</Button>
+                <Button type="submit" disabled={addMutation.isPending || updateMutation.isPending} className="flex-1">
                   {editingLog ? '保存修改' : '保存记录'}
                 </Button>
               </div>
@@ -1182,8 +1179,8 @@ export default function BookDetailPage() {
                 <p className="mt-2 text-sm leading-7 text-slate-700">{parseReadingNote(selectedLog.note, chapters).remark || '未记录'}</p>
               </div>
               <div className="mt-5 flex gap-3">
-                <Button variant="outline" onClick={() => setSelectedLog(null)} className="h-11 flex-1 rounded-xl">关闭</Button>
-                <Button onClick={() => openEditReadingLog(selectedLog)} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">
+                <Button variant="outline" onClick={() => setSelectedLog(null)} className="flex-1">关闭</Button>
+                <Button onClick={() => openEditReadingLog(selectedLog)} className="flex-1">
                   <Edit3 className="mr-2 size-4" /> 编辑记录
                 </Button>
               </div>
@@ -1207,15 +1204,15 @@ export default function BookDetailPage() {
               />
               <p className="mt-2 text-xs text-slate-500">保存时会按“第一章 / 第1章 / 1.”等格式自动拆分。</p>
               <div className="mt-5 flex gap-3">
-                <Button variant="outline" onClick={() => setShowChapterManager(false)} className="h-11 flex-1 rounded-xl">取消</Button>
+                <Button variant="outline" onClick={() => setShowChapterManager(false)} className="flex-1">取消</Button>
                 <Button
                   variant="outline"
                   onClick={() => setChapterInput(parseChapterCatalog(chapterInput).join('\n'))}
-                  className="h-11 flex-1 rounded-xl"
+                  className="flex-1"
                 >
                   整理章节
                 </Button>
-                <Button onClick={handleSaveChapters} className="h-11 flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">保存目录</Button>
+                <Button onClick={handleSaveChapters} className="flex-1">保存目录</Button>
               </div>
             </CardContent>
           </Card>
@@ -1239,10 +1236,10 @@ export default function BookDetailPage() {
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none font-mono text-sm"
               />
               <div className="flex gap-3 mt-4">
-                <Button variant="outline" onClick={() => setShowNotesForm(false)} className="flex-1 rounded-xl">
+                <Button variant="outline" onClick={() => setShowNotesForm(false)} className="flex-1">
                   取消
                 </Button>
-                <Button onClick={handleSaveNotes} className="flex-1 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:from-indigo-600 hover:to-violet-600">
+                <Button onClick={handleSaveNotes} className="flex-1">
                   保存笔记
                 </Button>
               </div>

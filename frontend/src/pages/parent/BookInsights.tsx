@@ -120,7 +120,7 @@ export default function BookInsightsPage() {
     mutationFn: () => generateBookInsights(Number(id), selectedChildId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['book-insights', id] });
-      toast.success('AI阅读分析已生成');
+      toast.success('阅读分析已生成');
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -167,7 +167,7 @@ export default function BookInsightsPage() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-50">AI阅读洞察</Badge>
+                <Badge className="rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-50">阅读洞察</Badge>
                 <Badge variant="outline" className="rounded-full">当前孩子：{selectedChild?.name || '未选择'}</Badge>
               </div>
               <h1 className="mt-4 text-2xl font-bold text-slate-950">{book.name}</h1>
@@ -190,7 +190,6 @@ export default function BookInsightsPage() {
             <Button
               onClick={() => generateMutation.mutate()}
               disabled={generateMutation.isPending}
-              className="h-11 rounded-xl bg-purple-600 text-white hover:bg-purple-700"
             >
               {generateMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               {insights ? '重新生成' : '生成分析'}

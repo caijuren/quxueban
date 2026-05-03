@@ -1,6 +1,6 @@
 # 趣学伴文档索引
 
-更新时间：2026-05-03
+更新时间：2026-05-04
 
 ## 当前主文档
 
@@ -16,8 +16,10 @@
 - `production-release-checklist.md`：生产发布检查清单。
 - `deployment.md`：生产部署流程。
 - `checks/regression-1.9-ui.md`：1.9 UI 首轮回归记录。
+- `checks/regression-1.9.1-ui.md`：1.9.1 UI 架构升级走查记录。
 - `releases/release-1.9.0.md`：1.9.0 发布记录。
 - `releases/release-1.9.1.md`：1.9.1 技术债务清理版发布记录。
+- `releases/release-1.9.1-ui.md`：1.9.1 UI 架构升级版发布记录。
 
 ## 产品背景
 

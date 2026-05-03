@@ -36,6 +36,9 @@ tmp/
 .pm2/
 .trae/
 docker-data/
+__pycache__/
+test_report.json
+test_screenshots/
 
 # Local operational notes
 COMMERCIAL_ANALYSIS.md

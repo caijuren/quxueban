@@ -954,11 +954,11 @@ export default function ParentDashboard() {
         right={
           <>
           <DatePicker value={selectedDate} onChange={setSelectedDate} className="w-[190px]" />
-          <Button onClick={handleShareToDingTalk} className="h-11 rounded-xl bg-blue-500 px-4 text-white shadow-sm hover:bg-blue-600">
+          <Button onClick={handleShareToDingTalk} variant="secondary">
             <Send className="mr-1.5 h-4 w-4" />
             钉钉
           </Button>
-          <Button onClick={() => setExportDialogOpen(true)} className="h-11 rounded-xl bg-emerald-500 px-4 text-white shadow-sm hover:bg-emerald-600">
+          <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
             <Download className="mr-1.5 h-4 w-4" />
             导出
           </Button>
