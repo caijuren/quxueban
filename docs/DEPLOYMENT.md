@@ -5,6 +5,7 @@
 - 生产环境只使用 `pnpm`，不要在 `/home/ubuntu`、`/home/ubuntu/backend` 或 `/home/ubuntu/frontend` 运行 `npm install`。
 - 生产仓库固定放在 `/srv/apps/quxueban`，不要再把 `/home/ubuntu` 当作 Git 仓库根目录。
 - 依赖只在仓库根目录 `/srv/apps/quxueban` 安装，使用根目录 `pnpm-lock.yaml`。
+- 只提交仓库根目录的 `pnpm-lock.yaml`，不要提交 `backend/` 或 `frontend/` 下的子 lockfile。
 - 每次上线必须执行 `prisma migrate deploy`，禁止在生产环境执行 `prisma migrate reset`。
 - 前端构建后必须同步到 nginx 根目录 `/srv/www/quxueban`，只执行 `pnpm build` 不会更新线上页面。
 - 默认不要删除 `node_modules`。只有依赖树损坏时才使用 `CLEAN_INSTALL=1 bash scripts/deploy-production.sh`。
