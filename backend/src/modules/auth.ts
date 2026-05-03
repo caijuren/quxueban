@@ -5,6 +5,9 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, generateToken, requireRole } from '../middleware/auth'
 import { env } from '../config/env'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('Auth')
 
 export const authRouter: Router = Router()
 
@@ -107,7 +110,7 @@ authRouter.post('/register', async (req, res: Response) => {
       },
     })
   } catch (error: any) {
-    console.error('Register error:', error)
+    logger.error({ err: error }, 'Register error')
     if (error instanceof AppError) throw error
     throw new AppError(500, `注册失败: ${error.message}`)
   }
@@ -229,7 +232,7 @@ authRouter.post('/add-child', authMiddleware, requireRole('parent'), async (req:
       },
     })
   } catch (error: any) {
-    console.error('[ADD CHILD] Error:', error)
+    logger.error({ err: error }, 'Add child error')
     if (error instanceof AppError) throw error
     throw new AppError(500, `添加孩子失败: ${error.message}`)
   }
@@ -558,7 +561,7 @@ authRouter.put('/children/:id', authMiddleware, requireRole('parent'), async (re
       data: updatedChild,
     })
   } catch (error: any) {
-    console.error('[UPDATE CHILD] Error:', error)
+    logger.error({ err: error }, 'Update child error')
     if (error instanceof AppError) throw error
     throw new AppError(500, `更新失败: ${error.message}`)
   }
@@ -651,7 +654,7 @@ authRouter.delete('/children/:id', authMiddleware, requireRole('parent'), async 
       message: '孩子已删除',
     })
   } catch (error: any) {
-    console.error('Delete child error:', error)
+    logger.error({ err: error }, 'Delete child error')
     if (error instanceof AppError) throw error
     throw new AppError(500, `删除失败: ${error.message}`)
   }

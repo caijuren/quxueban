@@ -481,6 +481,14 @@ export default function TasksPage() {
     acc[layer.id] = tasks.filter(task => getTaskReadinessLayer(task).id === layer.id).length;
     return acc;
   }, {} as Record<ReadinessLayerId, number>);
+  const currentTabCount = (() => {
+    if (activeTab === 'readiness') return getReadinessGroups().reduce((sum, group) => sum + group.tasks.length, 0);
+    if (activeTab === 'subject') return getSubjectGroups().reduce((sum, group) => sum + group.tasks.length, 0);
+    if (activeTab === 'type') return getTypeGroups().reduce((sum, group) => sum + group.tasks.length, 0);
+    if (activeTab === 'completion') return getCompletionGroups().reduce((sum, group) => sum + group.tasks.length, 0);
+    if (activeTab === 'schedule') return getScheduleGroups().reduce((sum, group) => sum + group.tasks.length, 0);
+    return tasks.length;
+  })();
 
   const tabItems: Array<{ key: typeof activeTab; label: string }> = [
     { key: 'all', label: '全部任务' },
@@ -494,6 +502,7 @@ export default function TasksPage() {
   const renderTaskCard = (task: Task) => {
     const visual = getTaskVisual(task);
     const layer = getTaskReadinessLayer(task);
+    const issues = getTaskConfigIssues(task);
     const Icon = visual.Icon;
     return (
       <motion.div
@@ -517,33 +526,38 @@ export default function TasksPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
-          {task.tags?.abilityPoint ? (
-            <span className="inline-flex min-w-0 max-w-full items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-100">
-              <span className="truncate">{task.tags.abilityPoint}</span>
-            </span>
-          ) : null}
+          <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-100">
+            {getSubjectLabel(task)}
+          </span>
           <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-100">
             {task.category}
           </span>
+          {task.tags?.abilityPoint ? (
+            <span className="inline-flex min-w-0 max-w-full items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600 ring-1 ring-indigo-100">
+              <span className="truncate">{task.tags.abilityPoint}</span>
+            </span>
+          ) : issues.length > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700 ring-1 ring-amber-100">
+              待补配置
+            </span>
+          ) : null}
         </div>
 
-        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50/70 p-3 text-xs text-slate-500">
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-50/70 p-3 text-xs text-slate-500">
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <CalendarDays className="size-3.5" />
             <span className="truncate">{getScheduleLabel(task)}</span>
           </span>
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Clock3 className="size-3.5" />
-            <span className="truncate">{task.timePerUnit || 30} 分钟</span>
-          </span>
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <Users className="size-3.5" />
-            <span className="truncate">{task.appliesTo?.length ? `${task.appliesTo.length} 个孩子` : selectedChild?.name || '当前孩子'}</span>
+            <span className="truncate">预计 {task.timePerUnit || 30} 分钟</span>
           </span>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
-          <span className="truncate text-xs text-slate-500">{getParentRoleLabel(task)}</span>
+          <span className="truncate text-xs text-slate-500">
+            {issues.length > 0 ? issues.slice(0, 2).join(' · ') : getParentRoleLabel(task)}
+          </span>
           <div className="flex shrink-0 items-center gap-2">
             <Button
               type="button"
@@ -601,6 +615,10 @@ export default function TasksPage() {
               <RefreshCw className="mr-1.5 size-4" />
               同步计划
             </Button>
+            <Button variant="outline" onClick={() => navigate('/parent/task-templates')} className="h-11 min-w-28 rounded-xl bg-white shadow-sm">
+              <ClipboardList className="mr-1.5 size-4" />
+              任务模板
+            </Button>
             <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90">
               <Plus className="mr-1.5 size-4" />
               新建任务
@@ -611,7 +629,32 @@ export default function TasksPage() {
 	      <section className="space-y-5">
 
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))_190px]">
+          <div className="grid gap-3 md:grid-cols-3">
+            {readinessLayers.map((layer) => {
+              const Icon = layer.icon;
+              return (
+                <button
+                  key={layer.id}
+                  type="button"
+                  onClick={() => setActiveTab('readiness')}
+                  className="rounded-lg border border-slate-100 bg-slate-50/70 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className={cn('flex size-10 items-center justify-center rounded-lg ring-1', layer.softTone)}>
+                      <Icon className="size-5" />
+                    </div>
+                    <span className="text-2xl font-semibold text-slate-950">{layerCounts[layer.id] || 0}</span>
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-slate-950">{layer.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{layer.question}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-4">
             {operationalMetrics.map((metric) => {
               const Icon = metric.icon;
               return (
@@ -627,22 +670,6 @@ export default function TasksPage() {
                 </div>
               );
             })}
-            <div className="rounded-lg bg-gradient-to-br from-indigo-50 to-white p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">健康趋势</p>
-                  <p className="mt-1 text-xs text-slate-500">配置完整度估算</p>
-                </div>
-                <BarChart3 className="size-5 text-indigo-500" />
-              </div>
-              <svg viewBox="0 0 180 86" className="mt-4 h-20 w-full">
-                <path d={`${trendPath} L 170 82 L 14 82 Z`} fill="#6366f1" opacity="0.12" />
-                <path d={trendPath} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                {trendPoints.map((point, index) => (
-                  <circle key={`${point}-${index}`} cx={14 + index * 26} cy={72 - point * 0.52} r="3" fill="#6366f1" />
-                ))}
-              </svg>
-            </div>
           </div>
         </div>
 
@@ -706,31 +733,15 @@ export default function TasksPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          {readinessLayers.map((layer) => {
-            const Icon = layer.icon;
-            return (
-              <button
-                key={layer.id}
-                type="button"
-                onClick={() => setActiveTab('readiness')}
-                className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/30"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className={cn('flex size-10 items-center justify-center rounded-lg ring-1', layer.softTone)}>
-                    <Icon className="size-5" />
-                  </div>
-                  <span className="text-2xl font-semibold text-slate-950">{layerCounts[layer.id] || 0}</span>
-                </div>
-                <p className="mt-3 text-sm font-semibold text-slate-950">{layer.label}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{layer.question}</p>
-              </button>
-            );
-          })}
-        </div>
       </section>
 
-      <FilterBar>
+      <FilterBar
+        actions={
+          <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+            当前 {currentTabCount} / 全部 {tasks.length}
+          </span>
+        }
+      >
             {tabItems.map((item) => (
               <button
                 key={item.key}

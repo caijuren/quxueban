@@ -4,6 +4,9 @@ import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import fetch from 'node-fetch'
 import crypto from 'crypto'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('Settings')
 
 export const settingsRouter: Router = Router()
 
@@ -64,7 +67,7 @@ function normalizeStoredGoal(input: any): StoredGoal | null {
           summary: typeof note.summary === 'string' ? note.summary.trim().slice(0, 500) : '',
           adjustment: typeof note.adjustment === 'string' ? note.adjustment.trim().slice(0, 500) : '',
         }))
-        .filter((note) => note.summary || note.adjustment)
+        .filter((note: { summary: string; adjustment: string }) => note.summary || note.adjustment)
         .slice(0, 30)
     : []
 
@@ -201,7 +204,6 @@ settingsRouter.use(requireRole('parent'))
 settingsRouter.get('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
 
-  console.log('[GET SETTINGS] Family ID:', familyId)
 
   const family = await prisma.family.findUnique({
     where: { id: familyId },
@@ -211,7 +213,6 @@ settingsRouter.get('/', async (req: AuthRequest, res: Response) => {
     throw new AppError(404, '家庭不存在')
   }
 
-  console.log('[GET SETTINGS] Family settings:', family.settings)
 
   res.json({
     status: 'success',
@@ -237,7 +238,6 @@ settingsRouter.put('/', async (req: AuthRequest, res: Response) => {
   const { familyId } = req.user!
   const { familyName, dingtalkWebhook, dailyTimeLimit } = req.body
 
-  console.log('[PUT SETTINGS] Request:', { familyId, familyName, dailyTimeLimit })
 
   if (!familyName) {
     throw new AppError(400, '请输入家庭名称')
@@ -265,7 +265,6 @@ settingsRouter.put('/', async (req: AuthRequest, res: Response) => {
     },
   })
 
-  console.log('[PUT SETTINGS] Updated settings:', updatedFamily.settings)
 
   res.json({
     status: 'success',
@@ -507,8 +506,6 @@ settingsRouter.post('/test-webhook', async (req: AuthRequest, res: Response) => 
 
   // Test webhook by sending a test message
   try {
-    console.log('[Test Webhook] Sending to:', webhookUrl)
-    console.log('[Test Webhook] With signature:', signedUrl !== webhookUrl)
     
     const requestBody = {
       msgtype: 'markdown',
@@ -517,7 +514,6 @@ settingsRouter.post('/test-webhook', async (req: AuthRequest, res: Response) => 
         text: '# 测试消息\n> 这是一条测试消息，用于验证钉钉机器人配置是否正确\n\n测试成功！✅',
       },
     }
-    console.log('[Test Webhook] Request body:', JSON.stringify(requestBody))
     
     const response = await fetch(signedUrl, {
       method: 'POST',
@@ -528,8 +524,6 @@ settingsRouter.post('/test-webhook', async (req: AuthRequest, res: Response) => 
     })
 
     const responseText = await response.text()
-    console.log('[Test Webhook] Response status:', response.status)
-    console.log('[Test Webhook] Response body:', responseText)
 
     if (!response.ok) {
       throw new Error(`钉钉API返回错误: ${responseText}`)
@@ -552,7 +546,7 @@ settingsRouter.post('/test-webhook', async (req: AuthRequest, res: Response) => 
       message: '测试消息发送成功',
     })
   } catch (error: any) {
-    console.error('[Test Webhook] Error:', error)
+    logger.error({ err: error }, 'Test webhook failed')
     throw new AppError(500, `测试失败: ${error.message}`)
   }
 })
@@ -599,7 +593,7 @@ settingsRouter.delete('/family-data', async (req: AuthRequest, res: Response) =>
       message: '数据已删除',
     })
   } catch (error: any) {
-    console.error('Delete family data error:', error)
+    logger.error({ err: error }, 'Delete family data failed')
     throw new AppError(500, `删除失败: ${error.message}`)
   }
 })
@@ -780,7 +774,7 @@ settingsRouter.get('/export', async (req: AuthRequest, res: Response) => {
       data: exportData,
     })
   } catch (error: any) {
-    console.error('Export data error:', error)
+    logger.error({ err: error }, 'Export data failed')
     throw new AppError(500, `导出失败: ${error.message}`)
   }
 })
@@ -877,7 +871,7 @@ settingsRouter.delete('/account', async (req: AuthRequest, res: Response) => {
         : '账户已注销',
     })
   } catch (error: any) {
-    console.error('Delete account error:', error)
+    logger.error({ err: error }, 'Delete account failed')
     throw new AppError(500, `注销失败: ${error.message}`)
   }
 })

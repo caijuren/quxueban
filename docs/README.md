@@ -1,6 +1,6 @@
 # 趣学伴文档索引
 
-更新时间：2026-05-02
+更新时间：2026-05-03
 
 ## 当前主文档
 
@@ -9,10 +9,9 @@
 - `todo-master.md`：当前唯一总 ToDo。
 - `version-roadmap.md`：当前唯一版本迭代计划。
 - `documentation-guide.md`：文档命名、撰写和归档规范。
-- `design-education-stage-model.md`：小学/初中阶段化设计。
-- `design-1.9-ability-goal-engine.md`：1.9 三层准备度模型与诊断引擎设计方案。
-- `draft-ability-model-1.8.md`：能力模型工作底稿。
-- `design-reading-data-flow.md`：图书馆和阅读数据闭环。
+- `features/feature-1.8-education-stage-model.md`：小学/初中阶段化设计。
+- `features/feature-1.9-readiness-goal-engine.md`：1.9 三层准备度模型与诊断引擎设计方案。
+- `features/feature-reading-data-flow.md`：图书馆和阅读数据闭环。
 - `workflow-conventions.md`：协作和发布规范。
 - `production-release-checklist.md`：生产发布检查清单。
 - `deployment.md`：生产部署流程。
@@ -27,6 +26,7 @@
 ## 历史文档
 
 - `releases/`：历史发布记录。
+- `features/`：已完成或已经进入当前主线的功能设计与专项方案。
 - `roadmaps/`：旧路线图和已被替代的版本规划。
 - `todos/`：旧 ToDo、旧问题清单和旧改进清单。
 - `checks/`：历史回归、封板检查、稳定基线。

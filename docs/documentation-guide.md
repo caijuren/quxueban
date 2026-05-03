@@ -13,7 +13,7 @@
 1. **路线设计**
    - 先写清楚版本定位、目标、范围、不做什么。
    - 使用 `docs/version-roadmap.md` 维护主路线。
-   - 大专项可新增设计文档，例如 `design-education-stage-model.md`。
+   - 大专项可新增功能设计文档，例如 `features/feature-1.9-readiness-goal-engine.md`。
 
 2. **ToDo 拆解**
    - 所有当前任务进入 `docs/todo-master.md`。
@@ -43,9 +43,6 @@
 - `todo-master.md`：唯一总 ToDo。
 - `version-roadmap.md`：唯一版本路线图。
 - `documentation-guide.md`：文档规范。
-- `design-education-stage-model.md`：当前阶段化设计。
-- `draft-ability-model-1.8.md`：当前能力模型工作底稿。
-- `design-reading-data-flow.md`：当前阅读数据流设计。
 - `workflow-conventions.md`：协作规范。
 - `production-release-checklist.md`：发布检查。
 - `deployment.md`：部署流程。
@@ -62,20 +59,20 @@
 - `current-progress.md`
 - `README.md`
 
-### 设计文档
+### 功能设计文档
 
 格式：
 
 ```text
-design-<domain>.md
+docs/features/feature-<version-or-domain>-<topic>.md
 ```
 
 示例：
 
-- `design-education-stage-model.md`
-- `design-reading-data-flow.md`
+- `feature-1.9-readiness-goal-engine.md`
+- `feature-reading-data-flow.md`
 
-设计草案使用 `draft-<topic>-<version>.md`，例如 `draft-ability-model-1.8.md`。
+已被新方案替代但仍有参考价值的草案，也放入 `docs/features/`，命名为 `feature-<version>-<topic>-draft.md`。
 
 ### Release 报告
 

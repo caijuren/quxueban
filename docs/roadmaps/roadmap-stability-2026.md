@@ -13,7 +13,7 @@
 - 已新增生产发布清单：`docs/production-release-checklist.md`。
 - 已新增协作与发布规范：`docs/workflow-conventions.md`。
 - 已新增技术健康基线：`docs/checks/baseline-stability-1.7.7.md`。
-- 已新增阶段化能力模型设计：`docs/design-education-stage-model.md`。
+- 已新增阶段化能力模型设计：`docs/features/feature-1.8-education-stage-model.md`。
 - 已新增 1.8 阶段化 ToDo：`docs/todos/todo-1.8-stage-model.md`。
 - 已新增学习时长诊断脚本：`pnpm run script:check-daily-study-minutes`。
 
@@ -255,7 +255,7 @@
 
 - `1.7.7` 作为当前稳定基线，不在该版本继续做大版本依赖升级。
 - 进入 1.8 前优先做 `1.7.8` 环境和目录治理。
-- 1.8 必须纳入小学/初中阶段化基础字段和能力配置，详见 `docs/design-education-stage-model.md`。
+- 1.8 必须纳入小学/初中阶段化基础字段和能力配置，详见 `docs/features/feature-1.8-education-stage-model.md`。
 - 1.8 和 2.0 的产品目标可以统一叙事，但工程上分阶段发布。
 - 3.0 才全面升级 AI。
 - 3.0 前必须先完成数据口径、事件日志和结构化表现记录。

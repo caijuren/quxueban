@@ -9,6 +9,11 @@ import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import { env } from '../config/env'
 import { supabase } from '../config/supabase'
+import { parseTaskTags } from '../utils/task-utils'
+import { cleanIsbn, normalizeBookName, normalizeText, normalizeYear, firstText, firstNumber, pickRowValue } from '../utils/book-utils'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('Library')
 
 export const libraryRouter: Router = Router()
 
@@ -45,79 +50,10 @@ async function storeCoverBuffer(buffer: Buffer, fileExt: string, contentType?: s
       if (urlData.publicUrl) return urlData.publicUrl
     }
 
-    console.error('[Cover Storage] Supabase upload failed, falling back to local:', error)
+    logger.warn({ err: error }, 'Supabase upload failed, falling back to local')
   }
 
   return saveCoverLocally(buffer, fileExt)
-}
-
-function cleanIsbn(isbn: string): string {
-  return String(isbn || '').replace(/[\s-]/g, '')
-}
-
-function normalizeBookName(name: string): string {
-  return String(name || '')
-    .trim()
-    .replace(/[《》<>]/g, '')
-    .replace(/\s+/g, '')
-    .toLowerCase()
-}
-
-function normalizeText(value: string): string {
-  return String(value || '')
-    .trim()
-    .replace(/[《》<>]/g, '')
-    .replace(/\s+/g, '')
-    .toLowerCase()
-}
-
-function normalizeYear(value: unknown): string {
-  const match = String(value || '').match(/\d{4}/)
-  return match ? match[0] : ''
-}
-
-function firstText(value: unknown): string {
-  if (Array.isArray(value)) {
-    return value.filter(Boolean).join(', ')
-  }
-  return value ? String(value) : ''
-}
-
-function firstNumber(...values: unknown[]): number {
-  for (const value of values) {
-    const parsed = parseInt(String(value || ''), 10)
-    if (!Number.isNaN(parsed) && parsed > 0) return parsed
-  }
-  return 0
-}
-
-function pickRowValue(row: any, keys: string[]): string {
-  for (const key of keys) {
-    const value = row[key]
-    if (value !== undefined && value !== null && String(value).trim() !== '') {
-      return String(value).trim()
-    }
-  }
-  return ''
-}
-
-function parseTaskTags(value: unknown): Record<string, unknown> {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value)
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>
-      }
-    } catch {
-      return {}
-    }
-  }
-
-  return {}
 }
 
 function normalizeBookLists(value: unknown): Array<{ id: string; name: string; bookIds: number[]; createdAt: string }> {
@@ -714,7 +650,7 @@ libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: 
     try {
       openLibraryBook = await searchOpenLibraryByIsbn(isbn)
     } catch (openLibraryError: any) {
-      console.warn(`[OpenLibrary ISBN] ${isbn}:`, openLibraryError.message)
+      logger.debug({ err: openLibraryError }, 'OpenLibrary ISBN lookup failed')
     }
     if (openLibraryBook) {
       const storedBook = await persistRemoteCover(openLibraryBook, 'openlibrary')
@@ -788,7 +724,7 @@ libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: 
             })
 
           if (error) {
-            console.error('[Supabase Upload] Error:', error)
+            logger.error({ err: error }, 'Supabase upload failed')
             // If upload fails, use the original URL as fallback
           } else if (data) {
             // Get the public URL
@@ -801,7 +737,7 @@ libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: 
             }
           }
         } catch (imageError) {
-          console.error('[Cover Image] Error:', imageError)
+          logger.error({ err: imageError }, 'Cover image processing failed')
           // If image processing fails, use the original URL
         }
       }
@@ -828,7 +764,7 @@ libraryRouter.get('/fetch-by-isbn/:isbn', authMiddleware, async (req: any, res: 
       throw fetchError
     }
   } catch (error: any) {
-    console.error('[ISBN Fetch] Error:', error)
+    logger.error({ err: error }, 'ISBN fetch failed')
     
     // Handle specific Jisu API errors
     let errorMessage = 'ISBN查询失败'
@@ -908,7 +844,7 @@ libraryRouter.get('/search-by-title/:title', authMiddleware, async (req: any, re
       data: transformedResults.length > 0 ? transformedResults : localResults,
     })
   } catch (error: any) {
-    console.error('[Title Search] Error:', error)
+    logger.error({ err: error }, 'Title search failed')
     res.json({
       status: 'success',
       data: localResults,
@@ -934,7 +870,7 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
   
   // Validate childId if provided
   const parsedChildId = childId ? parseInt(childId) : null
-  if (childId && isNaN(parsedChildId)) {
+  if (childId && (parsedChildId === null || isNaN(parsedChildId))) {
     throw new AppError(400, 'Invalid childId: must be a number')
   }
 
@@ -1023,7 +959,7 @@ libraryRouter.get('/', authMiddleware, requireRole('parent'), async (req: AuthRe
       readingLogs: {
         where: { ...(parsedChildId ? { childId: parsedChildId } : {}) },
         orderBy: { readDate: 'desc' },
-        select: { pages: true, minutes: true, readDate: true, endPage: true },
+        select: { pages: true, minutes: true, readDate: true, startPage: true, endPage: true },
       },
     },
   })
@@ -1318,7 +1254,7 @@ libraryRouter.get('/stats', authMiddleware, requireRole('parent'), async (req: A
   
   // Validate childId if provided
   const parsedChildId = childId ? parseInt(childId) : null
-  if (childId && isNaN(parsedChildId)) {
+  if (childId && (parsedChildId === null || isNaN(parsedChildId))) {
     throw new AppError(400, 'Invalid childId: must be a number')
   }
 
@@ -1916,7 +1852,7 @@ libraryRouter.post('/refresh-openlibrary', authMiddleware, requireRole('parent')
       await new Promise(resolve => setTimeout(resolve, 120))
     } catch (error: any) {
       failed++
-      console.error(`[OpenLibrary Refresh] ${book.name}:`, error.message)
+      logger.warn({ err: error, bookName: book.name }, 'OpenLibrary refresh failed')
     }
   }
 
@@ -1945,7 +1881,7 @@ libraryRouter.get('/:id', authMiddleware, requireRole('parent'), async (req: Aut
   }
 
   const parsedChildId = childId ? parseInt(childId) : null
-  if (childId && isNaN(parsedChildId)) {
+  if (childId && (parsedChildId === null || isNaN(parsedChildId))) {
     throw new AppError(400, 'Invalid childId: must be a number')
   }
 
@@ -2112,7 +2048,7 @@ libraryRouter.post('/upload-cover', authMiddleware, requireRole('parent'), uploa
       }
     })
   } catch (error: any) {
-    console.error('[Cover Upload] Error:', error)
+    logger.error({ err: error }, 'Cover upload failed')
     res.status(error.status || 500).json({
       status: 'error',
       message: error.message || '上传失败'
@@ -2389,7 +2325,6 @@ async function downloadAndUploadCover(imageUrl: string, bookName: string): Promi
   }
 
   try {
-    console.log(`[COVER] Downloading cover for "${bookName}": ${imageUrl}`)
     
     // Download image with timeout
     const controller = new AbortController()
@@ -2404,7 +2339,7 @@ async function downloadAndUploadCover(imageUrl: string, bookName: string): Promi
     clearTimeout(timeoutId)
     
     if (!imageResponse.ok) {
-      console.error(`[COVER] Failed to download: ${imageResponse.status}`)
+      logger.error({ status: imageResponse.status }, 'Cover download failed')
       return ''
     }
 
@@ -2412,7 +2347,7 @@ async function downloadAndUploadCover(imageUrl: string, bookName: string): Promi
     
     // Validate image size (max 5MB)
     if (imageBuffer.length > 5 * 1024 * 1024) {
-      console.error(`[COVER] Image too large: ${imageBuffer.length} bytes`)
+      logger.error({ size: imageBuffer.length }, 'Cover image too large')
       return ''
     }
 
@@ -2424,10 +2359,9 @@ async function downloadAndUploadCover(imageUrl: string, bookName: string): Promi
     else if (contentType.includes('webp')) fileExt = 'webp'
     
     const storedUrl = await storeCoverBuffer(imageBuffer, fileExt, contentType || `image/${fileExt}`)
-    console.log(`[COVER] Success: ${storedUrl}`)
     return storedUrl
   } catch (error: any) {
-    console.error(`[COVER] Error processing cover for "${bookName}":`, error.message)
+    logger.error({ err: error, bookName }, 'Cover processing failed')
     return ''
   }
 }
@@ -2588,7 +2522,7 @@ libraryRouter.post('/import/preview', authMiddleware, requireRole('parent'), upl
       },
     })
   } catch (error: any) {
-    console.error('[IMPORT_PREVIEW] Error:', error)
+    logger.error({ err: error }, 'Import preview failed')
     res.status(error.statusCode || 500).json({
       status: 'error',
       message: `导入预检失败: ${error.message}`,
@@ -2618,22 +2552,17 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       }
     }
 
-    console.log(`[IMPORT] Starting import for family ${familyId}, childId: ${childId || 'none'}`)
 
     if (!file) {
       throw new AppError(400, '请上传文件')
     }
 
-    console.log(`[IMPORT] File received: ${file.originalname}, size: ${file.size}`)
 
     const { rows: data, hyperlinks, columns } = extractImportWorkbook(file.buffer)
 
-    console.log(`[IMPORT] Found ${data.length} rows in Excel`)
     
     // Log first row to debug column names
     if (data.length > 0) {
-      console.log(`[IMPORT] First row columns:`, columns)
-      console.log(`[IMPORT] First row data:`, data[0])
     }
 
     let imported = 0
@@ -2647,7 +2576,6 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
 
     // 先获取所有已存在的书籍名称，减少数据库查询次数
     const existingBookByKey = await getExistingBookKeyMap(familyId)
-    console.log(`[IMPORT] Found ${existingBookByKey.size} existing book keys`)
 
     // 启用分块响应
     res.writeHead(200, {
@@ -2676,7 +2604,6 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       const coverUrl = getImportCoverUrl(row, hyperlinks, excelRowNumber)
       
       if (coverUrl) {
-        console.log(`[IMPORT] Row ${excelRowNumber} cover URL: ${coverUrl}`)
       }
 
       // Download and upload cover if URL exists
@@ -2795,7 +2722,6 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
       }
     }
 
-    console.log(`[IMPORT] Completed: ${imported} imported, ${matchedBooks} matched, ${readingLogsCreated} logs, ${readStatesUpdated} read states, ${skipped} skipped, ${coverSuccess} covers, ${coverFailed} failed`)
 
     // 发送完成信息
     res.write(JSON.stringify({
@@ -2806,7 +2732,7 @@ libraryRouter.post('/import', authMiddleware, requireRole('parent'), upload.sing
 
     res.end()
   } catch (error: any) {
-    console.error('[IMPORT] Error:', error)
+    logger.error({ err: error }, 'Import failed')
     // 如果响应头还没发送，发送错误响应
     if (!res.headersSent) {
       res.writeHead(500, {

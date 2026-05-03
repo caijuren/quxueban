@@ -3,6 +3,9 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { env } from '../config/env'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('Plans')
 
 function parseAssignedDays(value: unknown): number[] {
   if (Array.isArray(value)) {
@@ -226,18 +229,14 @@ plansRouter.get('/today', async (req: AuthRequest, res: Response) => {
 
     // School homework: exclude Wednesday (day 3)
     if (showToday && (task.category === 'school' || task.category === 'advanced')) {
-      console.log(`Task: ${task.name}, Category: ${task.category}, Day: ${dayOfWeek}`)
       if (task.name.includes('培优') || task.name.includes('高思') || task.name.includes('全新英语')) {
         // Advanced: weekend only
-        console.log(`Advanced task, should only show on weekend: ${dayOfWeek === 0 || dayOfWeek === 6}`)
         showToday = dayOfWeek === 0 || dayOfWeek === 6
       } else {
         // Regular school homework: exclude Wednesday
-        console.log(`Regular school task, should exclude Wednesday: ${dayOfWeek !== 3}`)
         showToday = dayOfWeek !== 3
       }
     }
-    console.log(`Task: ${task.name}, Show today: ${showToday}, Assigned days: ${assignedDays}`)
 
     // Apply weekly rule overrides
     if (showToday && weeklyRule?.onlyWeekend) {
@@ -924,7 +923,6 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
     const { familyId, role } = req.user!
     const { taskId, childId, action, date, fromDate, toDate } = req.body
 
-    console.log('[MODIFY] Request:', { taskId, childId, action, date, fromDate, toDate })
 
     if (role !== 'parent') {
       throw new AppError(403, 'Only parents can modify plans')
@@ -984,7 +982,6 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
         },
       })
 
-      console.log(`[MODIFY] Removed day ${dayOfWeek} from task ${taskId}, remaining days:`, newAssignedDays)
 
       res.json({
         status: 'success',
@@ -1020,7 +1017,6 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
         },
       })
 
-      console.log(`[MODIFY] Moved task ${taskId} from day ${fromDay} to day ${toDay}, days:`, newAssignedDays)
 
       res.json({
         status: 'success',
@@ -1029,7 +1025,7 @@ plansRouter.post('/modify', async (req: AuthRequest, res: Response) => {
       })
     }
   } catch (error: any) {
-    console.error('[MODIFY] Error:', error)
+    logger.error({ err: error }, 'Modify plan error')
     if (error instanceof AppError) {
       throw error
     }

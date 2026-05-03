@@ -6,6 +6,9 @@ import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import { env } from '../config/env'
 import { AIServiceFactory, AIConfig } from '../services/ai/AIServiceFactory'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('AIInsights')
 
 export const aiInsightsRouter: Router = Router()
 
@@ -30,7 +33,7 @@ aiInsightsRouter.get('/user/ai-config', async (req: AuthRequest, res: Response) 
       data: configs
     })
   } catch (error) {
-    console.error('[AI Config] Error getting config:', error)
+    logger.error({ err: error }, 'Error getting AI config')
     res.status(500).json({
       status: 'error',
       message: '获取AI配置失败'
@@ -76,7 +79,7 @@ aiInsightsRouter.post('/user/ai-config', async (req: AuthRequest, res: Response)
       data: aiConfig
     })
   } catch (error) {
-    console.error('[AI Config] Error saving config:', error)
+    logger.error({ err: error }, 'Error saving AI config')
     res.status(500).json({
       status: 'error',
       message: '保存AI配置失败'
@@ -189,7 +192,7 @@ aiInsightsRouter.post('/ai/test', async (req: AuthRequest, res: Response) => {
       }
     })
   } catch (error) {
-    console.error('[AI Test] Error testing connection:', error)
+    logger.error({ err: error }, 'Error testing AI connection')
     res.status(500).json({
       status: 'error',
       message: '测试连接失败'
@@ -280,7 +283,7 @@ aiInsightsRouter.post('/test/generate', async (req: AuthRequest, res: Response) 
       data: insight,
     })
   } catch (error) {
-    console.error('[AI Insight] Error:', error)
+    logger.error({ err: error }, 'AI insight error')
     res.status(500).json({
       status: 'error',
       message: 'AI分析生成失败，请稍后重试'
@@ -352,7 +355,7 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
 
   // Validate childId if provided
   const parsedChildId = childId ? parseInt(childId) : null
-  if (childId && isNaN(parsedChildId)) {
+  if (childId && (parsedChildId === null || isNaN(parsedChildId))) {
     throw new AppError(400, 'Invalid childId: must be a number')
   }
 
@@ -437,7 +440,7 @@ aiInsightsRouter.post('/books/:bookId/generate', async (req: AuthRequest, res: R
       data: insight,
     })
   } catch (error) {
-    console.error('[AI Insight] Error:', error)
+    logger.error({ err: error }, 'AI insight error')
     res.status(500).json({
       status: 'error',
       message: 'AI分析生成失败，请稍后重试'
@@ -488,7 +491,6 @@ async function getBookDescription(isbn: string, bookName: string, bookId: number
     const API_KEY = env.JISU_API_KEY || 'your_api_key';
     const API_URL = `https://api.jisuapi.com/isbn/query?appkey=${API_KEY}&isbn=${isbn}`;
     
-    console.log('Fetching book description from API:', API_URL);
     
     const response = await axios.get(API_URL);
     const data = response.data;
@@ -502,14 +504,12 @@ async function getBookDescription(isbn: string, bookName: string, bookId: number
         data: { description }
       });
       
-      console.log('Book description updated in database for book:', bookName);
       return description;
     } else {
-      console.log('No description found for ISBN:', isbn);
       return `这是《${bookName}》的内容简介，描述了书籍的主要内容和主题思想。`;
     }
   } catch (error) {
-    console.error('Error fetching book description:', error);
+    logger.error({ err: error }, 'Error fetching book description');
     return `这是《${bookName}》的内容简介，描述了书籍的主要内容和主题思想。`;
   }
 }
@@ -602,7 +602,6 @@ function calculateAge(birthDate: string) {
  * Call AI API using the configured service
  */
 async function callAIAPI(prompt: string, familyId: number) {
-  console.log('Sending prompt to AI API:', prompt);
   
   try {
     // Get the active AI configuration for the family
@@ -612,7 +611,6 @@ async function callAIAPI(prompt: string, familyId: number) {
     });
 
     if (aiConfig) {
-      console.log('Using AI configuration:', aiConfig.provider);
       
       // Create AI service instance using factory
       const service = AIServiceFactory.createService({
@@ -623,12 +621,12 @@ async function callAIAPI(prompt: string, familyId: number) {
       // Generate reading report
       return await service.generateReadingReport(prompt);
     } else {
-      console.warn('No active AI configuration found, returning mock AI insight');
+      logger.warn('No active AI configuration found, returning mock AI insight');
       // Fallback to mock response
       return getMockResponse(prompt);
     }
   } catch (error) {
-    console.error('Error calling AI API:', error);
+    logger.error({ err: error }, 'Error calling AI API');
     // Fallback to mock response
     return getMockResponse(prompt);
   }
@@ -653,6 +651,5 @@ function getMockResponse(prompt: string) {
     parentGuidance: `家长可以通过提问的方式帮助${childName}理解《${bookName}》中的道理，培养思考能力和表达能力。`
   };
   
-  console.log('Generated mock AI response:', mockResponse);
   return mockResponse;
 }

@@ -1,5 +1,6 @@
-import { Save } from 'lucide-react';
+import { ChevronDown, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -258,6 +259,27 @@ function FormSection({ title, description, children }: { title: string; descript
   );
 }
 
+function OptionalFormSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <Collapsible>
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-4 text-left">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
+              {description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}
+            </div>
+            <ChevronDown className="size-4 shrink-0 text-slate-400" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-5">{children}</div>
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
+  );
+}
+
 function ChoiceGrid<T extends string>({
   value,
   options,
@@ -341,28 +363,6 @@ export function TaskEditor({
               <ChoiceGrid value={value.type} options={typeOptions} onChange={(type) => setValue({ type })} columns="grid-cols-3" />
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>单次时长（分钟）</Label>
-              <Input type="number" value={value.timePerUnit} onChange={(event) => setValue({ timePerUnit: parseInt(event.target.value, 10) || 30 })} />
-            </div>
-            <div className="space-y-2">
-              <Label>分配规则</Label>
-              <ChoiceGrid
-                value={value.scheduleRule}
-                options={['daily', 'school', 'flexible', 'weekend']}
-                onChange={(scheduleRule) => setValue({ scheduleRule })}
-                getLabel={(scheduleRule) => scheduleRuleLabels[scheduleRule]}
-                columns="grid-cols-2"
-              />
-            </div>
-          </div>
-          {value.scheduleRule === 'flexible' ? (
-            <div className="space-y-2">
-              <Label>每周次数</Label>
-              <Input type="number" value={value.weeklyFrequency} onChange={(event) => setValue({ weeklyFrequency: parseInt(event.target.value, 10) || 1 })} />
-            </div>
-          ) : null}
         </div>
       </FormSection>
 
@@ -425,7 +425,29 @@ export function TaskEditor({
       </FormSection>
 
       <FormSection title="执行设置" description="决定孩子怎么完成、难度如何，以及完成时怎么记录。">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>单次时长（分钟）</Label>
+            <Input type="number" value={value.timePerUnit} onChange={(event) => setValue({ timePerUnit: parseInt(event.target.value, 10) || 30 })} />
+          </div>
+          <div className="space-y-2">
+            <Label>分配规则</Label>
+            <ChoiceGrid
+              value={value.scheduleRule}
+              options={['daily', 'school', 'flexible', 'weekend']}
+              onChange={(scheduleRule) => setValue({ scheduleRule })}
+              getLabel={(scheduleRule) => scheduleRuleLabels[scheduleRule]}
+              columns="grid-cols-2"
+            />
+          </div>
+        </div>
+        {value.scheduleRule === 'flexible' ? (
+          <div className="mt-4 space-y-2">
+            <Label>每周次数</Label>
+            <Input type="number" value={value.weeklyFrequency} onChange={(event) => setValue({ weeklyFrequency: parseInt(event.target.value, 10) || 1 })} />
+          </div>
+        ) : null}
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label>完成方式</Label>
             <ChoiceGrid value={value.parentRole} options={['独立完成', '家长陪伴', '家长主导']} onChange={(parentRole) => setValue({ parentRole })} columns="grid-cols-3" />
@@ -466,7 +488,7 @@ export function TaskEditor({
         </div>
       </FormSection>
 
-      <FormSection title="额外字段" description="学科、年级、时间块和任务标签用于筛选与展示。">
+      <OptionalFormSection title="额外字段" description="学科、年级、时间块和任务标签用于筛选与展示，默认收起以降低编辑噪音。">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>学科</Label>
@@ -503,7 +525,7 @@ export function TaskEditor({
             </Select>
           </div>
         </div>
-      </FormSection>
+      </OptionalFormSection>
 
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={onCancel}>取消</Button>

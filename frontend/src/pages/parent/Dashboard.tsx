@@ -1,57 +1,23 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
-import { Clock, CheckCircle2, ClipboardList, BookOpen, Plus, X, Calendar, Send, Brain, Download, Loader2, Camera, Image, Mic, FileText, XCircle, AlertCircle, ArrowRight, LayoutDashboard, HeartPulse, Lightbulb, Play, Square, Pause, RotateCcw, Timer } from 'lucide-react';
+import { Clock, CheckCircle2, BookOpen, Calendar, Send, Brain, Download, Image, FileText, XCircle, AlertCircle, LayoutDashboard, HeartPulse, Lightbulb, Play, Square, Pause, RotateCcw, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageToolbar } from '@/components/parent/PageToolbar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { DatePicker } from '@/components/ui/date-picker';
 import { ExportDialog } from '@/components/ExportDialog';
 import { getEducationStageLabel } from '@/lib/education-stage';
 import { toast } from 'sonner';
 import { startOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-function ProgressRing({ value }: { value: number }) {
-  const safeValue = Math.max(0, Math.min(100, value));
-  return (
-    <div
-      className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full"
-      style={{ background: `conic-gradient(#8b5cf6 ${safeValue * 3.6}deg, #ede9fe 0deg)` }}
-    >
-      <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white shadow-inner">
-        <span className="text-3xl font-semibold text-slate-950">{safeValue}%</span>
-        <span className="text-xs text-slate-500">已完成</span>
-      </div>
-    </div>
-  );
-}
-
-function StudyIllustration() {
-  return (
-    <div className="pointer-events-none absolute bottom-4 right-5 hidden h-[120px] w-36 md:block xl:right-6">
-      <div className="absolute bottom-4 right-10 h-[72px] w-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-400 shadow-xl shadow-violet-200" />
-      <div className="absolute bottom-7 right-[52px] h-14 w-[72px] rounded-xl border-4 border-violet-300 bg-white/90 shadow-lg">
-        <div className="mx-auto mt-3 h-2 w-12 rounded-full bg-violet-200" />
-        <div className="mx-auto mt-2.5 h-2 w-9 rounded-full bg-violet-100" />
-        <div className="mx-auto mt-2.5 h-2 w-10 rounded-full bg-violet-100" />
-      </div>
-      <div className="absolute bottom-4 right-2 h-24 w-4 rotate-12 rounded-full bg-gradient-to-b from-amber-300 to-orange-400 shadow-lg" />
-      <div className="absolute bottom-5 right-28 h-12 w-7 rounded-t-full bg-emerald-400" />
-      <div className="absolute bottom-2 right-24 h-8 w-12 rounded-xl bg-orange-100 shadow" />
-      <div className="absolute right-1 top-7 h-4 w-4 rotate-45 rounded-md bg-amber-300" />
-      <div className="absolute right-[136px] top-11 h-3 w-3 rounded-full bg-violet-200" />
-    </div>
-  );
-}
 
 type TrendPoint = {
   date: string;
@@ -104,73 +70,6 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
   );
 }
 
-const dailyQuotes = [
-  { text: '千里之行，始于足下。', author: '老子' },
-  { text: '不积跬步，无以至千里。', author: '荀子' },
-  { text: '知不足而奋进，望远山而前行。', author: '佚名' },
-  { text: '日日行，不怕千万里。', author: '佚名' },
-  { text: '学而不思则罔，思而不学则殆。', author: '孔子' },
-  { text: '纸上得来终觉浅，绝知此事要躬行。', author: '陆游' },
-  { text: '博观而约取，厚积而薄发。', author: '苏轼' },
-  { text: '今日事，今日毕。', author: '佚名' },
-  { text: '温故而知新，可以为师矣。', author: '孔子' },
-  { text: '欲穷千里目，更上一层楼。', author: '王之涣' },
-];
-
-function getDailyQuote(dateString: string) {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const index = Math.abs(year * 372 + month * 31 + day) % dailyQuotes.length;
-  return dailyQuotes[index];
-}
-
-function DailyQuoteCard({ date }: { date: string }) {
-  const quote = getDailyQuote(date);
-  return (
-    <section className="relative min-h-[210px] overflow-hidden rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-950 via-indigo-700 to-sky-500 p-5 text-white shadow-sm">
-      <div className="absolute inset-0 opacity-40">
-        <div className="absolute bottom-0 left-0 h-24 w-full bg-gradient-to-t from-indigo-950 to-transparent" />
-        <div className="absolute bottom-0 left-8 h-24 w-48 skew-x-[-25deg] bg-indigo-800/70" />
-        <div className="absolute bottom-0 right-16 h-32 w-56 skew-x-[25deg] bg-violet-700/70" />
-        <div className="absolute right-10 top-12 h-10 w-10 rounded-full bg-yellow-200 shadow-[0_0_40px_rgba(254,240,138,0.7)]" />
-      </div>
-      <div className="relative flex h-full flex-col items-center justify-center text-center">
-        <p className="text-sm font-semibold text-indigo-100">每日一句</p>
-        <p className="mt-8 text-lg font-semibold tracking-wide">“{quote.text}”</p>
-        <p className="mt-4 text-sm text-indigo-100">—— {quote.author}</p>
-      </div>
-    </section>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  unit,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: number;
-  unit: string;
-  icon: ReactNode;
-  tone: string;
-}) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-medium text-slate-700">{label}</p>
-      <div className="mt-5 flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
-          {icon}
-        </div>
-        <p className="text-3xl font-semibold text-slate-950">
-          {value}
-          <span className="ml-1 text-sm font-medium text-slate-500">{unit}</span>
-        </p>
-      </div>
-    </section>
-  );
-}
-
 // Task Card Component
 function TaskCard({ 
   task, 
@@ -212,8 +111,11 @@ function TaskCard({
           <p className={`truncate text-base font-semibold ${isCompleted ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-950'}`}>
             {task.name}
           </p>
-          <p className="mt-1 text-sm text-slate-500">
-            {typeof actualTime === 'number' && Number.isFinite(actualTime) ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}
+          <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-sm text-slate-500">
+            <span>{getCategoryLabel(task.category, task.subject)}</span>
+            {task.abilityCategory && <span>{task.abilityCategory}</span>}
+            {task.abilityPoint && <span>{task.abilityPoint}</span>}
+            <span>{typeof actualTime === 'number' && Number.isFinite(actualTime) ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}</span>
           </p>
         </button>
         <div className="flex shrink-0 items-center gap-2">
@@ -229,6 +131,9 @@ function TaskCard({
               开始
             </Button>
           )}
+          <Button type="button" variant="outline" size="sm" onClick={onClick} className="h-8 rounded-lg">
+            {status === 'pending' ? '完成' : '查看'}
+          </Button>
           <span className={`rounded-full border px-3 py-1 text-sm font-medium ${statusMeta.className}`}>
             {statusMeta.label}
           </span>
@@ -276,19 +181,6 @@ interface Checkin {
   evidenceUrl?: string;
 }
 
-interface CheckinPayload {
-  taskId: number;
-  childId: number | undefined | null;
-  status: string;
-  value: number;
-  completedValue: number | undefined | null;
-  focusMinutes?: number | undefined | null;
-  notes: string;
-  metadata?: Record<string, any>;
-  evidenceUrl?: string;
-  date: string;
-}
-
 function getStagePrimaryAdvice(remainingTasks: number, needsAttentionCount: number) {
   if (needsAttentionCount > 0) {
     return `有 ${needsAttentionCount} 项任务需要复盘，先看孩子卡在哪里，再补家长观察。`;
@@ -309,20 +201,6 @@ function getStageMiddleAdvice(remainingTasks: number, needsAttentionCount: numbe
   return '今天任务推进稳定，可以整理错题、薄弱点和明日复习优先级。';
 }
 
-interface AIAnalysisResult {
-  overallEvaluation: string;
-  taskCompletionAnalysis: string;
-  learningEfficiencyAnalysis: string;
-  strengths: string[];
-  improvementSuggestions: string[];
-  tomorrowPlan: string;
-}
-
-// 格式化学习时长
-function formatStudyTime(minutes: number): string {
-  return `${minutes}分钟`;
-}
-
 function formatFocusTime(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -334,15 +212,6 @@ function formatPomodoroTime(seconds: number): string {
   const minutes = Math.floor(safeSeconds / 60);
   const remainingSeconds = safeSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
-}
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 6) return '夜深了';
-  if (hour < 12) return '早上好';
-  if (hour < 14) return '中午好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
 }
 
 // 获取本地日期格式（YYYY-MM-DD）
@@ -381,6 +250,7 @@ function getWeekDatesFromMonday(dateString: string): string[] {
 const weekDayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 type CompletionStatus = 'completed' | 'partial' | 'postponed' | 'not_completed' | 'not_involved';
+type TaskFilter = 'all' | 'pending' | 'attention' | 'completed';
 
 const categoryLabelMap: Record<string, string> = {
   chinese: '语文',
@@ -464,6 +334,15 @@ const reviewQualityOptions = [
 const cognitiveErrorLabelMap = Object.fromEntries(cognitiveErrorOptions.map((option) => [option.value, option.label]));
 const reviewQualityLabelMap = Object.fromEntries(reviewQualityOptions.map((option) => [option.value, option.label]));
 
+const taskStatusLabelMap: Record<string, string> = {
+  pending: '待处理',
+  completed: '已完成',
+  partial: '部分完成',
+  postponed: '推迟',
+  not_completed: '未完成',
+  not_involved: '今日不涉及',
+};
+
 function getCategoryLabel(category: string, subject?: string) {
   return categoryLabelMap[subject || ''] || categoryLabelMap[category] || category || '未分类';
 }
@@ -525,6 +404,7 @@ export default function ParentDashboard() {
   const [pomodoroDuration, setPomodoroDuration] = useState(25);
   const [pomodoroRemaining, setPomodoroRemaining] = useState(25 * 60);
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>('all');
   // 日期选择状态
   const [selectedDate, setSelectedDate] = useState(getLocalDateString(new Date()));
   // 导出对话框状态
@@ -658,21 +538,6 @@ export default function ParentDashboard() {
     },
     staleTime: 5 * 60 * 1000,
     enabled: !!selectedChildId,
-  });
-  
-  // 标记任务完成的mutation
-  const markTaskCompleteMutation = useMutation({
-    mutationFn: (data: CheckinPayload) => apiClient.post(`/plans/checkin`, data),
-    onSuccess: () => {
-      setOpen(false);
-      refetchTasks();
-      refetchStats();
-      refetchTodayCheckins();
-    },
-    onError: (error: Error) => {
-      console.error('任务完成失败:', error);
-      toast.error(getErrorMessage(error) || '任务完成失败，请稍后重试');
-    },
   });
   
   // 处理任务点击
@@ -822,38 +687,6 @@ export default function ParentDashboard() {
     }
   };
 
-  // AI分析
-  const [aiAnalysisOpen, setAiAnalysisOpen] = useState(false);
-  const [aiAnalysisData, setAiAnalysisData] = useState<AIAnalysisResult | null>(null);
-  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
-
-  const handleAIAnalysis = async () => {
-    if (!selectedChildId) {
-      toast.error('请先选择一个孩子');
-      return;
-    }
-
-    setAiAnalysisLoading(true);
-    try {
-      const response = await apiClient.post(`/ai/analyze-dashboard`, {
-        childId: selectedChildId,
-        date: selectedDate,
-      });
-
-      if (response.data.success) {
-        setAiAnalysisData(response.data.data);
-        setAiAnalysisOpen(true);
-      } else {
-        toast.error('AI分析失败，请稍后重试');
-      }
-    } catch (error) {
-      console.error('AI分析失败:', error);
-      toast.error('AI分析失败，请稍后重试');
-    } finally {
-      setAiAnalysisLoading(false);
-    }
-  };
-  
   // 处理任务完成
   const handleCompleteTask = async () => {
     if (selectedTask) {
@@ -998,16 +831,41 @@ export default function ParentDashboard() {
   const remainingTasks = pendingTasks.length + partialTasks.length;
   const remainingMinutes = pendingTasks.reduce((sum, task) => sum + (task.task.timePerUnit || 0), 0);
   const needsAttentionTasks = [...partialTasks, ...notCompletedTasks, ...postponedTasks];
+  const orderedTodayTasks = [...pendingTasks, ...needsAttentionTasks, ...completedTasks, ...notInvolvedTasks];
+  const visibleTodayTasks = (() => {
+    if (taskFilter === 'pending') return pendingTasks;
+    if (taskFilter === 'attention') return needsAttentionTasks;
+    if (taskFilter === 'completed') return completedTasks;
+    return orderedTodayTasks;
+  })();
   const selectedEducationStage = selectedChild?.educationStage || 'primary';
   const stageAdviceText = selectedEducationStage === 'middle'
     ? getStageMiddleAdvice(remainingTasks, needsAttentionTasks.length)
     : getStagePrimaryAdvice(remainingTasks, needsAttentionTasks.length);
-  const nextActions = pendingTasks.slice(0, 2);
-  const greeting = getGreeting();
+  const nextTask = pendingTasks[0]?.task;
+  const nextActionTitle = nextTask
+    ? `建议先做 ${nextTask.name}`
+    : needsAttentionTasks.length > 0
+      ? `需要处理 ${needsAttentionTasks.length} 项`
+      : totalTasksForRate > 0
+        ? '建议做 5 分钟复盘'
+        : '先安排今日任务';
+  const nextActionDesc = nextTask
+    ? `${getCategoryLabel(nextTask.category, nextTask.subject)} · 预计 ${nextTask.timePerUnit} 分钟`
+    : needsAttentionTasks.length > 0
+      ? '先确认未完成原因，再补家长观察和复盘记录。'
+      : totalTasksForRate > 0
+        ? '今天任务已推进完，可以补充反馈并准备明日计划。'
+        : '今日还没有任务，先去学习计划生成或调整任务。';
+  const nextActionButtonLabel = nextTask ? '开始下一项' : totalTasksForRate > 0 ? '复盘今日' : '去任务列表';
+  const taskFilterTabs: Array<{ value: TaskFilter; label: string; count: number }> = [
+    { value: 'all', label: '全部', count: orderedTodayTasks.length },
+    { value: 'pending', label: '待完成', count: pendingTasks.length },
+    { value: 'attention', label: '需关注', count: needsAttentionTasks.length },
+    { value: 'completed', label: '已完成', count: completedTasks.length },
+  ];
   const displayName = selectedChild?.name || user?.name || '家长';
   const todayStudyMinutes = stats?.todayStudyMinutes || 0;
-  const readingPages = stats?.readingPerformance?.pages || 0;
-  const totalFocusMinutes = todayCheckins.reduce((sum: number, checkin: Checkin) => sum + (checkin.focusMinutes || 0), 0);
   const stabilityRecords = todayCheckins
     .map((checkin: Checkin) => checkin.metadata || {})
     .filter((metadata: Record<string, any>) => metadata.sleepHours || metadata.mood || metadata.externalLoad);
@@ -1088,7 +946,7 @@ export default function ParentDashboard() {
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950">今日概览</h1>
               <p className="truncate text-xs text-slate-500 sm:text-sm">
-                {greeting}，{displayName} · {getEducationStageLabel(selectedEducationStage)} · 坚持学习的每一天，都是成长的最好见证
+                {displayName} · {getEducationStageLabel(selectedEducationStage)} · {selectedDate}
               </p>
             </div>
           </div>
@@ -1108,153 +966,154 @@ export default function ParentDashboard() {
         }
       />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-slate-950">今日状态总览</h2>
-            <p className="mt-1 text-sm text-slate-500">先看任务交付，再参考认知和状态证据。</p>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">今日完成进度</h2>
+              <p className="mt-1 text-sm text-slate-500">先看今天是否能交付。</p>
+            </div>
+            <span className="rounded-lg bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">{statsLoading ? 0 : completionRate}%</span>
           </div>
-          <Button variant="outline" onClick={() => navigate('/parent/ability-model')} className="h-9 rounded-lg bg-white">
-            查看三层模型
-            <ArrowRight className="ml-1.5 h-4 w-4" />
+          <div className="mt-5">
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-blue-600" style={{ width: `${statsLoading ? 0 : completionRate}%` }} />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-slate-500">任务完成</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{completedCount}/{totalTasksForRate} 项</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-slate-500">学习时长</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{todayStudyMinutes} 分钟</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-slate-500">剩余任务</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{remainingTasks} 项</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-slate-500">预计还需</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{remainingMinutes} 分钟</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-950">下一步行动</h2>
+          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+            <p className="text-sm font-semibold text-blue-900">{nextActionTitle}</p>
+            <p className="mt-2 min-h-10 text-sm leading-5 text-blue-700">{nextActionDesc}</p>
+          </div>
+          <Button
+            className="mt-4 h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            onClick={() => {
+              if (nextTask) handleStartFocus(nextTask);
+              else if (totalTasksForRate > 0) navigate('/parent/reading');
+              else navigate('/parent/tasks');
+            }}
+          >
+            <Play className="mr-1.5 h-4 w-4" />
+            {nextActionButtonLabel}
           </Button>
         </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className="rounded-lg border border-blue-100 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                交付层
-              </span>
-              <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{completionRate}%</span>
-            </div>
-            <p className="mt-3 text-sm font-semibold text-slate-950">{completedCount}/{totalTasksForRate} 项完成</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">剩余 {remainingTasks} 项，优先处理今日任务。</p>
-          </div>
-          <div className="rounded-lg border border-violet-100 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700">
-                <Brain className="h-3.5 w-3.5" />
-                认知层
-              </span>
-              <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">{cognitiveRecords.length} 条</span>
-            </div>
-            <p className="mt-3 text-sm font-semibold text-slate-950">尝试 {attemptSummary}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">提示：{hintSummary}，复盘：{reviewSummary}。</p>
-          </div>
-          <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                <HeartPulse className="h-3.5 w-3.5" />
-                稳定性层
-              </span>
-              <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">{stabilityRecords.length} 条</span>
-            </div>
-            <p className="mt-3 text-sm font-semibold text-slate-950">睡眠 {sleepSummary}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">情绪：{moodSummary}，负载：{externalLoadSummary}。</p>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          {readinessSuggestions.map((item) => (
-            <div key={item.title} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2">
-              <span className={cn('mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1', item.tone)}>
-                {item.icon}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-slate-900">{item.title}</p>
-                <p className="truncate text-xs text-slate-500">{item.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)_minmax(260px,0.82fr)]">
-        <section className="relative min-h-[214px] overflow-hidden rounded-xl border border-violet-100 bg-gradient-to-br from-blue-50 via-violet-50 to-fuchsia-50 p-5 shadow-sm">
-          <h2 className="relative z-10 text-base font-semibold text-slate-950">今日进度</h2>
-          <div className="relative z-10 mt-5 grid gap-5 md:grid-cols-[128px_minmax(0,1fr)] md:items-center md:pr-32 lg:pr-[120px] xl:pr-36">
-            <div className="flex justify-center md:justify-start">
-              <ProgressRing value={statsLoading ? 0 : completionRate} />
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-950">状态提醒</h2>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800">
+                <HeartPulse className="h-4 w-4" />
+                稳定性风险
+              </p>
+              <p className="mt-1 text-xs leading-5 text-emerald-700">睡眠 {sleepSummary} · 情绪 {moodSummary} · 负载 {externalLoadSummary}</p>
             </div>
-            <div className="grid max-w-[210px] gap-3">
-              <div className="flex min-h-12 items-center gap-3 rounded-xl bg-white/55 px-3 py-2 ring-1 ring-violet-100/70">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-                  <ClipboardList className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-slate-950">{completedCount}/{totalTasksForRate} 项</p>
-                  <p className="text-xs text-slate-500">任务完成</p>
-                </div>
-              </div>
-              <div className="flex min-h-12 items-center gap-3 rounded-xl bg-white/55 px-3 py-2 ring-1 ring-violet-100/70">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-                  <Clock className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-slate-950">{todayStudyMinutes} 分钟</p>
-                  <p className="text-xs text-slate-500">学习时长</p>
-                </div>
-              </div>
-              <p className="inline-flex w-fit rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600">
-                加油！开启今天的学习之旅吧
+            <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-violet-800">
+                <Brain className="h-4 w-4" />
+                认知记录
+              </p>
+              <p className="mt-1 text-xs leading-5 text-violet-700">尝试 {attemptSummary} · {hintSummary} · 复盘 {reviewSummary}</p>
+            </div>
+            <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800">
+                <AlertCircle className="h-4 w-4" />
+                数据缺口
+              </p>
+              <p className="mt-1 text-xs leading-5 text-amber-700">
+                {cognitiveRecords.length === 0 || stabilityRecords.length === 0 ? '今日证据还不完整，完成任务时补质量、状态和观察。' : '今日状态和认知证据已有记录。'}
               </p>
             </div>
           </div>
-          <StudyIllustration />
-        </section>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <MetricTile label="待完成任务" value={remainingTasks} unit="项" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} tone="bg-emerald-50" />
-          <MetricTile label="学习时长" value={todayStudyMinutes} unit="分钟" icon={<Clock className="h-5 w-5 text-indigo-600" />} tone="bg-indigo-50" />
-          <MetricTile label="阅读页数" value={readingPages} unit="页" icon={<BookOpen className="h-5 w-5 text-orange-500" />} tone="bg-orange-50" />
-          <MetricTile label="专注时长" value={totalFocusMinutes} unit="分钟" icon={<Brain className="h-5 w-5 text-sky-500" />} tone="bg-sky-50" />
         </div>
+      </section>
 
-        <DailyQuoteCard date={selectedDate} />
-      </div>
-
-      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(260px,0.78fr)]">
-        <section className="flex h-[390px] min-h-0 flex-col overflow-hidden rounded-xl border border-orange-100 bg-white shadow-sm">
-          <div className="bg-gradient-to-r from-orange-50 to-white px-5 py-4">
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
             <h2 className="text-base font-semibold text-slate-950">今日任务</h2>
+            <p className="mt-1 text-sm text-slate-500">待完成 {pendingTasks.length} 项，需关注 {needsAttentionTasks.length} 项。</p>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            {tasksLoading && todayTasks.length === 0 ? (
-              <div className="grid gap-3">
-                {[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />)}
-              </div>
-            ) : totalTasksForRate === 0 ? (
-              <div className="flex min-h-56 flex-col items-center justify-center text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-violet-50 text-violet-500">
-                  <Calendar className="h-10 w-10" />
-                </div>
-                <p className="mt-5 text-base font-semibold text-slate-950">还没有任务安排呢</p>
-                <p className="mt-2 text-sm text-slate-500">从学习计划生成今日任务，或手动添加任务吧</p>
-                <Button onClick={() => navigate('/parent/tasks')} className="mt-5 rounded-lg bg-primary px-6 text-white hover:bg-primary/90">
-                  去创建任务
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3 pr-1">
-                {[...pendingTasks, ...needsAttentionTasks, ...completedTasks].map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task.task}
-                    status={task.status as any}
-                    actualTime={task.actualTime}
-                    onClick={() => handleTaskClick(task.task)}
-                    onStartFocus={() => handleStartFocus(task.task)}
-                  />
-                ))}
-              </div>
-            )}
+          <div className="flex flex-wrap items-center gap-2">
+            {taskFilterTabs.map((tab) => (
+              <Button
+                key={tab.value}
+                variant="outline"
+                onClick={() => setTaskFilter(tab.value)}
+                className={cn(
+                  'h-9 rounded-lg border-slate-200 bg-white px-3 text-sm',
+                  taskFilter === tab.value && 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50'
+                )}
+              >
+                {tab.label}
+                <span className="ml-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{tab.count}</span>
+              </Button>
+            ))}
           </div>
-        </section>
+        </div>
+        <div className="p-5">
+          {tasksLoading && todayTasks.length === 0 ? (
+            <div className="grid gap-3">
+              {[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100" />)}
+            </div>
+          ) : totalTasksForRate === 0 ? (
+            <div className="flex min-h-64 flex-col items-center justify-center text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-50 text-blue-500">
+                <Calendar className="h-10 w-10" />
+              </div>
+              <p className="mt-5 text-base font-semibold text-slate-950">还没有任务安排</p>
+              <p className="mt-2 text-sm text-slate-500">从学习计划生成今日任务，或手动添加任务。</p>
+              <Button onClick={() => navigate('/parent/tasks')} className="mt-5 rounded-lg bg-primary px-6 text-white hover:bg-primary/90">
+                去任务列表
+              </Button>
+            </div>
+          ) : visibleTodayTasks.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+              当前筛选下没有任务
+            </div>
+          ) : (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {visibleTodayTasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task.task}
+                  status={task.status as any}
+                  actualTime={task.actualTime}
+                  onClick={() => handleTaskClick(task.task)}
+                  onStartFocus={() => handleStartFocus(task.task)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
-        <section className="flex h-[390px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <section className="flex min-h-[360px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-950">学习趋势</h2>
-            <Button variant="outline" size="sm" className="h-9 rounded-lg">本周 · 较昨日</Button>
+            <h2 className="text-base font-semibold text-slate-950">本周趋势简版</h2>
+            <span className="rounded-lg bg-slate-50 px-3 py-1 text-sm text-slate-600">学习时长</span>
           </div>
           <div className="mt-4 flex-1">
             <TrendChart data={weekTrend} />
@@ -1273,10 +1132,31 @@ export default function ParentDashboard() {
           </div>
         </section>
 
-        <aside className="flex h-[390px] min-h-0 flex-col gap-4 overflow-hidden">
-          <section className="shrink-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <section>
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950">
+              <Lightbulb className="h-5 w-5 text-amber-500" />
+              今日建议
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{stageAdviceText}</p>
+            <div className="mt-4 space-y-2">
+              {readinessSuggestions.map((item) => (
+                <div key={item.title} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                  <span className={cn('mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1', item.tone)}>
+                    {item.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-900">{item.title}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-slate-500">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-5 border-t border-slate-100 pt-5">
             <h2 className="text-base font-semibold text-slate-950">快速操作</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               <Button variant="outline" onClick={openPomodoro} className="h-12 rounded-xl bg-violet-50/60">
                 <Timer className="mr-2 h-4 w-4 text-primary" />
                 番茄闹钟
@@ -1298,108 +1178,11 @@ export default function ParentDashboard() {
               </Button>
               <Button variant="outline" onClick={() => navigate('/parent/plans')} className="h-12 rounded-xl bg-sky-50/60">
                 <Calendar className="mr-2 h-4 w-4 text-sky-500" />
-                学习工具
+                学习计划
               </Button>
             </div>
           </section>
-
-          <section className="min-h-0 flex-1 rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950">
-              <Brain className="h-5 w-5 text-primary" />
-              AI 今日建议
-            </h2>
-            <p className="mt-5 text-sm leading-6 text-slate-600">
-              {stageAdviceText}
-            </p>
-            <Button variant="outline" onClick={handleAIAnalysis} className="mt-5 rounded-lg">
-              查看分析
-            </Button>
-          </section>
         </aside>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-950">学习状态</h2>
-          <div className="mt-4 flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
-              <HeartPulse className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-base font-semibold text-slate-950">
-                {completionRate >= 80 ? '状态良好' : completionRate >= 40 ? '需要推进' : '等待开始'}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {completionRate >= 80
-                  ? '今天任务推进顺利，可以保持当前节奏。'
-                  : remainingTasks > 0
-                    ? `今天还有 ${remainingTasks} 项任务待处理，建议先从短任务开始。`
-                    : '今天还没有足够记录，完成任务后会形成更准确的状态判断。'}
-              </p>
-            </div>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {[
-              ['完成率', `${completionRate}%`, completionRate],
-              ['剩余任务', `${remainingTasks}项`, totalTasksForRate > 0 ? Math.max(0, 100 - completionRate) : 0],
-              ['学习时长', `${todayStudyMinutes}分钟`, Math.min(100, Math.round((todayStudyMinutes / 120) * 100))],
-              ['阅读页数', `${readingPages}页`, Math.min(100, readingPages * 5)],
-            ].map(([label, value, progress]) => (
-              <div key={String(label)}>
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
-                <div className="mt-2 h-1.5 rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-950">今日学习建议</h2>
-          <div className="mt-4 space-y-4">
-            {[
-              {
-                title: needsAttentionTasks.length > 0
-                  ? (selectedEducationStage === 'middle' ? '先看薄弱项' : '先处理卡点')
-                  : '继续保持',
-                desc: stageAdviceText,
-                icon: Lightbulb,
-                bg: 'bg-amber-50',
-                color: 'text-amber-500',
-              },
-              {
-                title: remainingTasks > 0
-                  ? (selectedEducationStage === 'middle' ? '按学科排优先级' : '放进时间块')
-                  : '安排复盘',
-                desc: remainingTasks > 0
-                  ? (selectedEducationStage === 'middle'
-                    ? `剩余任务预计还需 ${remainingMinutes} 分钟，优先处理薄弱学科和错题关联任务。`
-                    : `剩余任务预计还需 ${remainingMinutes} 分钟，可优先安排阅读、专注或短任务。`)
-                  : (selectedEducationStage === 'middle'
-                    ? '今日任务基本完成后，可以整理错题和明日复习顺序。'
-                    : '今日任务基本完成后，可以安排 5 分钟亲子复盘和阅读记录。'),
-                icon: Clock,
-                bg: 'bg-blue-50',
-                color: 'text-blue-500',
-              },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.title} className="flex gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.bg} ${item.color}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.desc}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
       </div>
 
       <Dialog open={pomodoroOpen} onOpenChange={setPomodoroOpen}>
@@ -1568,51 +1351,29 @@ export default function ParentDashboard() {
                 </div>
               </div>
 
-              {/* 完成状态 */}
-              <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3">
-                <Label className="text-sm font-medium text-slate-700">完成状态</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={completionStatus === 'completed' ? 'default' : 'outline'}
-                    onClick={() => setCompletionStatus('completed')}
-                    className={getStatusButtonClass('completed', completionStatus)}
-                  >
-                    全部完成
-                  </Button>
-                  <Button
-                    variant={completionStatus === 'partial' ? 'default' : 'outline'}
-                    onClick={() => setCompletionStatus('partial')}
-                    className={getStatusButtonClass('partial', completionStatus)}
-                  >
-                    部分完成
-                  </Button>
-                  <Button
-                    variant={completionStatus === 'not_completed' ? 'default' : 'outline'}
-                    onClick={() => setCompletionStatus('not_completed')}
-                    className={getStatusButtonClass('not_completed', completionStatus)}
-                  >
-                    未完成
-                  </Button>
-                  <Button
-                    variant={completionStatus === 'postponed' ? 'default' : 'outline'}
-                    onClick={() => setCompletionStatus('postponed')}
-                    className={getStatusButtonClass('postponed', completionStatus)}
-                  >
-                    推迟
-                  </Button>
-                  <Button
-                    variant={completionStatus === 'not_involved' ? 'default' : 'outline'}
-                    onClick={() => setCompletionStatus('not_involved')}
-                    className={getStatusButtonClass('not_involved', completionStatus)}
-                  >
-                    今日不涉及
-                  </Button>
+              <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-950">完成结果</h3>
+                  <p className="mt-1 text-xs text-slate-500">必填：状态、用时、质量和难度。</p>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">完成状态</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['completed', 'partial', 'not_completed', 'postponed', 'not_involved'] as CompletionStatus[]).map((status) => (
+                      <Button
+                        key={status}
+                        variant={completionStatus === status ? 'default' : 'outline'}
+                        onClick={() => setCompletionStatus(status)}
+                        className={getStatusButtonClass(status, completionStatus)}
+                      >
+                        {status === 'completed' ? '全部完成' : taskStatusLabelMap[status]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
 
-              {/* 实际用时 */}
-              {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) && (
-                <div className="grid gap-3 rounded-xl border border-slate-100 bg-white p-3 sm:grid-cols-2">
+                {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) && (
+                  <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-700">计入学习时长（分钟）</Label>
                     <Input
@@ -1635,11 +1396,11 @@ export default function ParentDashboard() {
                       className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
                     />
                   </div>
-                </div>
-              )}
+                  </div>
+                )}
 
-              {!['postponed', 'not_involved'].includes(completionStatus) && (
-                <div className="grid gap-3 rounded-xl border border-slate-100 bg-white p-3 sm:grid-cols-2">
+                {!['postponed', 'not_involved'].includes(completionStatus) && (
+                  <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-700">完成质量</Label>
                     <select
@@ -1660,11 +1421,11 @@ export default function ParentDashboard() {
                       {difficultyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </div>
-                </div>
-              )}
+                  </div>
+                )}
 
-              {['partial', 'not_completed', 'postponed'].includes(completionStatus) && (
-                <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3">
+                {['partial', 'not_completed', 'postponed'].includes(completionStatus) && (
+                  <div className="space-y-2">
                   <Label className="text-sm font-medium text-slate-700">未完成/调整原因</Label>
                   <select
                     value={completionData.blocker}
@@ -1673,19 +1434,50 @@ export default function ParentDashboard() {
                   >
                     {blockerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
+                  </div>
+                )}
+                </div>
+
+              {!['not_involved'].includes(completionStatus) && (
+                <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">反馈记录</h3>
+                    <p className="mt-1 text-xs text-slate-500">建议填：孩子反馈和家长观察。</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">孩子反馈</Label>
+                    <Input
+                      value={completionData.childFeedback}
+                      onChange={(e) => setCompletionData({ ...completionData, childFeedback: e.target.value })}
+                      placeholder="例如：今天计算有点慢，但能坚持做完"
+                      className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">家长观察</Label>
+                    <Textarea
+                      value={completionData.notes}
+                      onChange={(e) => setCompletionData({ ...completionData, notes: e.target.value })}
+                      placeholder="记录状态、卡点、需要调整的地方，后续可用于复盘分析"
+                      rows={3}
+                      className="w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary p-3"
+                    />
+                  </div>
                 </div>
               )}
 
-              <details className="group rounded-xl border border-emerald-100 bg-emerald-50/30 p-3">
+              <details className="group rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
                   <span>
-                    <span className="block text-sm font-medium text-slate-700">状态记录（可选）</span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">睡眠、情绪和外部负载。</span>
+                    <span className="block text-sm font-semibold text-slate-950">1.9 证据</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">可选：稳定性、认知记录和证据上传。</span>
                   </span>
-                  <span className="text-xs font-semibold text-emerald-700 group-open:hidden">展开</span>
-                  <span className="text-xs font-semibold text-emerald-700 hidden group-open:inline">收起</span>
+                  <span className="text-xs font-semibold text-slate-700 group-open:hidden">展开</span>
+                  <span className="text-xs font-semibold text-slate-700 hidden group-open:inline">收起</span>
                 </summary>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-emerald-700">稳定性记录</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-slate-600">昨晚睡眠时长（小时）</Label>
                     <Input
@@ -1719,18 +1511,9 @@ export default function ParentDashboard() {
                     </select>
                   </div>
                 </div>
-              </details>
 
-              <details className="group rounded-xl border border-violet-100 bg-violet-50/30 p-3">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                  <span>
-                    <span className="block text-sm font-medium text-slate-700">认知记录（可选）</span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">尝试、提示、错因和复盘质量，适合新规则题和讲题复盘。</span>
-                  </span>
-                  <span className="text-xs font-semibold text-violet-700 group-open:hidden">展开</span>
-                  <span className="text-xs font-semibold text-violet-700 hidden group-open:inline">收起</span>
-                </summary>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <p className="mt-5 text-xs font-semibold text-violet-700">认知记录</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-slate-600">尝试次数</Label>
                     <Input
@@ -1775,31 +1558,95 @@ export default function ParentDashboard() {
                     </select>
                   </div>
                 </div>
+
+                  <p className="mt-5 text-xs font-semibold text-slate-700">证据上传</p>
+                  {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) ? (
+                    <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                      {completionData.evidenceUrl && (
+                        <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-primary" />
+                              <span className="text-sm text-slate-600">已上传证据</span>
+                            </div>
+                            <a 
+                              href={completionData.evidenceUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:text-primary/80"
+                            >
+                              查看
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {!completionData.evidence && (
+                        <div className="flex gap-3">
+                          <input
+                            type="file"
+                            id="evidence-upload"
+                            accept="image/*,audio/*,video/*,.pdf,.xls,.xlsx,.csv,.ppt,.pptx"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 10 * 1024 * 1024) {
+                                  toast.error('文件大小不能超过 10MB');
+                                  return;
+                                }
+                                setCompletionData({ ...completionData, evidence: file });
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <label htmlFor="evidence-upload" className="flex-1 cursor-pointer">
+                            <Button
+                              variant="outline"
+                              className="w-full rounded-lg border-dashed border-2 hover:border-primary hover:bg-primary/5"
+                              asChild
+                            >
+                              <span>
+                                <Image className="w-4 h-4 mr-2" />
+                                选择文件
+                              </span>
+                            </Button>
+                          </label>
+                        </div>
+                      )}
+
+                      {completionData.evidence && (
+                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-primary" />
+                              <span className="text-sm text-slate-700 truncate max-w-[200px]">
+                                {completionData.evidence.name}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                ({(completionData.evidence.size / 1024 / 1024).toFixed(2)} MB)
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCompletionData({ ...completionData, evidence: null })}
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-gray-500">支持图片、音频、视频、PDF、Excel 和 PPT，最大 10MB</p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">当前状态不需要上传证据。</p>
+                  )}
+                </div>
               </details>
 
-              {/* 备注 */}
-              {!['not_involved'].includes(completionStatus) && (
-                <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3">
-                  <Label className="text-sm font-medium text-slate-700">孩子反馈（可选）</Label>
-                  <Input
-                    value={completionData.childFeedback}
-                    onChange={(e) => setCompletionData({ ...completionData, childFeedback: e.target.value })}
-                    placeholder="例如：今天计算有点慢，但能坚持做完"
-                    className="rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  />
-                  <Label className="text-sm font-medium text-slate-700">家长观察（可选）</Label>
-                  <Textarea
-                    value={completionData.notes}
-                    onChange={(e) => setCompletionData({ ...completionData, notes: e.target.value })}
-                    placeholder="记录状态、卡点、需要调整的地方，后续可用于复盘分析"
-                    rows={3}
-                    className="w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-primary/30 focus:border-primary p-3"
-                  />
-                </div>
-              )}
-
-              {/* 完成日期 */}
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-4">
                 <Label className="text-sm font-medium text-slate-700">完成日期</Label>
 	                <DatePicker
 	                  value={completionData.date}
@@ -1809,182 +1656,16 @@ export default function ParentDashboard() {
 	                />
               </div>
 
-              {/* 证据上传 */}
-              {!['postponed', 'not_completed', 'not_involved'].includes(completionStatus) && (
-                <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3">
-                  <Label className="text-sm font-medium text-slate-700">添加证据（可选）</Label>
-                  
-                  {/* 已上传的证据预览 */}
-                  {completionData.evidenceUrl && (
-                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <span className="text-sm text-slate-600">已上传证据</span>
-                        </div>
-                        <a 
-                          href={completionData.evidenceUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:text-primary/80"
-                        >
-                          查看
-                        </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 新证据上传 */}
-                  {!completionData.evidence && (
-                    <div className="flex gap-3">
-                      <input
-                        type="file"
-                        id="evidence-upload"
-                        accept="image/*,audio/*,video/*,.pdf,.xls,.xlsx,.csv,.ppt,.pptx"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            if (file.size > 10 * 1024 * 1024) {
-                              toast.error('文件大小不能超过 10MB');
-                              return;
-                            }
-                            setCompletionData({ ...completionData, evidence: file });
-                          }
-                        }}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="evidence-upload"
-                        className="flex-1 cursor-pointer"
-                      >
-                        <Button
-                          variant="outline"
-                          className="w-full rounded-lg border-dashed border-2 hover:border-primary hover:bg-primary/5"
-                          asChild
-                        >
-                          <span>
-                            <Image className="w-4 h-4 mr-2" />
-                            选择文件
-                          </span>
-                        </Button>
-                      </label>
-                    </div>
-                  )}
-
-                  {/* 已选择的文件预览 */}
-                  {completionData.evidence && (
-                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <span className="text-sm text-slate-700 truncate max-w-[200px]">
-                            {completionData.evidence.name}
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            ({(completionData.evidence.size / 1024 / 1024).toFixed(2)} MB)
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCompletionData({ ...completionData, evidence: null })}
-                          className="text-gray-400 hover:text-red-500"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-gray-500">
-                    支持图片、音频、视频、PDF、Excel 和 PPT，最大 10MB
-                  </p>
-                </div>
-              )}
-
-              {/* 提交按钮 */}
-              <Button
-                onClick={handleCompleteTask}
-                className="w-full rounded-lg h-11 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
-              >
-                {completionStatus === 'postponed' ? '确认推迟' : 
-                 completionStatus === 'not_completed' ? '确认未完成' : 
-                 completionStatus === 'not_involved' ? '确认今日不涉及' : '标记完成'}
-              </Button>
+              <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+                <Button variant="outline" onClick={() => setOpen(false)} className="h-11 rounded-lg px-5">
+                  取消
+                </Button>
+                <Button onClick={handleCompleteTask} className="h-11 rounded-lg bg-primary px-6 text-primary-foreground hover:bg-primary/90 shadow-sm">
+                  保存记录
+                </Button>
+              </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* AI分析弹窗 */}
-      <Dialog open={aiAnalysisOpen} onOpenChange={setAiAnalysisOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-xl border border-slate-200 shadow-xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="text-lg font-semibold text-slate-950 flex items-center gap-2">
-              <Brain className="w-5 h-5 text-primary" />
-              AI学习分析
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {aiAnalysisLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-              </div>
-            ) : aiAnalysisData ? (
-              <div className="space-y-6">
-                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                  <h3 className="text-base font-semibold text-slate-950 mb-2">总体评价</h3>
-                  <p className="text-slate-700">{aiAnalysisData.overallEvaluation}</p>
-                </div>
-                
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-base font-semibold text-slate-950 mb-2">任务完成分析</h3>
-                  <p className="text-slate-700">{aiAnalysisData.taskCompletionAnalysis}</p>
-                </div>
-                
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-base font-semibold text-slate-950 mb-2">学习效率分析</h3>
-                  <p className="text-slate-700">{aiAnalysisData.learningEfficiencyAnalysis}</p>
-                </div>
-                
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="text-base font-semibold text-slate-950 mb-2">学习亮点</h3>
-                  <ul className="list-disc list-inside space-y-2 text-slate-700">
-                    {(Array.isArray(aiAnalysisData.strengths) ? aiAnalysisData.strengths : []).map((strength: string, index: number) => (
-                      <li key={index}>{strength}</li>
-                    ))}
-                  </ul>
-                </div>
-                
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="text-base font-semibold text-slate-950 mb-2">改进建议</h3>
-                  <ul className="list-disc list-inside space-y-2 text-slate-700">
-                    {(Array.isArray(aiAnalysisData.improvementSuggestions) ? aiAnalysisData.improvementSuggestions : []).map((suggestion: string, index: number) => (
-                      <li key={index}>{suggestion}</li>
-                    ))}
-                  </ul>
-                </div>
-                
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-base font-semibold text-slate-950 mb-2">明日计划建议</h3>
-                  <p className="text-slate-700">{aiAnalysisData.tomorrowPlan}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-center py-12">
-                <p className="text-slate-500">暂无分析数据</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex justify-center pt-4">
-            <Button 
-              type="button" 
-              onClick={() => setAiAnalysisOpen(false)}
-              className="w-full rounded-lg h-11 bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              关闭
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

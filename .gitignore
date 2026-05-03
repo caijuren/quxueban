@@ -44,6 +44,8 @@ DEPLOY_COMMANDS.md
 deploy_commands.sh
 fix_prisma.sh
 ssh_connect.sh
+update-password.sql
+check-users.js
 【孩子基本情况】.md
 scripts/clean_parent_reading_excel.py
 

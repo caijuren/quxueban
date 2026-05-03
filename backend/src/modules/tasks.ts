@@ -4,6 +4,9 @@ import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import { env } from '../config/env'
 import { isChinaPublicHoliday } from '../utils/china-holidays'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('Tasks')
 
 export const tasksRouter: Router = Router()
 
@@ -382,7 +385,7 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
       .map((task) => formatTaskRecord(task))
     res.json({ status: 'success', data: formattedTasks })
   } catch (error: any) {
-    console.error('[GET TASKS] Error:', error)
+    logger.error({ err: error }, 'Get tasks error')
     throw new AppError(500, 'Failed to get tasks: ' + error.message)
   }
 })
@@ -492,7 +495,6 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   const { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules, skipHolidays = true } = req.body
   const { familyId } = req.user!
 
-  console.log('[PUBLISH] Request:', { childIds, weekNo, weekStartDate: requestedWeekStartDate, selectedTaskIds, taskRules })
 
   if (!childIds || !Array.isArray(childIds) || childIds.length === 0) {
     throw new AppError(400, 'Missing or invalid childIds')
@@ -543,7 +545,6 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
   const [year, week] = weekNo.split('-').map(Number)
   const weekStartDate = parseWeekStartDate(requestedWeekStartDate) || getWeekStartDate(year, week)
 
-  console.log('[PUBLISH] Week start:', weekStartDate)
 
   // 计算每周安排
   const results: any[] = []
@@ -632,7 +633,6 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     }
   })
 
-  console.log('[PUBLISH] Success:', { weekNo, children: results.length })
 
   res.json({
     status: 'success',
@@ -644,10 +644,10 @@ tasksRouter.post('/publish', async (req: AuthRequest, res: Response) => {
     },
   })
   } catch (error) {
-    console.error('[PUBLISH] ERROR:', error)
+    logger.error({ err: error }, 'Publish error')
     if (error instanceof Error) {
-      console.error('[PUBLISH] Error message:', error.message)
-      console.error('[PUBLISH] Error stack:', error.stack)
+      logger.error({ message: error.message }, 'Publish error message')
+      logger.error({ stack: error.stack }, 'Publish error stack')
     }
     if (!(error instanceof AppError)) {
       throw new AppError(500, 'Failed to publish plan: ' + (error instanceof Error ? error.message : 'Unknown error'))

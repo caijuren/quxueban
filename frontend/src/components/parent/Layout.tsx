@@ -45,42 +45,56 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const navGroups = [
   {
-    id: 'daily',
-    label: '日常执行',
+    id: 'today',
+    label: '今日',
     items: [
       { path: '/parent', label: '今日概览', icon: LayoutDashboard },
       { path: '/parent/plans', label: '学习计划', icon: CalendarDays },
+    ],
+  },
+  {
+    id: 'tasks',
+    label: '任务',
+    items: [
       { path: '/parent/tasks', label: '任务管理', icon: ListTodo },
-      { path: '/parent/library', label: '图书馆', icon: Library },
+    ],
+  },
+  {
+    id: 'goals',
+    label: '目标',
+    items: [
+      { path: '/parent/goals', label: '目标管理', icon: Target },
+      { path: '/parent/ability-model', label: '三层准备度', icon: Brain },
     ],
   },
   {
     id: 'growth',
-    label: '成长规划',
+    label: '成长',
     items: [
-      { path: '/parent/ability-model', label: '能力模型', icon: Brain },
-      { path: '/parent/goals', label: '目标', icon: Target },
-    ],
-  },
-  {
-    id: 'review',
-    label: '复盘分析',
-    items: [
-      { path: '/parent/growth-dashboard', label: '仪表盘', icon: ChartNoAxesCombined },
+      { path: '/parent/growth-dashboard', label: '成长总览', icon: ChartNoAxesCombined },
       { path: '/parent/data-quality', label: '数据体检', icon: ClipboardCheck },
       { path: '/parent/reports', label: '学习报告', icon: FileText },
       { path: '/parent/achievements', label: '成就', icon: Trophy },
     ],
   },
   {
+    id: 'reading',
+    label: '阅读',
+    items: [
+      { path: '/parent/library', label: '图书馆', icon: Library },
+    ],
+  },
+  {
     id: 'system',
-    label: '系统',
+    label: '设置',
     items: [
       { path: '/parent/settings/account', label: '设置', icon: Settings },
       { path: '/parent/help', label: '帮助中心', icon: HelpCircle },
     ],
   },
 ];
+
+const navItems = navGroups.flatMap((group) => group.items);
 
 type AppNotification = {
   id: number;
@@ -98,10 +112,10 @@ const pageTitleMap: Record<string, string> = {
   '/parent/plans': '学习计划',
   '/parent/library': '图书馆',
   '/parent/achievements': '成就系统',
-  '/parent/growth-dashboard': '仪表盘',
+  '/parent/growth-dashboard': '成长总览',
   '/parent/data-quality': '数据体检',
-  '/parent/ability-model': '能力模型',
-  '/parent/goals': '目标',
+  '/parent/ability-model': '三层准备度',
+  '/parent/goals': '目标管理',
   '/parent/children': '孩子管理',
   '/parent/statistics': '学习统计',
   '/parent/reports': '学习报告',
@@ -127,7 +141,7 @@ function getActiveGroupLabel(pathname: string): string {
     )
   );
 
-  return activeGroup?.label || '日常执行';
+  return activeGroup?.label || '今日';
 }
 
 const sidebarVariants = {
@@ -315,44 +329,32 @@ export default function ParentLayout() {
 
         {/* Navigation */}
         <ScrollArea className="flex-1 px-2.5 py-1.5">
-          <nav className="space-y-3">
-            {navGroups.map((group, groupIndex) => (
-              <div key={group.id} className="space-y-1">
-                {groupIndex > 0 ? <div className="mx-1.5 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" /> : null}
-                {group.label ? (
-                  <p className="px-1.5 pt-1 text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-semibold">
-                    {group.label}
-                  </p>
-                ) : null}
-                <div className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const isActive = isMenuActive(item.path);
-                    const Icon = item.icon;
-                    return (
-                      <NavLink
-                        key={item.path}
-                        to={item.path}
-                        className={cn(
-                          'group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all',
-                          isActive
-                            ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
-                            : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
-                        )}
-                      >
-                        {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
-                        <div className={cn(
-                          'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-colors',
-                          isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
-                        )}>
-                          <Icon className="size-[14px] flex-shrink-0" />
-                        </div>
-                        <span>{item.label}</span>
-                      </NavLink>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+          <nav className="space-y-0.5">
+            {navItems.map((item) => {
+              const isActive = isMenuActive(item.path);
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    'group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all',
+                    isActive
+                      ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
+                      : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
+                  )}
+                >
+                  {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
+                  <div className={cn(
+                    'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-colors',
+                    isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
+                  )}>
+                    <Icon className="size-[14px] flex-shrink-0" />
+                  </div>
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })}
           </nav>
         </ScrollArea>
 
@@ -728,45 +730,33 @@ export default function ParentLayout() {
 
               {/* Mobile Navigation */}
               <ScrollArea className="flex-1 px-3 py-2">
-                <nav className="space-y-4">
-                  {navGroups.map((group, groupIndex) => (
-                    <div key={group.id} className="space-y-1.5">
-                      {groupIndex > 0 ? <div className="mx-2 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" /> : null}
-                      {group.label ? (
-                        <p className="px-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
-                          {group.label}
-                        </p>
-                      ) : null}
-                      <div className="space-y-0.5">
-                        {group.items.map((item) => {
-                          const isActive = isMenuActive(item.path);
-                          const Icon = item.icon;
-                          return (
-                            <NavLink
-                              key={item.path}
-                              to={item.path}
-                              onClick={closeSidebar}
-                              className={cn(
-                                'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
-                                isActive
-                                  ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
-                                  : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
-                              )}
-                            >
-                              {isActive ? <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
-                              <div className={cn(
-                                'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
-                                isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
-                              )}>
-                                <Icon className="size-4 flex-shrink-0" />
-                              </div>
-                              <span>{item.label}</span>
-                            </NavLink>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                <nav className="space-y-0.5">
+                  {navItems.map((item) => {
+                    const isActive = isMenuActive(item.path);
+                    const Icon = item.icon;
+                    return (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        onClick={closeSidebar}
+                        className={cn(
+                          'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
+                          isActive
+                            ? 'bg-gradient-to-r from-indigo-50 to-violet-50 text-primary shadow-sm ring-1 ring-indigo-100'
+                            : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
+                        )}
+                      >
+                        {isActive ? <span className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500" /> : null}
+                        <div className={cn(
+                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
+                          isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
+                        )}>
+                          <Icon className="size-4 flex-shrink-0" />
+                        </div>
+                        <span>{item.label}</span>
+                      </NavLink>
+                    );
+                  })}
                 </nav>
               </ScrollArea>
 

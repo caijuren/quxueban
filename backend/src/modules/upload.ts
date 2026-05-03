@@ -5,6 +5,9 @@ import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import fs from 'fs'
 import path from 'path'
 import multer from 'multer'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('Upload')
 
 // Configure multer for avatar uploads
 const avatarStorage = multer.diskStorage({
@@ -110,7 +113,7 @@ uploadRouter.post('/avatar', avatarUpload.single('avatar'), async (req: AuthRequ
       }
     })
   } catch (error) {
-    console.error('[Upload] Error uploading avatar:', error)
+    logger.error({ err: error }, 'Error uploading avatar')
     res.status(500).json({
       status: 'error',
       message: '上传头像失败'
@@ -166,7 +169,7 @@ uploadRouter.post('/evidence', evidenceUpload.single('evidence'), async (req: Au
       })
     }
   } catch (error) {
-    console.error('[Upload] Error uploading evidence:', error)
+    logger.error({ err: error }, 'Error uploading evidence')
     res.status(500).json({
       status: 'error',
       message: '上传证据失败'

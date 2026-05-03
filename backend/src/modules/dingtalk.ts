@@ -5,6 +5,10 @@ import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import fetch from 'node-fetch'
 import crypto from 'crypto'
 import { dedupeLatestDailyTaskCheckins, getCountedStudyMinutes } from '../utils/study-minutes'
+import { getWeekNo } from '../utils/date-utils'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('DingTalk')
 
 export const dingtalkRouter: Router = Router()
 
@@ -79,7 +83,7 @@ function getAssignedDaysForPlan(plan: any): number[] {
         assignedDays = parsedDays
       }
     } catch (e) {
-      console.error('Failed to parse assignedDays:', e)
+      logger.warn({ err: e }, 'Failed to parse assignedDays')
     }
   }
 
@@ -155,9 +159,6 @@ dingtalkRouter.post('/push-weekly-plan', async (req: AuthRequest, res: Response)
 
   // Push to DingTalk
   try {
-    console.log('[Push Weekly Plan] Sending to:', webhookUrl)
-    console.log('[Push Weekly Plan] With signature:', signedUrl !== webhookUrl)
-    console.log('[Push Weekly Plan] Message:', message)
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
@@ -180,8 +181,6 @@ dingtalkRouter.post('/push-weekly-plan', async (req: AuthRequest, res: Response)
     clearTimeout(timeoutId);
 
     const responseText = await response.text()
-    console.log('[Push Weekly Plan] Response status:', response.status)
-    console.log('[Push Weekly Plan] Response body:', responseText)
 
     if (!response.ok) {
       throw new Error(`钉钉API返回错误: ${responseText}`)
@@ -204,7 +203,7 @@ dingtalkRouter.post('/push-weekly-plan', async (req: AuthRequest, res: Response)
       message: '已推送至钉钉',
     })
   } catch (error: any) {
-    console.error('[Push Weekly Plan] Error:', error)
+    logger.error({ err: error }, 'Push weekly plan failed')
     throw new AppError(500, `推送失败: ${error.message}`)
   }
 })
@@ -256,9 +255,6 @@ dingtalkRouter.post('/tasks/:taskId/push-to-dingtalk', async (req: AuthRequest, 
 
   // Push to DingTalk
   try {
-    console.log('[Push Task] Sending to:', webhookUrl)
-    console.log('[Push Task] With signature:', signedUrl !== webhookUrl)
-    console.log('[Push Task] Message:', message)
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
@@ -281,8 +277,6 @@ dingtalkRouter.post('/tasks/:taskId/push-to-dingtalk', async (req: AuthRequest, 
     clearTimeout(timeoutId);
 
     const responseText = await response.text()
-    console.log('[Push Task] Response status:', response.status)
-    console.log('[Push Task] Response body:', responseText)
 
     if (!response.ok) {
       throw new Error(`钉钉API返回错误: ${responseText}`)
@@ -305,7 +299,7 @@ dingtalkRouter.post('/tasks/:taskId/push-to-dingtalk', async (req: AuthRequest, 
       message: '任务已推送至钉钉',
     })
   } catch (error: any) {
-    console.error('[Push Task] Error:', error)
+    logger.error({ err: error }, 'Push task failed')
     throw new AppError(500, `推送失败: ${error.message}`)
   }
 })
@@ -407,12 +401,6 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   const todayScheduledPlans = allActivePlans.filter(plan => getAssignedDaysForPlan(plan).includes(todayDayOfWeek))
 
   // Log debug information
-  console.log('[Share Dashboard] Request date:', date)
-  console.log('[Share Dashboard] Target date:', targetDate.toISOString())
-  console.log('[Share Dashboard] Target date day of week:', todayDayOfWeek)
-  console.log('[Share Dashboard] Total active plans:', allActivePlans.length)
-  console.log('[Share Dashboard] Today scheduled plans:', todayScheduledPlans.length)
-  console.log('[Share Dashboard] Today checkins:', activeTodayCheckins.length)
 
   // Calculate study time (only completed and partial tasks)
   const todayStudyMinutes = activeTodayCheckins
@@ -482,15 +470,8 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
   const completionRate = actionableTasks > 0 ? Math.round(((completedTasks + partialTasks) / actionableTasks) * 100) : 0
 
   // Log debug information about task grouping
-  console.log('[Share Dashboard] Completed tasks:', tasksByStatus.completed.length)
-  console.log('[Share Dashboard] Partial tasks:', tasksByStatus.partial.length)
-  console.log('[Share Dashboard] Not completed tasks:', tasksByStatus.notCompleted.length)
-  console.log('[Share Dashboard] Postponed tasks:', tasksByStatus.postponed.length)
-  console.log('[Share Dashboard] Not involved tasks:', tasksByStatus.notInvolved.length)
   
   // Log checkin statuses and full checkins
-  console.log('[Share Dashboard] Checkin statuses:', activeTodayCheckins.map(c => c.status))
-  console.log('[Share Dashboard] Full checkins:', activeTodayCheckins)
 
   // Generate dashboard message
   const message = generateDashboardMessage(
@@ -510,9 +491,6 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
 
   // Push to DingTalk
   try {
-    console.log('[Share Dashboard] Sending to:', webhookUrl)
-    console.log('[Share Dashboard] With signature:', signedUrl !== webhookUrl)
-    console.log('[Share Dashboard] Message:', message)
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
@@ -535,8 +513,6 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
     clearTimeout(timeoutId);
 
     const responseText = await response.text()
-    console.log('[Share Dashboard] Response status:', response.status)
-    console.log('[Share Dashboard] Response body:', responseText)
 
     if (!response.ok) {
       throw new Error(`钉钉API返回错误: ${responseText}`)
@@ -559,7 +535,7 @@ dingtalkRouter.post('/dashboard/share', async (req: AuthRequest, res: Response) 
       message: '今日学习情况已分享至钉钉',
     })
   } catch (error: any) {
-    console.error('[Share Dashboard] Error:', error)
+    logger.error({ err: error }, 'Share dashboard failed')
     throw new AppError(500, `分享失败: ${error.message}`)
   }
 })
@@ -597,15 +573,6 @@ function generateTaskMessage(childName: string, task: any): string {
 }
 
 // Helper functions
-function getWeekNo(date: Date): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNum = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
-  return `${d.getUTCFullYear()}-${weekNum.toString().padStart(2, '0')}`
-}
-
 function generateWeeklyPlanMessage(childName: string, plans: any[], weekStart: Date): string {
   const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
   const weekEnd = new Date(weekStart)
@@ -632,7 +599,7 @@ function generateWeeklyPlanMessage(childName: string, plans: any[], weekStart: D
           assignedDays = parsedDays
         }
       } catch (e) {
-        console.error('Failed to parse assignedDays:', e)
+        logger.warn({ err: e }, 'Failed to parse assignedDays')
       }
     } else if (weeklyRule?.days && weeklyRule.days.length > 0) {
       assignedDays = weeklyRule.days

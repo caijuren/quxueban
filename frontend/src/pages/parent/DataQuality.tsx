@@ -47,6 +47,16 @@ type BookItem = {
   isbn?: string | null;
   type?: string | null;
   totalPages?: number | null;
+  readLogCount?: number | null;
+  readingLogs?: ReadingLogSummary[];
+};
+
+type ReadingLogSummary = {
+  pages?: number | null;
+  minutes?: number | null;
+  readDate?: string | null;
+  startPage?: number | null;
+  endPage?: number | null;
 };
 
 type ActiveReading = {
@@ -156,6 +166,20 @@ function hasValue(value: unknown) {
   return typeof value === 'string'
     ? value.trim().length > 0 && value.trim() !== '不关联能力点' && value.trim() !== '__none__'
     : value !== null && value !== undefined;
+}
+
+function hasValidPageRange(log: ReadingLogSummary) {
+  return Boolean(log.startPage && log.endPage && log.endPage >= log.startPage);
+}
+
+function hasReadingPageAnomaly(log: ReadingLogSummary) {
+  const hasInvertedRange = Boolean(log.startPage && log.endPage && log.endPage < log.startPage);
+  const hasMinutesWithoutPages = Boolean((log.minutes || 0) > 0 && !(log.pages && log.pages > 0) && !hasValidPageRange(log));
+  return hasInvertedRange || hasMinutesWithoutPages;
+}
+
+function getReadingPageAnomalyCount(book: BookItem) {
+  return (book.readingLogs || []).filter(hasReadingPageAnomaly).length;
 }
 
 function getText(value: unknown) {
@@ -412,6 +436,10 @@ export default function DataQualityPage() {
     const goalsMissingAbility = goals.filter((goal) => !hasValue(goal.abilityPoint) || !hasValue(goal.abilityCategory));
     const booksMissingCore = books.filter((book) => !hasValue(book.isbn) || !book.totalPages || book.totalPages <= 0 || !hasValue(book.type));
     const readingsMissingCore = readings.filter((reading) => !reading.startedAt || !reading.book?.totalPages || reading.book.totalPages <= 0 || !reading.readPages || reading.readPages <= 0);
+    const readingPageAnomalyBooks = books.filter((book) => getReadingPageAnomalyCount(book) > 0);
+    const readingLogTotal = books.reduce((sum, book) => sum + (book.readLogCount ?? book.readingLogs?.length ?? 0), 0);
+    const readingPageAnomalyCount = readingPageAnomalyBooks.reduce((sum, book) => sum + getReadingPageAnomalyCount(book), 0);
+    const firstReadingPageAnomalyBook = readingPageAnomalyBooks[0];
     const checkinsMissingQuality = checkins.filter((checkin) => {
       if (checkin.status === 'pending' || checkin.status === 'not_involved') return false;
       const metadata = checkin.metadata || {};
@@ -473,6 +501,17 @@ export default function DataQualityPage() {
         path: '/parent/library',
         action: '去阅读记录',
         examples: readingsMissingCore.map((reading) => reading.book?.name || `记录 ${reading.id}`),
+      },
+      {
+        id: 'reading-page-anomaly',
+        title: '阅读记录页码异常',
+        description: '页码倒挂或有阅读时长但缺页数，会影响阅读档案的累计页数和推进速度判断。点击进入异常图书后，打开高亮记录编辑页码即可修正。',
+        count: readingPageAnomalyCount,
+        total: readingLogTotal,
+        tone: 'amber',
+        path: firstReadingPageAnomalyBook ? `/parent/library/${firstReadingPageAnomalyBook.id}?issue=reading-page` : '/parent/library',
+        action: '查看异常书',
+        examples: readingPageAnomalyBooks.map((book) => `${book.name}（${getReadingPageAnomalyCount(book)} 条）`),
       },
       {
         id: 'checkin-quality',

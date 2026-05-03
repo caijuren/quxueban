@@ -5,7 +5,7 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
-    "strict": false,
+    "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -23,5 +23,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "src/modules/cloud-storage.ts", "src/modules/config.ts", "src/modules/scheduler.ts", "src/modules/child.ts", "src/modules/internal.ts", "src/modules/achievements.ts"]
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "src/archive/**/*"]
 }

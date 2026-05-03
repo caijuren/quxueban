@@ -384,6 +384,7 @@ export default function TaskDetail() {
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
+                <h2 className="mb-3 text-sm font-semibold text-slate-950">任务档案</h2>
                 <div className="flex flex-wrap gap-2">
                   <Chip tone="blue">层级：{readinessLayer.label}</Chip>
                   <Chip>学科：{getSubjectLabel(tags.subject)}</Chip>
@@ -464,7 +465,7 @@ export default function TaskDetail() {
           </div>
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <FormSection title="任务配置" description="展示当前任务的结构化字段，后续目标引擎会复用这些数据。">
+            <FormSection title="任务档案字段" description="展示当前任务的核心配置，后续目标引擎会复用这些数据。">
               <div className="grid gap-4 md:grid-cols-2">
                 <DetailRow label="任务类型" value={tags.taskKind || '未设置'} />
                 <DetailRow label="适用年级" value={tags.level || '未设置'} />
@@ -517,12 +518,26 @@ export default function TaskDetail() {
             </FormSection>
           </div>
 
-          <FormSection title="任务历史" description="完成任务后，这里会展示执行历史和累计数据。">
-            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-slate-500">
-              <History className="mx-auto mb-3 size-10 text-slate-300" />
-              <p className="text-sm font-medium text-slate-700">还没有打卡记录</p>
+          <FormSection title="执行历史和证据" description="完成记录、质量证据、认知记录和稳定性记录按层级沉淀到这里。">
+            <div className="grid gap-3 md:grid-cols-4">
+              {[
+                { title: '完成记录', desc: '完成、部分完成、未完成和延期状态。', tone: 'bg-emerald-50 text-emerald-700' },
+                { title: '质量证据', desc: '完成质量、备注、家长观察和作品证据。', tone: 'bg-indigo-50 text-indigo-700' },
+                { title: '认知记录', desc: '尝试次数、提示使用、错因和复盘质量。', tone: 'bg-violet-50 text-violet-700' },
+                { title: '稳定性记录', desc: '睡眠、情绪、外部负载和专注时长。', tone: 'bg-amber-50 text-amber-700' },
+              ].map((item) => (
+                <div key={item.title} className={cn('rounded-lg px-3 py-3', item.tone)}>
+                  <p className="text-sm font-semibold">{item.title}</p>
+                  <p className="mt-2 text-xs leading-5 opacity-90">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-slate-500">
+              <History className="mx-auto mb-3 size-9 text-slate-300" />
+              <p className="text-sm font-medium text-slate-700">当前详情页暂无逐条历史列表</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">先从今日概览完成任务；后续打卡明细会按上方四类证据回流到这里。</p>
               <Button variant="outline" className="mt-4" onClick={() => navigate('/parent')}>
-                去首页打卡
+                去今日概览打卡
               </Button>
             </div>
           </FormSection>

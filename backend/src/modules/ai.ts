@@ -3,6 +3,9 @@ import { prisma } from '../config/database'
 import { AppError } from '../middleware/errorHandler'
 import { authMiddleware, AuthRequest, requireRole } from '../middleware/auth'
 import axios from 'axios'
+import { createLogger } from '../config/logger'
+
+const logger = createLogger('AI')
 
 export const aiRouter: Router = Router()
 
@@ -83,7 +86,7 @@ aiRouter.post('/analyze-dashboard', async (req: AuthRequest, res: Response) => {
           assignedDays = parsedDays
         }
       } catch (e) {
-        console.error('Failed to parse assignedDays:', e)
+        logger.warn({ err: e }, 'Failed to parse assignedDays')
       }
     }
 
@@ -311,7 +314,7 @@ ${notInvolvedTasks > 0 ? `【今日不涉及】\n${notInvolvedList}` : ''}
     try {
       return JSON.parse(aiResponseText)
     } catch (e) {
-      console.error('Kimi AI返回结果非JSON格式:', aiResponseText)
+      logger.warn('Kimi AI返回结果非JSON格式')
       return generateRuleBasedAnalysis(
         childName, targetDate, totalTasks, completedTasks, partialTasks,
         postponedTasks, notCompletedTasks, notInvolvedTasks, completionRate,
@@ -319,7 +322,7 @@ ${notInvolvedTasks > 0 ? `【今日不涉及】\n${notInvolvedList}` : ''}
       )
     }
   } catch (error) {
-    console.error('Error calling Kimi AI API:', error)
+    logger.error({ err: error }, 'Error calling Kimi AI API')
     return generateRuleBasedAnalysis(
       childName, targetDate, totalTasks, completedTasks, partialTasks,
       postponedTasks, notCompletedTasks, notInvolvedTasks, completionRate,

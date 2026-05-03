@@ -20,7 +20,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   const token = generateCsrfToken();
   
   // Store token in memory with user session ID or IP
-  const sessionKey = req.headers['x-forwarded-for'] as string || req.ip;
+  const sessionKey = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
   csrfTokens.set(sessionKey, token);
   
   // Set CSRF token in response header
@@ -37,7 +37,7 @@ export function validateCsrfToken(req: Request, res: Response, next: NextFunctio
   const token = req.headers['x-csrf-token'] as string;
   
   // Get session key (user session ID or IP)
-  const sessionKey = req.headers['x-forwarded-for'] as string || req.ip;
+  const sessionKey = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
   
   // Get stored token
   const storedToken = csrfTokens.get(sessionKey);

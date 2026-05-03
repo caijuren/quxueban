@@ -55,6 +55,18 @@ pnpm --dir frontend build
   - `/parent/goals`
   - `/parent/library`
 
+2026-05-03 阅读成长档案首版检查：
+
+- `pnpm --dir frontend build` 通过。
+- `pnpm --dir backend build` 通过。
+- `/api/login` 使用种子账号 `andycoy` 可登录。
+- `/api/library?childId=3` 返回 1078 本书，其中 1076 本存在阅读记录。
+- 样本 `/api/library/2241?childId=3` 返回 `readLogCount=2`、`totalReadMinutes=120`、`readingLogs` 含 `readDate`、`startPage`、`endPage`、`minutes`、`readStage`、`effect`、`performance`、`note`。
+- 图书详情页“成长档案”首版复用 `/library/:id?childId=` 已有字段，不新增后端表。
+- 历史数据存在 `startPage > endPage` 的页码异常，前端时间线已改为异常区间降级展示“读到第 X 页”，避免显示倒挂页码范围。
+- 数据体检的阅读页码异常入口已能跳转到异常书、定位并高亮异常记录。
+- 阅读记录编辑已支持起始页/结束页修正，并阻止保存倒挂页码；保存后刷新数据体检图书缓存。
+
 ## 仍需人工视觉走查
 
 当前环境完成了构建、接口健康和路由可达性检查；还没有完成逐页截图级视觉走查。下一轮 UI 收口重点：

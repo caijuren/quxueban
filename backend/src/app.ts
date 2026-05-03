@@ -1,6 +1,8 @@
 import express, { Application } from 'express'
 import cors from 'cors'
 import compression from 'compression'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import 'express-async-errors'
 import path from 'path'
 import { env } from './config/env'
@@ -31,6 +33,19 @@ import { uploadRouter } from './modules/upload'
 export const createApp = (): Application => {
   const app = express()
 
+  // Security headers
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }))
+
   // HTTP request logging
   app.use(httpLogger)
 
@@ -48,13 +63,36 @@ export const createApp = (): Application => {
   app.use(express.urlencoded({ extended: true, limit: '5mb' }))
   app.use(compression())
 
+  // Rate limiting - skip in development
+  if (env.NODE_ENV === 'production') {
+    const limiter = rateLimit({
+      windowMs: env.RATE_LIMIT_WINDOW_MS,
+      max: env.RATE_LIMIT_MAX_REQUESTS,
+      message: { status: 'error', message: '请求过于频繁，请稍后再试' },
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+    app.use(limiter)
+
+    // Stricter rate limiting for auth endpoints
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 20, // 20 attempts per window
+      message: { status: 'error', message: '登录尝试过于频繁，请15分钟后再试' },
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+    app.use(env.API_PREFIX, authLimiter, authRouter)
+  } else {
+    app.use(env.API_PREFIX, authRouter)
+  }
+
   // API routes - System & Health
   app.use(env.API_PREFIX, systemRouter)
 
   // ============================================
   // Domain module routes
   // ============================================
-  app.use(env.API_PREFIX, authRouter)
   app.use(`${env.API_PREFIX}/tasks`, tasksRouter)
   app.use(`${env.API_PREFIX}/plans`, plansRouter)
   app.use(`${env.API_PREFIX}/library`, libraryRouter)
