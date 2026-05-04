@@ -1745,6 +1745,9 @@ export default function GrowthDashboard() {
   const [period, setPeriod] = useState<Period>('本月');
   const requestedTab = searchParams.get('tab');
   const activeTab: DashboardTab = isDashboardTab(requestedTab) ? requestedTab : 'today';
+  const focusedGoal = searchParams.get('goal');
+  const focusedGoalPoint = searchParams.get('point');
+  const focusedGoalCategory = searchParams.get('category');
   const [customRange, setCustomRange] = useState<DateRange>(defaultRange);
   const { selectedChildId } = useSelectedChild();
 
@@ -1933,6 +1936,32 @@ export default function GrowthDashboard() {
           </div>
         }
       />
+
+      {focusedGoal && (
+        <section className="rounded-lg border border-teal-100 bg-teal-50/80 px-4 py-3 text-sm text-teal-800 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-semibold text-teal-900">正在查看目标准备：{focusedGoal}</p>
+              <p className="mt-1 truncate text-xs text-teal-700">
+                {focusedGoalCategory || '目标'}{focusedGoalPoint ? ` · ${focusedGoalPoint}` : ''}。下面的长期状态、三层结构和证据质量可用于判断这个目标是否具备推进基础。
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                searchParams.delete('goal');
+                searchParams.delete('category');
+                searchParams.delete('point');
+                setSearchParams(searchParams, { replace: true });
+              }}
+              className="h-8 shrink-0 rounded-lg bg-white"
+            >
+              清除聚焦
+            </Button>
+          </div>
+        </section>
+      )}
 
       {activeTab === 'today' && <TodayView stats={stats} readingStats={readingStats} range={activeRange} diagnosticSummary={diagnosticSummary} tasks={diagnosticTasks} checkins={diagnosticCheckins} />}
       {activeTab === 'execution' && <ExecutionView stats={stats} range={activeRange} diagnosticSummary={diagnosticSummary} />}

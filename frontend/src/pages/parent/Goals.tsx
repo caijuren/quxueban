@@ -7,14 +7,12 @@ import {
   Dumbbell,
   HeartPulse,
   Lightbulb,
-  PenLine,
   PencilLine,
   RefreshCw,
   Trash2,
   ShieldCheck,
   Sparkles,
   Target,
-  TrendingUp,
   X,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -38,7 +36,7 @@ import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
-import { getReadinessLayerByText, readinessLayers } from '@/lib/readiness-model';
+import { getReadinessLayerByText } from '@/lib/readiness-model';
 
 type GoalStatus = 'on-track' | 'attention' | 'strong';
 
@@ -49,6 +47,9 @@ type GoalItem = {
   level: string;
   abilityCategory: string;
   abilityPoint: string;
+  goalType?: string;
+  goalCycle?: string;
+  successCriteria?: string;
   linkedTasks: string[];
   linkedTaskIds?: number[];
   reviewCadence: string;
@@ -121,6 +122,9 @@ const statusStyles: Record<GoalStatus, { label: string; className: string }> = {
   'on-track': { label: '稳定', className: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
   attention: { label: '需关注', className: 'bg-amber-50 text-amber-700 border-amber-100' },
 };
+
+const goalTypeOptions = ['能力提升目标', '习惯养成目标', '学科训练目标', '阅读目标', '体育健康目标'];
+const goalCycleOptions = ['本周', '本月', '本学期', '四周周期', '自定义周期'];
 
 const goalSections: GoalSection[] = [
   {
@@ -331,6 +335,9 @@ function buildGoalFromAbility(option: AbilityOption): GoalDraft {
     level: 'L3 三年级',
     abilityCategory: option.categoryLabel,
     abilityPoint: option.point,
+    goalType: '能力提升目标',
+    goalCycle: '四周周期',
+    successCriteria: `连续执行 ${firstTask}，并能看到该能力点有稳定推进。`,
     linkedTasks: option.tasks.length > 0 ? option.tasks.slice(0, 3) : [firstTask],
     linkedTaskIds: [],
     reviewCadence: '每周复盘',
@@ -347,11 +354,45 @@ function buildGoalFromTemplate(template: GoalItem): GoalDraft {
     ...template,
     id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     source: 'ability-model',
+    goalType: template.goalType || inferGoalType(template),
+    goalCycle: template.goalCycle || '四周周期',
+    successCriteria: template.successCriteria || template.target,
     progress: 0,
     current: '尚未开始',
     status: 'attention',
     linkedTaskIds: [],
   };
+}
+
+function buildBlankGoal(): GoalDraft {
+  return {
+    id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    source: 'ability-model',
+    title: '',
+    description: '',
+    level: 'L3 三年级',
+    abilityCategory: '',
+    abilityPoint: '',
+    goalType: '能力提升目标',
+    goalCycle: '四周周期',
+    successCriteria: '',
+    linkedTasks: [],
+    linkedTaskIds: [],
+    reviewCadence: '每周复盘',
+    progress: 0,
+    target: '',
+    current: '尚未开始',
+    suggestion: '',
+    status: 'attention',
+  };
+}
+
+function inferGoalType(goal: GoalItem) {
+  if (goal.abilityCategory === '体育与健康') return '体育健康目标';
+  if (goal.abilityPoint.includes('阅读')) return '阅读目标';
+  if (goal.abilityCategory === '学习习惯') return '习惯养成目标';
+  if (goal.abilityCategory === '学科能力') return '学科训练目标';
+  return '能力提升目标';
 }
 
 async function getAbilityModel(): Promise<AbilityModel | null> {
@@ -420,7 +461,7 @@ async function createTaskFromGoal({ childId, goal, taskName }: { childId: number
 
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section className={cn('rounded-2xl border border-border bg-white p-5 shadow-sm', className)}>
+    <section className={cn('rounded-lg border border-slate-200 bg-white p-5 shadow-sm', className)}>
       {children}
     </section>
   );
@@ -434,6 +475,84 @@ function ProgressBar({ value, tone = 'bg-indigo-500' }: { value: number; tone?: 
   );
 }
 
+function GoalMetricCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  hint: string;
+  icon: React.ElementType;
+  tone: string;
+}) {
+  return (
+    <Panel className="p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <div className="mt-1 flex items-baseline gap-2">
+            <p className="text-xl font-semibold tabular-nums text-slate-950">{value}</p>
+            <p className="truncate text-xs text-slate-500">{hint}</p>
+          </div>
+        </div>
+        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', tone)}>
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+    </Panel>
+  );
+}
+
+function GoalDialogShell({
+  children,
+  onClose,
+  maxWidth = 'max-w-xl',
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  maxWidth?: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" />
+      <div
+        className={cn('relative z-10 flex max-h-[88vh] w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl', maxWidth)}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function GoalDialogHeader({
+  eyebrow,
+  title,
+  description,
+  onClose,
+}: {
+  eyebrow?: ReactNode;
+  title: string;
+  description?: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
+      <div className="min-w-0">
+        {eyebrow ? <p className="text-xs font-semibold text-slate-500">{eyebrow}</p> : null}
+        <h3 className="mt-1 text-lg font-semibold text-slate-950">{title}</h3>
+        {description ? <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p> : null}
+      </div>
+      <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9 shrink-0 rounded-lg">
+        <X className="h-5 w-5" />
+      </Button>
+    </div>
+  );
+}
+
 function GoalCard({
   goal,
   onManageTasks,
@@ -441,6 +560,7 @@ function GoalCard({
   onReview,
   onDelete,
   onViewAbility,
+  onViewReadiness,
 }: {
   goal: GoalItem;
   onManageTasks?: (goal: GoalItem) => void;
@@ -448,118 +568,78 @@ function GoalCard({
   onReview?: (goal: GoalItem) => void;
   onDelete?: (goal: GoalItem) => void;
   onViewAbility?: (goal: GoalItem) => void;
+  onViewReadiness?: (goal: GoalItem) => void;
 }) {
   const status = statusStyles[goal.status];
   const tone = goal.status === 'strong' ? 'bg-emerald-500' : goal.status === 'attention' ? 'bg-amber-500' : 'bg-indigo-500';
   const latestReview = goal.reviewNotes?.[0];
   const readinessLayer = getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description);
+  const visibleTasks = goal.linkedTasks.slice(0, 3);
+  const hiddenTaskCount = Math.max(0, goal.linkedTasks.length - visibleTasks.length);
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-950">{goal.title}</h3>
-            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-indigo-600 ring-1 ring-indigo-100">{goal.level}</span>
-            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', readinessLayer.softTone)}>{readinessLayer.label}</span>
+    <article className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+        <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-slate-950">{goal.title}</h3>
+            <Badge variant="outline" className={cn('shrink-0 rounded-md px-2 py-0 text-[11px]', status.className)}>
+              {status.label}
+            </Badge>
+            <span className="shrink-0 rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">{goal.level}</span>
+            <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1', readinessLayer.softTone)}>{readinessLayer.label}</span>
           </div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">{goal.description}</p>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+            <span className="truncate">{goal.abilityPoint}</span>
+            {goal.goalType ? <span>{goal.goalType}</span> : null}
+            {goal.goalCycle ? <span>{goal.goalCycle}</span> : null}
+            <span>{goal.reviewCadence}</span>
+            <span>{goal.target}</span>
+            {latestReview ? <span>最近复盘 {latestReview.date}</span> : null}
+          </div>
+          <p className="line-clamp-1 text-xs leading-5 text-slate-500">{goal.successCriteria || goal.suggestion || goal.description}</p>
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            {visibleTasks.map((task) => (
+              <span key={task} className="max-w-[160px] truncate rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                {task}
+              </span>
+            ))}
+            {hiddenTaskCount > 0 ? (
+              <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+                +{hiddenTaskCount}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <Badge variant="outline" className={cn('shrink-0 rounded-full', status.className)}>
-          {status.label}
-        </Badge>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_110px] md:items-center">
-        <div>
-          <div className="mb-2 flex items-center justify-between text-xs">
-            <span className="text-slate-500">{goal.current}</span>
-            <span className="font-semibold text-slate-900">{goal.progress}%</span>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="truncate text-slate-500">{goal.current}</span>
+            <span className="font-semibold tabular-nums text-slate-900">{goal.progress}%</span>
           </div>
           <ProgressBar value={goal.progress} tone={tone} />
-        </div>
-        <div className="rounded-lg bg-white px-3 py-2 text-xs">
-          <p className="text-slate-500">目标</p>
-          <p className="mt-1 font-semibold text-slate-900">{goal.target}</p>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => onEdit?.(goal)} disabled={!onEdit} className="h-7 rounded-md bg-white px-2 text-xs">
+              编辑
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onReview?.(goal)} disabled={!onReview} className="h-7 rounded-md bg-white px-2 text-xs">
+              复盘
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onManageTasks?.(goal)} disabled={!onManageTasks} className="h-7 rounded-md bg-white px-2 text-xs">
+              任务
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onViewReadiness?.(goal)} disabled={!onViewReadiness} className="h-7 rounded-md bg-white px-2 text-xs">
+              准备
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onViewAbility?.(goal)} disabled={!onViewAbility} className="h-7 w-7 rounded-md text-slate-500">
+              <Target className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onDelete?.(goal)} disabled={!onDelete} className="h-7 w-7 rounded-md text-red-600 hover:text-red-700">
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-lg bg-white p-3 text-xs">
-          <p className="font-semibold text-slate-900">关联能力</p>
-          <p className="mt-1 text-slate-500">{readinessLayer.label} · {goal.abilityPoint}</p>
-        </div>
-        <div className="rounded-lg bg-white p-3 text-xs">
-          <p className="font-semibold text-slate-900">复盘节奏</p>
-          <p className="mt-1 text-slate-500">{goal.reviewCadence}</p>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {goal.linkedTasks.map((task) => (
-          <span key={task} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-100">
-            {task}
-          </span>
-        ))}
-      </div>
-      <div className="mt-4 flex gap-2 rounded-lg bg-white p-3 text-xs leading-5 text-slate-600">
-        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-        <span>{goal.suggestion}</span>
-      </div>
-      {latestReview && (
-        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-slate-600">
-          <p className="font-semibold text-blue-700">最近复盘 · {latestReview.date}</p>
-          <p className="mt-1">{latestReview.summary}</p>
-          {latestReview.adjustment && <p className="mt-1 text-slate-500">调整：{latestReview.adjustment}</p>}
-        </div>
-      )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onEdit?.(goal)}
-          disabled={!onEdit}
-          className="h-8 rounded-lg bg-white text-xs"
-        >
-          <PenLine className="mr-1.5 h-3.5 w-3.5" />
-          编辑
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onReview?.(goal)}
-          disabled={!onReview}
-          className="h-8 rounded-lg bg-white text-xs"
-        >
-          复盘
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onViewAbility?.(goal)}
-          disabled={!onViewAbility}
-          className="h-8 rounded-lg bg-white text-xs"
-        >
-          查看能力点
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onManageTasks?.(goal)}
-          disabled={!onManageTasks}
-          className="h-8 rounded-lg bg-white text-xs"
-        >
-          管理关联任务
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onDelete?.(goal)}
-          disabled={!onDelete}
-          className="h-8 rounded-lg bg-white text-xs text-red-600 hover:text-red-700"
-        >
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          删除
-        </Button>
-      </div>
-    </div>
+    </article>
   );
 }
 
@@ -570,6 +650,7 @@ function GoalSectionCard({
   onReview,
   onDelete,
   onViewAbility,
+  onViewReadiness,
 }: {
   section: GoalSection;
   onManageTasks?: (goal: GoalItem) => void;
@@ -577,21 +658,22 @@ function GoalSectionCard({
   onReview?: (goal: GoalItem) => void;
   onDelete?: (goal: GoalItem) => void;
   onViewAbility?: (goal: GoalItem) => void;
+  onViewReadiness?: (goal: GoalItem) => void;
 }) {
   const Icon = section.icon;
 
   return (
-    <Panel>
-      <div className="mb-4 flex items-center gap-3">
-        <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', section.tone)}>
-          <Icon className="h-5 w-5" />
+    <Panel className="p-4">
+      <div className="mb-3 flex items-center gap-3">
+        <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', section.tone)}>
+          <Icon className="h-4 w-4" />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-slate-950">{section.title}</h2>
-          <p className="mt-1 text-xs text-slate-500">{section.subtitle}</p>
+          <h2 className="text-sm font-semibold text-slate-950">{section.title}</h2>
+          <p className="text-xs text-slate-500">{section.subtitle}</p>
         </div>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {section.items.map((goal) => (
           <GoalCard
             key={goal.id || goal.title}
@@ -601,6 +683,7 @@ function GoalSectionCard({
             onReview={goal.id ? onReview : undefined}
             onDelete={goal.id ? onDelete : undefined}
             onViewAbility={goal.id ? onViewAbility : undefined}
+            onViewReadiness={goal.id ? onViewReadiness : undefined}
           />
         ))}
       </div>
@@ -617,11 +700,11 @@ function GoalStatusSummaryCard({ summary }: { summary: GoalStatusSummary }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-500">真实目标</p>
           <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.total}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-500">已关联任务</p>
           <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.linked}</p>
         </div>
@@ -641,7 +724,7 @@ function GoalStatusSummaryCard({ summary }: { summary: GoalStatusSummary }) {
         );
       })}
       {summary.total === 0 && (
-        <p className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-500">
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-500">
           创建真实目标并关联任务后，这里会显示目标状态分布。历史趋势需要后续按日期保存快照后再启用。
         </p>
       )}
@@ -660,6 +743,7 @@ export default function GoalsPage() {
   const [reviewGoal, setReviewGoal] = useState<GoalItem | null>(null);
   const [reviewForm, setReviewForm] = useState({ summary: '', adjustment: '' });
   const [goalToDelete, setGoalToDelete] = useState<GoalItem | null>(null);
+  const [showCreateAssist, setShowCreateAssist] = useState(false);
   const { data: savedAbilityModel } = useQuery({
     queryKey: ['ability-model'],
     queryFn: getAbilityModel,
@@ -705,27 +789,30 @@ export default function GoalsPage() {
   });
   const abilityOptions = useMemo(() => buildAbilityOptions(savedAbilityModel), [savedAbilityModel]);
   const recommendedGoalTemplates = useMemo(() => goalSections.flatMap(section => section.items), []);
-  const recommendedGoalGroups = useMemo(() => readinessLayers.map((layer) => ({
-    layer,
-    goals: recommendedGoalTemplates.filter((goal) => getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description).id === layer.id),
-  })).filter((group) => group.goals.length > 0), [recommendedGoalTemplates]);
+  const orderedGoals = useMemo(() => {
+    const getPriority = (goal: GoalDraft) => {
+      if (goal.status === 'attention') return 0;
+      if ((goal.linkedTaskIds || []).length === 0) return 1;
+      if (goal.progress === 0) return 2;
+      return 3;
+    };
+    return [...goalDrafts].sort((a, b) => getPriority(a) - getPriority(b) || a.title.localeCompare(b.title, 'zh-Hans-CN'));
+  }, [goalDrafts]);
   const dynamicGoalSections = useMemo<GoalSection[]>(() => (
-    goalDrafts.length > 0
+    orderedGoals.length > 0
       ? [
           {
             title: '当前目标',
-            subtitle: '当前孩子已确认并保存的目标，进度按关联任务打卡自动计算',
+            subtitle: '按需关注、未绑定任务、待推进的顺序排列',
             icon: Target,
             tone: 'bg-blue-50 text-blue-600',
-            items: goalDrafts,
+            items: orderedGoals,
           },
         ]
       : []
-  ), [goalDrafts]);
+  ), [orderedGoals]);
   const allGoals = goalDrafts;
-  const averageProgress = allGoals.length > 0 ? Math.round(allGoals.reduce((sum, goal) => sum + goal.progress, 0) / allGoals.length) : 0;
-  const strongCount = allGoals.filter(goal => goal.status === 'strong').length;
-  const attentionCount = allGoals.filter(goal => goal.status === 'attention').length;
+  const linkedTaskCount = new Set(allGoals.flatMap(goal => goal.linkedTaskIds || [])).size;
   const statusSummary = useMemo<GoalStatusSummary>(() => ({
     total: allGoals.length,
     strong: allGoals.filter(goal => goal.status === 'strong').length,
@@ -733,6 +820,14 @@ export default function GoalsPage() {
     attention: allGoals.filter(goal => goal.status === 'attention').length,
     linked: allGoals.filter(goal => (goal.linkedTaskIds || []).length > 0).length,
   }), [allGoals]);
+  const stableProgressCount = allGoals.filter(goal => goal.status !== 'attention' && goal.progress > 0).length;
+  const stabilityLabel = allGoals.length === 0
+    ? '待建立'
+    : statusSummary.attention > 0
+      ? '需调整'
+      : statusSummary.linked < statusSummary.total
+        ? '待绑定'
+        : '稳定推进';
   const actionSuggestions = useMemo(() => {
     if (allGoals.length === 0) {
       return [
@@ -766,6 +861,12 @@ export default function GoalsPage() {
 
     return suggestions.slice(0, 3);
   }, [allGoals.length, statusSummary]);
+
+  const openBlankGoal = () => {
+    setSelectedAbility(null);
+    setDraftForm(buildBlankGoal());
+    setEditingGoalId(null);
+  };
 
   const openCreateGoal = (option: AbilityOption) => {
     const nextGoal = buildGoalFromAbility(option);
@@ -810,6 +911,15 @@ export default function GoalsPage() {
       point: goal.abilityPoint,
     });
     navigate(`/parent/ability-model?${params.toString()}`);
+  };
+
+  const viewGoalReadiness = (goal: GoalItem) => {
+    const params = new URLSearchParams({
+      goal: goal.title,
+      category: goal.abilityCategory,
+      point: goal.abilityPoint,
+    });
+    navigate(`/parent/growth-dashboard?${params.toString()}`);
   };
 
   const openManageTasks = (goal: GoalItem) => {
@@ -966,7 +1076,7 @@ export default function GoalsPage() {
       <PageToolbar
         left={
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
               <Target className="h-5 w-5" />
             </div>
             <div className="min-w-0">
@@ -991,47 +1101,30 @@ export default function GoalsPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               同步数据
             </Button>
-            <Button
-              onClick={() => abilityOptions[0] && openCreateGoal(abilityOptions[0])}
-              disabled={isGoalsLoading || saveGoalsMutation.isPending}
-            >
+            <Button onClick={openBlankGoal} disabled={isGoalsLoading || saveGoalsMutation.isPending}>
               <PencilLine className="mr-2 h-4 w-4" />
-              从能力点创建
+              创建目标
             </Button>
           </div>
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-4">
         {[
-          { label: '真实目标', value: allGoals.length, hint: '已保存到当前孩子', icon: Target, tone: 'bg-indigo-50 text-indigo-600' },
-          { label: '综合进度', value: `${averageProgress}%`, hint: '真实目标平均', icon: TrendingUp, tone: 'bg-blue-50 text-blue-600' },
-          { label: '领先目标', value: strongCount, hint: '建议继续强化', icon: Sparkles, tone: 'bg-emerald-50 text-emerald-600' },
-          { label: '需关注目标', value: attentionCount, hint: '需要调整策略', icon: HeartPulse, tone: 'bg-amber-50 text-amber-600' },
-        ].map((item) => {
-          const Icon = item.icon;
-          return (
-            <Panel key={item.label} className="p-4">
-              <div className="flex items-center gap-3">
-                <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', item.tone)}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-950">{item.value}</p>
-                  <p className="mt-1 text-xs text-slate-500">{item.hint}</p>
-                </div>
-              </div>
-            </Panel>
-          );
-        })}
+          { label: '真实目标', value: allGoals.length, hint: '已保存到当前孩子', icon: Target, tone: 'bg-teal-50 text-teal-700' },
+          { label: '已绑定任务', value: linkedTaskCount, hint: `${statusSummary.linked}/${statusSummary.total} 个目标已绑定`, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
+          { label: '需关注目标', value: statusSummary.attention, hint: '需要复盘或调整', icon: HeartPulse, tone: 'bg-amber-50 text-amber-600' },
+          { label: '推进稳定性', value: stabilityLabel, hint: `${stableProgressCount}/${allGoals.length} 个已推进`, icon: ShieldCheck, tone: 'bg-sky-50 text-sky-700' },
+        ].map((item) => (
+          <GoalMetricCard key={item.label} {...item} />
+        ))}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div>
           {isGoalsLoading ? (
-            <Panel className="xl:col-span-2">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-6 text-sm text-slate-500">正在加载目标...</div>
+            <Panel>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">正在加载目标...</div>
             </Panel>
           ) : dynamicGoalSections.length > 0 ? (
             dynamicGoalSections.map((section) => (
@@ -1043,132 +1136,129 @@ export default function GoalsPage() {
                 onReview={openReviewGoal}
                 onDelete={setGoalToDelete}
                 onViewAbility={viewAbilityPoint}
+                onViewReadiness={viewGoalReadiness}
               />
             ))
           ) : (
-            <Panel className="xl:col-span-2">
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+            <Panel>
+              <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                 <Target className="h-10 w-10 text-slate-300" />
                 <h2 className="mt-4 text-base font-semibold text-slate-950">还没有真实目标</h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                  可以从右侧能力点或推荐模板创建目标。创建后目标会保存到当前孩子档案，并按关联任务打卡自动计算进度。
+                  先创建 1-3 个当前阶段最重要的目标，再为目标绑定任务。目标会按关联任务打卡自动计算进度。
                 </p>
-                <Button onClick={() => abilityOptions[0] && openCreateGoal(abilityOptions[0])} className="mt-4">
-                  从能力点创建
+                <Button onClick={openBlankGoal} className="mt-4">
+                  创建目标
                 </Button>
               </div>
             </Panel>
           )}
         </div>
 
-        <div className="space-y-5">
-          <Panel>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-                <Brain className="h-5 w-5" />
+        <div className="space-y-4">
+          <Panel className="p-4">
+            <button
+              type="button"
+              onClick={() => setShowCreateAssist((value) => !value)}
+              className="flex w-full items-center justify-between gap-3 text-left"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+                <Brain className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-slate-950">创建辅助</h2>
+                  <p className="truncate text-xs text-slate-500">从能力点或模板生成目标</p>
+                </div>
               </div>
+              <Badge variant="outline" className="rounded-md bg-white px-2 py-0 text-[11px] text-slate-600">
+                {showCreateAssist ? '收起' : '展开'}
+              </Badge>
+            </button>
+            {showCreateAssist && (
+            <div className="mt-3 space-y-3">
               <div>
-                <h2 className="text-base font-semibold text-slate-950">能力模型承接</h2>
-                <p className="mt-1 text-xs text-slate-500">从能力点生成目标，再关联任务执行</p>
-              </div>
-            </div>
-            <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">能力模型承接</p>
+                <div className="max-h-40 space-y-1.5 overflow-auto pr-1">
               {abilityOptions.slice(0, 12).map((option) => (
                 <button
                   key={`${option.categoryLabel}-${option.point}`}
                   type="button"
                   onClick={() => openCreateGoal(option)}
-                  className="w-full rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left transition hover:border-violet-200 hover:bg-violet-50"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-teal-200 hover:bg-teal-50"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{option.point}</p>
-                      <p className="mt-1 truncate text-xs text-slate-500">{option.categoryLabel}</p>
+                      <p className="truncate text-xs font-semibold text-slate-900">{option.point}</p>
+                      <p className="truncate text-[11px] text-slate-500">{option.categoryLabel}</p>
                     </div>
-                    <Badge variant="outline" className="rounded-full bg-white text-violet-700">创建</Badge>
+                    <Badge variant="outline" className="rounded-md bg-white px-1.5 py-0 text-[11px] text-teal-700">选用</Badge>
                   </div>
                 </button>
               ))}
-            </div>
-          </Panel>
-
-          <Panel>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-950">目标状态分布</h2>
-                <p className="mt-1 text-xs text-slate-500">基于真实目标和近 28 天打卡进度</p>
-              </div>
-              <Badge variant="outline" className="rounded-full bg-indigo-50 text-indigo-700">已接入打卡</Badge>
-            </div>
-            <div className="mt-4">
-              <GoalStatusSummaryCard summary={statusSummary} />
-            </div>
-          </Panel>
-
-          <Panel>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                <Sparkles className="h-5 w-5" />
+                </div>
               </div>
               <div>
-                <h2 className="text-base font-semibold text-slate-950">推荐目标模板</h2>
-                <p className="mt-1 text-xs text-slate-500">模板不进入统计，确认后才成为真实目标</p>
-              </div>
-            </div>
-            <div className="max-h-80 space-y-4 overflow-auto pr-1">
-              {recommendedGoalGroups.map((group) => {
-                const Icon = group.layer.icon;
-                return (
-                  <div key={group.layer.id} className="space-y-2">
-                    <div className="flex items-center gap-2 px-1">
-                      <span className={cn('flex size-7 items-center justify-center rounded-lg ring-1', group.layer.softTone)}>
-                        <Icon className="size-3.5" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-900">{group.layer.label}</p>
-                        <p className="text-[11px] text-slate-500">{group.layer.question}</p>
-                      </div>
-                    </div>
-                    {group.goals.slice(0, 4).map((goal) => (
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">推荐目标模板</p>
+                <div className="max-h-48 space-y-1.5 overflow-auto pr-1">
+                  {recommendedGoalTemplates.slice(0, 12).map((goal) => {
+                    const layer = getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description);
+                    return (
                       <button
                         key={`${goal.abilityCategory}-${goal.title}`}
                         type="button"
                         onClick={() => openCreateGoalFromTemplate(goal)}
-                        className="w-full rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-sky-200 hover:bg-sky-50"
                       >
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">{goal.title}</p>
-                            <p className="mt-1 truncate text-xs text-slate-500">{goal.abilityPoint}</p>
+                            <p className="truncate text-xs font-semibold text-slate-900">{goal.title}</p>
+                            <p className="truncate text-[11px] text-slate-500">{goal.abilityPoint}</p>
                           </div>
-                          <Badge variant="outline" className="shrink-0 rounded-full bg-white text-indigo-700">使用</Badge>
+                          <span className={cn('shrink-0 rounded-md px-1.5 py-0 text-[11px] font-semibold ring-1', layer.softTone)}>
+                            {layer.label}
+                          </span>
                         </div>
                       </button>
-                    ))}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            )}
+          </Panel>
+
+          <Panel className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-950">目标状态分布</h2>
+                <p className="text-xs text-slate-500">近 28 天打卡进度</p>
+              </div>
+              <Badge variant="outline" className="rounded-md bg-teal-50 px-2 py-0 text-[11px] text-teal-700">已接入打卡</Badge>
+            </div>
+            <div className="mt-3">
+              <GoalStatusSummaryCard summary={statusSummary} />
             </div>
           </Panel>
 
-          <Panel>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                <BarChart3 className="h-5 w-5" />
+          <Panel className="p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+                <BarChart3 className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-slate-950">下一步动作</h2>
-                <p className="mt-1 text-xs text-slate-500">根据真实目标状态生成</p>
+                <h2 className="text-sm font-semibold text-slate-950">下一步动作</h2>
+                <p className="text-xs text-slate-500">根据真实目标生成</p>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {actionSuggestions.map(({ title, desc, icon: Icon }) => (
-                <div key={title} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                  <div className="flex gap-3">
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex gap-2.5">
+                    <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{title}</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">{desc}</p>
+                      <p className="text-xs font-semibold text-slate-900">{title}</p>
+                      <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{desc}</p>
                     </div>
                   </div>
                 </div>
@@ -1176,28 +1266,28 @@ export default function GoalsPage() {
             </div>
           </Panel>
 
-          <Panel>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <ShieldCheck className="h-5 w-5" />
+          <Panel className="p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                <ShieldCheck className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-slate-950">数据口径</h2>
-                <p className="mt-1 text-xs text-slate-500">当前版本的目标计算规则</p>
+                <h2 className="text-sm font-semibold text-slate-950">数据口径</h2>
+                <p className="text-xs text-slate-500">目标计算规则</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                <p className="text-sm font-semibold text-slate-900">进度来源</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">只统计目标已关联任务的近 28 天打卡记录；未关联任务的目标不会自动推进。</p>
+            <div className="space-y-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold text-slate-900">进度来源</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">只统计目标已关联任务的近 28 天打卡记录。</p>
               </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                <p className="text-sm font-semibold text-slate-900">完成计分</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">完成、提前、补做按 1 次计入，部分完成按 0.5 次计入，不参与不计入分母。</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold text-slate-900">完成计分</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">完成/提前/补做计 1 次，部分完成计 0.5 次。</p>
               </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                <p className="text-sm font-semibold text-slate-900">后续扩展</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">阅读、运动和报告复盘数据会在后续版本接入目标进度。</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold text-slate-900">后续扩展</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">阅读、运动和报告复盘数据后续接入。</p>
               </div>
             </div>
           </Panel>
@@ -1206,35 +1296,59 @@ export default function GoalsPage() {
       </div>
 
       {draftForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }}>
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative z-10 flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 p-5">
-              <div>
-                <p className="text-xs font-semibold text-violet-600">{selectedAbility?.categoryLabel} · {selectedAbility?.point}</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-950">{editingGoalId ? '编辑目标' : '从能力点创建目标'}</h3>
-                <p className="mt-1 text-sm text-slate-500">{editingGoalId ? '修改目标内容后，会继续保留已关联任务和复盘记录。' : '目标会保存到当前孩子档案，后续可继续关联任务和计划。'}</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }} className="rounded-full">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+        <GoalDialogShell onClose={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }}>
+            <GoalDialogHeader
+              eyebrow={`${selectedAbility?.categoryLabel || '能力模型'} · ${selectedAbility?.point || '目标'}`}
+              title={editingGoalId ? '编辑目标' : '创建目标'}
+              description={editingGoalId ? '修改目标内容后，会继续保留已关联任务和复盘记录。' : '目标会保存到当前孩子档案，后续可继续关联任务和计划。'}
+              onClose={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }}
+            />
             <div className="flex-1 space-y-4 overflow-auto p-5">
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">目标名称</span>
                 <input
                   value={draftForm.title}
                   onChange={(event) => setDraftForm({ ...draftForm, title: event.target.value })}
-                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                 />
               </label>
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">目标类型</span>
+                  <select
+                    value={draftForm.goalType || goalTypeOptions[0]}
+                    onChange={(event) => setDraftForm({ ...draftForm, goalType: event.target.value })}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  >
+                    {goalTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">目标周期</span>
+                  <select
+                    value={draftForm.goalCycle || goalCycleOptions[0]}
+                    onChange={(event) => setDraftForm({ ...draftForm, goalCycle: event.target.value })}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  >
+                    {goalCycleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">关联能力点</span>
+                  <input
+                    value={draftForm.abilityPoint}
+                    onChange={(event) => setDraftForm({ ...draftForm, abilityPoint: event.target.value })}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  />
+                </label>
+              </div>
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">目标描述</span>
                 <textarea
                   value={draftForm.description}
                   onChange={(event) => setDraftForm({ ...draftForm, description: event.target.value })}
                   rows={3}
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                 />
               </label>
               <div className="grid gap-4 md:grid-cols-2">
@@ -1243,7 +1357,7 @@ export default function GoalsPage() {
                   <input
                     value={draftForm.target}
                     onChange={(event) => setDraftForm({ ...draftForm, target: event.target.value })}
-                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                   />
                 </label>
                 <label className="block">
@@ -1251,64 +1365,52 @@ export default function GoalsPage() {
                   <input
                     value={draftForm.reviewCadence}
                     onChange={(event) => setDraftForm({ ...draftForm, reviewCadence: event.target.value })}
-                    className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                   />
                 </label>
               </div>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">完成标准</span>
+                <textarea
+                  value={draftForm.successCriteria || ''}
+                  onChange={(event) => setDraftForm({ ...draftForm, successCriteria: event.target.value })}
+                  rows={2}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                />
+              </label>
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">建议任务</span>
                 <textarea
                   value={draftForm.linkedTasks.join('\n')}
                   onChange={(event) => setDraftForm({ ...draftForm, linkedTasks: event.target.value.split('\n').map(item => item.trim()).filter(Boolean) })}
                   rows={4}
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                 />
               </label>
             </div>
-            <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
-              <Button variant="outline" onClick={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }} className="rounded-xl bg-white">取消</Button>
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+              <Button variant="outline" onClick={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }} className="rounded-lg bg-white">取消</Button>
               <Button onClick={saveDraftGoal} disabled={saveGoalsMutation.isPending}>
                 {saveGoalsMutation.isPending ? '保存中...' : editingGoalId ? '保存修改' : '保存目标'}
               </Button>
             </div>
-          </div>
-        </div>
+        </GoalDialogShell>
       )}
 
       {taskManageGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }}>
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative z-10 flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 p-5">
-              <div>
-                <p className="text-xs font-semibold text-indigo-600">{taskManageGoal.abilityCategory} · {taskManageGoal.abilityPoint}</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-950">关联任务</h3>
-                <p className="mt-1 text-sm text-slate-500">为“{taskManageGoal.title}”选择当前孩子已有任务。</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }} className="rounded-full">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+        <GoalDialogShell onClose={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }} maxWidth="max-w-2xl">
+            <GoalDialogHeader
+              eyebrow={`${taskManageGoal.abilityCategory} · ${taskManageGoal.abilityPoint}`}
+              title="关联任务"
+              description={`为“${taskManageGoal.title}”选择当前孩子已有任务。`}
+              onClose={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }}
+            />
 
             <div className="flex-1 overflow-auto p-5">
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-950">没有合适任务时，可以直接生成</p>
-                  <p className="mt-1 text-xs text-slate-500">会根据目标里的建议任务创建到当前孩子的任务管理中。</p>
-                </div>
-                <Button
-                  onClick={generateTasksForGoal}
-                  disabled={createGoalTasksMutation.isPending || saveGoalsMutation.isPending}
-                  className="shrink-0"
-                >
-                  {createGoalTasksMutation.isPending ? '生成中...' : '生成建议任务'}
-                </Button>
-              </div>
-
               {isTasksLoading ? (
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-500">正在加载任务...</div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">正在加载任务...</div>
               ) : tasks.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
                   <Target className="mx-auto h-8 w-8 text-slate-300" />
                   <p className="mt-3 text-sm font-semibold text-slate-900">当前孩子还没有任务</p>
                   <p className="mt-1 text-xs text-slate-500">可以先到任务管理创建任务，再回到目标页关联。</p>
@@ -1322,8 +1424,8 @@ export default function GoalsPage() {
                       <label
                         key={task.id}
                         className={cn(
-                          'flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition',
-                          checked ? 'border-indigo-200 bg-indigo-50' : 'border-slate-100 bg-slate-50/70 hover:border-indigo-100 hover:bg-indigo-50/40'
+                          'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition',
+                          checked ? 'border-teal-200 bg-teal-50' : 'border-slate-200 bg-slate-50 hover:border-teal-100 hover:bg-teal-50/40'
                         )}
                       >
                         <input
@@ -1336,13 +1438,13 @@ export default function GoalsPage() {
                                 : current.filter(id => id !== task.id)
                             ));
                           }}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-slate-950">{task.name}</p>
                             {isRecommended && (
-                              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">推荐</span>
+                              <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[11px] font-semibold text-teal-700">推荐</span>
                             )}
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
@@ -1357,8 +1459,18 @@ export default function GoalsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 p-5">
-              <p className="text-xs text-slate-500">已选择 {selectedTaskIds.length} 个任务</p>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+              <div>
+                <p className="text-xs text-slate-500">已选择 {selectedTaskIds.length} 个任务</p>
+                <button
+                  type="button"
+                  onClick={generateTasksForGoal}
+                  disabled={createGoalTasksMutation.isPending || saveGoalsMutation.isPending}
+                  className="mt-1 text-xs font-medium text-teal-700 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {createGoalTasksMutation.isPending ? '正在生成建议任务...' : '没有合适任务时生成建议任务'}
+                </button>
+              </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => { setTaskManageGoal(null); setSelectedTaskIds([]); }}>取消</Button>
                 <Button onClick={saveLinkedTasks} disabled={saveGoalsMutation.isPending}>
@@ -1366,24 +1478,17 @@ export default function GoalsPage() {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
+        </GoalDialogShell>
       )}
 
       {reviewGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }}>
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative z-10 flex max-h-[86vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 p-5">
-              <div>
-                <p className="text-xs font-semibold text-blue-600">{reviewGoal.abilityCategory} · {reviewGoal.abilityPoint}</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-950">目标复盘</h3>
-                <p className="mt-1 text-sm text-slate-500">记录“{reviewGoal.title}”的阶段表现和下一步调整。</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }} className="rounded-full">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+        <GoalDialogShell onClose={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }}>
+            <GoalDialogHeader
+              eyebrow={`${reviewGoal.abilityCategory} · ${reviewGoal.abilityPoint}`}
+              title="目标复盘"
+              description={`记录“${reviewGoal.title}”的阶段表现和下一步调整。`}
+              onClose={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }}
+            />
 
             <div className="flex-1 space-y-4 overflow-auto p-5">
               <label className="block">
@@ -1393,7 +1498,7 @@ export default function GoalsPage() {
                   onChange={(event) => setReviewForm({ ...reviewForm, summary: event.target.value })}
                   rows={4}
                   placeholder="例如：本周完成率稳定，但复述质量不够，需要增加口头表达练习。"
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 />
               </label>
               <label className="block">
@@ -1403,16 +1508,16 @@ export default function GoalsPage() {
                   onChange={(event) => setReviewForm({ ...reviewForm, adjustment: event.target.value })}
                   rows={3}
                   placeholder="例如：下周保留每日阅读，把每周一次复述改为两次。"
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 />
               </label>
 
               {reviewGoal.reviewNotes && reviewGoal.reviewNotes.length > 0 && (
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-sm font-semibold text-slate-900">历史复盘</p>
                   <div className="mt-3 space-y-2">
                     {reviewGoal.reviewNotes.slice(0, 5).map((note) => (
-                      <div key={note.id} className="rounded-lg bg-white p-3 text-xs leading-5 text-slate-600">
+                      <div key={note.id} className="rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
                         <p className="font-semibold text-slate-900">{note.date}</p>
                         {note.summary && <p className="mt-1">{note.summary}</p>}
                         {note.adjustment && <p className="mt-1 text-slate-500">调整：{note.adjustment}</p>}
@@ -1423,14 +1528,13 @@ export default function GoalsPage() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
               <Button variant="outline" onClick={() => { setReviewGoal(null); setReviewForm({ summary: '', adjustment: '' }); }}>取消</Button>
               <Button onClick={saveReviewNote} disabled={saveGoalsMutation.isPending}>
                 {saveGoalsMutation.isPending ? '保存中...' : '保存复盘'}
               </Button>
             </div>
-          </div>
-        </div>
+        </GoalDialogShell>
       )}
 
       <AlertDialog open={!!goalToDelete} onOpenChange={(open) => !open && setGoalToDelete(null)}>

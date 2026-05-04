@@ -9,6 +9,7 @@
 - `todo-master.md`：当前唯一总 ToDo。
 - `version-roadmap.md`：当前唯一版本迭代计划。
 - `documentation-guide.md`：文档命名、撰写和归档规范。
+- `ui-comprehensive-upgrade-plan.md`：当前 UI 全面提升总方案与逐页改版策略。
 - `features/feature-1.8-education-stage-model.md`：小学/初中阶段化设计。
 - `features/feature-1.9-readiness-goal-engine.md`：1.9 三层准备度模型与诊断引擎设计方案。
 - `features/feature-reading-data-flow.md`：图书馆和阅读数据闭环。

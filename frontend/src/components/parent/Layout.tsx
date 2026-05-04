@@ -14,6 +14,8 @@ import {
   Menu,
   X,
   ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
   Bell,
   Clock,
   MessageSquare,
@@ -95,6 +97,21 @@ const navGroups = [
 ];
 
 const navItems = navGroups.flatMap((group) => group.items);
+
+const navIconToneMap: Record<string, string> = {
+  '/parent': 'bg-teal-50 text-teal-700',
+  '/parent/plans': 'bg-emerald-50 text-emerald-700',
+  '/parent/tasks': 'bg-sky-50 text-sky-700',
+  '/parent/goals': 'bg-amber-50 text-amber-700',
+  '/parent/ability-model': 'bg-violet-50 text-violet-700',
+  '/parent/growth-dashboard': 'bg-cyan-50 text-cyan-700',
+  '/parent/data-quality': 'bg-orange-50 text-orange-700',
+  '/parent/reports': 'bg-blue-50 text-blue-700',
+  '/parent/achievements': 'bg-rose-50 text-rose-700',
+  '/parent/library': 'bg-indigo-50 text-indigo-700',
+  '/parent/settings/account': 'bg-slate-100 text-slate-700',
+  '/parent/help': 'bg-fuchsia-50 text-fuchsia-700',
+};
 
 type AppNotification = {
   id: number;
@@ -226,6 +243,7 @@ function ChildAvatar({ child, className }: { child: Child; className?: string })
 
 export default function ParentLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout, isAuthenticated, isInitializing } = useAuth();
@@ -281,6 +299,13 @@ export default function ParentLayout() {
     }
   }, [isInitializing, isAuthenticated, user, logout]);
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem('quxueban_parent_sidebar_collapsed');
+    if (stored === '1') {
+      setSidebarCollapsed(true);
+    }
+  }, []);
+
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -307,51 +332,72 @@ export default function ParentLayout() {
     navigate('/login');
   };
 
+  const toggleDesktopSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem('quxueban_parent_sidebar_collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
+
   const closeSidebar = () => setSidebarOpen(false);
   const pageTitle = getPageTitle(location.pathname);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* ==================== Desktop Sidebar ==================== */}
-      <aside className="hidden lg:flex lg:flex-col w-[176px] bg-white border-r border-border flex-shrink-0">
+      <aside
+        className={cn(
+          'hidden lg:flex lg:flex-col bg-white border-r border-border flex-shrink-0 transition-[width] duration-300 ease-out',
+          sidebarCollapsed ? 'w-[82px]' : 'w-[176px]'
+        )}
+      >
         {/* Brand */}
         <div className="border-b border-border px-2.5 py-2.5 flex-shrink-0">
-          <div className="rounded-xl border border-border/70 bg-white px-2 py-2 shadow-sm">
-            <div className="flex items-center gap-2">
+          <div className={cn(
+            'rounded-xl border border-border/70 bg-white shadow-sm',
+            sidebarCollapsed ? 'px-2 py-2' : 'px-2 py-2'
+          )}>
+            <div className={cn('flex items-center', sidebarCollapsed ? 'justify-center' : 'gap-2')}>
               <img src="/logo.png" alt="趣学伴" className="h-7 w-7 rounded-lg object-cover shadow-sm" />
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold tracking-tight text-slate-900">趣学伴</p>
-                <p className="mt-0.5 text-[9px] text-muted-foreground">家庭学习伙伴</p>
-              </div>
+              {!sidebarCollapsed ? (
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold tracking-tight text-slate-900">趣学伴</p>
+                  <p className="mt-0.5 text-[9px] text-muted-foreground">家庭学习伙伴</p>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <ScrollArea className="flex-1 px-2.5 py-1.5">
+        <ScrollArea className={cn('flex-1 pt-4 pb-2.5', sidebarCollapsed ? 'px-2.5' : 'pl-3.5 pr-2.5')}>
           <nav className="space-y-0.5">
             {navItems.map((item) => {
               const isActive = isMenuActive(item.path);
               const Icon = item.icon;
+              const iconTone = navIconToneMap[item.path] || 'bg-slate-100 text-slate-600';
               return (
                 <NavLink
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    'group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all',
+                    'group relative flex items-center rounded-lg px-2 py-1.5 text-[12px] font-medium transition-all duration-200',
                     isActive
                       ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
-                      : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-slate-50 hover:text-foreground hover:translate-x-[1px]',
+                    sidebarCollapsed ? 'justify-center gap-0 px-0 py-2' : 'gap-2'
                   )}
+                  title={sidebarCollapsed ? item.label : undefined}
                 >
                   {isActive ? <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-primary" /> : null}
                   <div className={cn(
-                    'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-colors',
-                    isActive ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
+                    'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md transition-all duration-200',
+                    isActive ? 'bg-white text-primary shadow-sm' : `${iconTone} group-hover:bg-white group-hover:shadow-sm`
                   )}>
                     <Icon className="size-[14px] flex-shrink-0" />
                   </div>
-                  <span>{item.label}</span>
+                  {!sidebarCollapsed ? <span>{item.label}</span> : null}
                 </NavLink>
               );
             })}
@@ -362,7 +408,12 @@ export default function ParentLayout() {
         <div className="border-t border-border p-2.5 flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2 rounded-xl border border-border/70 bg-white px-2 py-2 text-left shadow-sm transition-colors hover:border-primary/20 hover:bg-slate-50">
+              <button
+                className={cn(
+                  'flex w-full rounded-xl border border-border/70 bg-white px-2 py-2 text-left shadow-sm transition-colors hover:border-primary/20 hover:bg-slate-50',
+                  sidebarCollapsed ? 'justify-center' : 'items-center gap-2'
+                )}
+              >
                 <div className="relative flex-shrink-0">
                   <Avatar className="size-9 ring-1 ring-slate-200">
                     <AvatarImage src={user?.avatar} />
@@ -372,18 +423,22 @@ export default function ParentLayout() {
                   </Avatar>
                   <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-semibold tracking-tight text-slate-900">
-                    {user?.name || '家长'}
-                  </p>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-muted-foreground">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <span>家长</span>
-                  </div>
-                </div>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
-                  <ChevronDown className="size-3" />
-                </div>
+                {!sidebarCollapsed ? (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-semibold tracking-tight text-slate-900">
+                        {user?.name || '家长'}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span>家长</span>
+                      </div>
+                    </div>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                      <ChevronDown className="size-3" />
+                    </div>
+                  </>
+                ) : null}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
@@ -411,8 +466,19 @@ export default function ParentLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop Header */}
         <header className="hidden lg:flex items-center justify-between h-[52px] px-6 bg-white border-b border-border flex-shrink-0">
-          <div>
-            <h1 className="text-base font-semibold text-foreground">{pageTitle}</h1>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleDesktopSidebar}
+              className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              aria-label={sidebarCollapsed ? '展开导航' : '折叠导航'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </Button>
+            <div>
+              <h1 className="text-base font-semibold text-foreground">{pageTitle}</h1>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <ChildSwitcherButton

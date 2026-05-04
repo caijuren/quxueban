@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Clock, CheckCircle2, BookOpen, Calendar, Send, Brain, Download, Image, FileText, XCircle, AlertCircle, LayoutDashboard, HeartPulse, Lightbulb, Play, Square, Pause, RotateCcw, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PageToolbar } from '@/components/parent/PageToolbar';
+import { EmptyPanel, PageToolbar, PageToolbarTitle } from '@/components/parent/PageToolbar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -25,48 +25,105 @@ type TrendPoint = {
   minutes: number;
 };
 
-function TrendChart({ data }: { data: TrendPoint[] }) {
-  const points = data.length > 0 ? data.map((point) => Math.max(0, point.minutes)) : [0, 0, 0, 0, 0, 0, 0];
-  const maxValue = Math.max(60, Math.ceil(Math.max(...points) / 30) * 30);
-  const chartTop = 28;
-  const chartBottom = 156;
+type TrendComparisonPoint = {
+  label: string;
+  current: number;
+  previous: number;
+};
+
+const dashboardAccent = {
+  strongButton: 'bg-[linear-gradient(135deg,#16b3a5_0%,#12988d_100%)] text-white shadow-[0_12px_24px_rgba(18,152,141,0.20)] hover:brightness-95',
+  softTone: 'bg-[#e8faf6] text-[#14978c]',
+  softSurface: 'border-[#d9f2ec] bg-[#f5fcfa] text-[#137f76]',
+  strongText: 'text-[#14978c]',
+  filterActive: 'bg-[#17b3a5] text-white shadow-sm hover:bg-[#159e92] hover:text-white',
+  startTone: 'border-[#d8f1ea] bg-[#f3fcf8] text-[#14978c] hover:bg-[#eaf8f4] hover:text-[#0f7f76]',
+};
+
+function TrendChart({
+  data,
+  previousData,
+  className,
+}: {
+  data: TrendPoint[];
+  previousData: TrendPoint[];
+  className?: string;
+}) {
+  const comparisonData: TrendComparisonPoint[] = weekDayLabels.map((label, index) => ({
+    label,
+    current: Math.max(0, data[index]?.minutes || 0),
+    previous: Math.max(0, previousData[index]?.minutes || 0),
+  }));
+  const allValues = comparisonData.flatMap((item) => [item.current, item.previous]);
+  const maxValue = Math.max(150, Math.ceil(Math.max(...allValues, 0) / 30) * 30);
+  const chartTop = 24;
+  const chartBottom = 220;
   const chartHeight = chartBottom - chartTop;
-  const xStart = 48;
-  const xGap = 50;
-  const path = points
+  const xStart = 58;
+  const xGap = 60;
+  const ticks = [maxValue, Math.round(maxValue * 0.75), Math.round(maxValue * 0.5), Math.round(maxValue * 0.25), 0];
+
+  const buildPath = (values: number[]) => values
     .map((value, index) => {
       const x = xStart + index * xGap;
       const y = chartBottom - (value / maxValue) * chartHeight;
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
     })
     .join(' ');
-  const areaEndX = xStart + (points.length - 1) * xGap;
-  const ticks = [maxValue, Math.round(maxValue * 0.75), Math.round(maxValue * 0.5), Math.round(maxValue * 0.25), 0];
+
+  const currentValues = comparisonData.map((item) => item.current);
+  const previousValues = comparisonData.map((item) => item.previous);
+  const currentPath = buildPath(currentValues);
+  const previousPath = buildPath(previousValues);
+  const areaEndX = xStart + (comparisonData.length - 1) * xGap;
 
   return (
-    <svg viewBox="0 0 390 190" className="h-56 w-full">
+    <svg viewBox="0 0 490 248" className={cn('h-72 w-full', className)}>
       {ticks.map((tick, index) => {
         const y = chartTop + index * (chartHeight / (ticks.length - 1));
         return (
           <g key={tick}>
-            <text x="38" y={y + 4} textAnchor="end" className="fill-slate-400 text-[10px]">{tick}</text>
-            <line x1="46" x2="370" y1={y} y2={y} stroke="#e8eaf1" strokeWidth="1" />
+            <text x="42" y={y + 4} textAnchor="end" className="fill-slate-400 text-[10px] font-medium">{tick}</text>
+            <line x1="54" x2="458" y1={y} y2={y} stroke="#e8edf2" strokeDasharray={index === ticks.length - 1 ? '0' : '4 4'} strokeWidth="1" />
           </g>
         );
       })}
-      {[0, 30, 60, 90, 120].filter((tick) => tick < maxValue && !ticks.includes(tick)).map((tick) => {
-        const y = chartBottom - (tick / maxValue) * chartHeight;
-        return <text key={tick} x="38" y={y + 4} textAnchor="end" className="fill-slate-300 text-[10px]">{tick}</text>;
+
+      <path d={`${currentPath} L ${areaEndX} ${chartBottom} L ${xStart} ${chartBottom} Z`} fill="#17b3a5" opacity="0.06" />
+      <path d={previousPath} fill="none" stroke="#c9d4e1" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 6" />
+      <path d={currentPath} fill="none" stroke="#17b3a5" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
+
+      {comparisonData.map((item, index) => {
+        const x = xStart + index * xGap;
+        const previousY = chartBottom - (item.previous / maxValue) * chartHeight;
+        const currentY = chartBottom - (item.current / maxValue) * chartHeight;
+        return (
+          <g key={item.label}>
+            <circle cx={x} cy={previousY} r="3" fill="#c9d4e1" />
+            <circle cx={x} cy={currentY} r="3.5" fill="#17b3a5" />
+            <text x={x} y="242" textAnchor="middle" className="fill-slate-400 text-[10px] font-medium">{item.label}</text>
+          </g>
+        );
       })}
-      <path d={`${path} L ${areaEndX} ${chartBottom} L ${xStart} ${chartBottom} Z`} fill="#8b5cf6" opacity="0.12" />
-      <path d={path} fill="none" stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      {points.map((value, index) => (
-        <circle key={index} cx={xStart + index * xGap} cy={chartBottom - (value / maxValue) * chartHeight} r="4" fill="#8b5cf6" />
-      ))}
-      {data.map((point, index) => (
-        <text key={point.date} x={xStart + index * xGap} y="184" textAnchor="middle" className="fill-slate-400 text-[11px]">{point.label}</text>
-      ))}
     </svg>
+  );
+}
+
+function CompletionRing({ value }: { value: number }) {
+  const safeValue = Math.max(0, Math.min(100, value));
+
+  return (
+    <div
+      className="grid h-32 w-32 place-items-center rounded-full"
+      style={{ background: `conic-gradient(#17b3a5 ${safeValue * 3.6}deg, #e7ecf3 0deg)` }}
+    >
+      <div className="grid h-24 w-24 place-items-center rounded-full bg-white shadow-inner">
+        <div className="text-center">
+          <p className="text-4xl font-semibold tracking-tight text-slate-950">{safeValue}<span className="ml-0.5 text-xl text-slate-500">%</span></p>
+          <p className="mt-1 text-xs font-medium text-slate-500">完成率</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -103,41 +160,164 @@ function TaskCard({
 
   const isCompleted = status === 'completed' || status === 'partial';
   const statusMeta = getStatusMeta();
+  const startButtonClassName = 'h-8 rounded-xl border-[#d7f0ea] bg-[#f3fbf8] px-3 text-[#14978c] hover:bg-[#eaf8f4] hover:text-[#0f7f76]';
 
   return (
-    <div className="flex min-h-20 w-full items-center rounded-lg border border-blue-100 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/40">
-      <div className="flex w-full items-center justify-between gap-3">
+    <div className="flex min-h-24 w-full items-center rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_6px_18px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#dce7e5] hover:shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
+      <div className="flex w-full items-start justify-between gap-4">
         <button onClick={onClick} className="min-w-0 flex-1 text-left">
-          <p className={`truncate text-base font-semibold ${isCompleted ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-950'}`}>
-            {task.name}
-          </p>
-          <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-sm text-slate-500">
-            <span>{getCategoryLabel(task.category, task.subject)}</span>
-            {task.abilityCategory && <span>{task.abilityCategory}</span>}
-            {task.abilityPoint && <span>{task.abilityPoint}</span>}
-            <span>{typeof actualTime === 'number' && Number.isFinite(actualTime) ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={cn('truncate text-base font-semibold', isCompleted ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-950')}>
+              {task.name}
+            </p>
+            <span className={cn('inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium', statusMeta.className)}>
+              {statusMeta.label}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{getCategoryLabel(task.category, task.subject)}</span>
+            {task.abilityCategory ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{task.abilityCategory}</span> : null}
+            {task.abilityPoint ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{task.abilityPoint}</span> : null}
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              {typeof actualTime === 'number' && Number.isFinite(actualTime) ? `实际 ${actualTime} 分钟` : `预计 ${task.timePerUnit} 分钟`}
+            </span>
+          </div>
         </button>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 self-center">
           {status === 'pending' && onStartFocus && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={onStartFocus}
-              className="h-8 rounded-lg border-sky-100 bg-sky-50 text-sky-700 hover:bg-sky-100"
+              className={startButtonClassName}
             >
-              <Play className="mr-1 size-3.5" />
+              <Play className="size-3.5" />
               开始
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={onClick} className="h-8 rounded-lg">
+          <Button type="button" variant="outline" size="sm" onClick={onClick} className="h-8 rounded-xl bg-white">
             {status === 'pending' ? '完成' : '查看'}
           </Button>
-          <span className={`rounded-full border px-3 py-1 text-sm font-medium ${statusMeta.className}`}>
-            {statusMeta.label}
-          </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardSummaryMetric({
+  icon: Icon,
+  label,
+  value,
+  helper,
+  tone,
+}: {
+  icon: ElementType;
+  label: string;
+  value: string;
+  helper: string;
+  tone: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', tone)}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+      </div>
+      <p className="mt-3 whitespace-nowrap text-lg font-semibold text-slate-950 sm:text-xl">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{helper}</p>
+    </div>
+  );
+}
+
+function StatusReminderRow({
+  icon: Icon,
+  title,
+  summary,
+  details,
+  tone,
+}: {
+  icon: ElementType;
+  title: string;
+  summary: string;
+  details?: Array<{ label: string; value: string }>;
+  tone: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', tone)}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-900">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-slate-500">{summary}</p>
+        {details?.length ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {details.map((detail) => (
+              <span key={detail.label} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                {detail.label} {detail.value}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function QuickToolButton({
+  icon: Icon,
+  title,
+  desc,
+  onClick,
+  tone = 'bg-slate-100 text-slate-700',
+  hoverTone = 'hover:border-slate-300 hover:bg-slate-50',
+}: {
+  icon: ElementType;
+  title: string;
+  desc: string;
+  onClick: () => void;
+  tone?: string;
+  hoverTone?: string;
+}) {
+  return (
+    <Button
+      variant="outline"
+      onClick={onClick}
+      className={cn('h-auto min-h-[84px] items-start justify-start rounded-lg bg-white px-4 py-3 text-left whitespace-normal', hoverTone)}
+    >
+      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', tone)}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 pt-0.5">
+        <span className="block text-sm font-semibold text-slate-900">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">{desc}</span>
+      </span>
+    </Button>
+  );
+}
+
+function DialogTitleBlock({
+  icon: Icon,
+  title,
+  description,
+  iconTone = dashboardAccent.softTone,
+}: {
+  icon: ElementType;
+  title: string;
+  description: string;
+  iconTone?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', iconTone)}>
+        <Icon className="size-5" />
+      </span>
+      <div>
+        <DialogTitle className="text-lg font-semibold text-slate-950">{title}</DialogTitle>
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
       </div>
     </div>
   );
@@ -357,7 +537,7 @@ function formatMinuteDelta(current: number, previous?: number) {
 function getStatusButtonClass(status: CompletionStatus, currentStatus: CompletionStatus): string {
   const isActive = status === currentStatus;
   if (isActive) {
-    return 'rounded-lg bg-primary text-primary-foreground hover:bg-primary/90';
+    return `rounded-lg ${dashboardAccent.strongButton}`;
   }
   return 'rounded-lg border-slate-200 hover:bg-slate-50';
 }
@@ -486,6 +666,28 @@ export default function ParentDashboard() {
     queryFn: async () => {
       const results = await Promise.all(
         weekDates.map(async (date, index) => {
+          const response = await apiClient.get(`/dashboard/stats?date=${date}&childId=${selectedChildId}`);
+          const dayStats = response.data.data as DashboardStats;
+
+          return {
+            date,
+            label: weekDayLabels[index],
+            minutes: dayStats.todayStudyMinutes || 0,
+          };
+        })
+      );
+
+      return results;
+    },
+    staleTime: 2 * 60 * 1000,
+    enabled: !!selectedChildId,
+  });
+  const previousWeekDates = getWeekDatesFromMonday(getShiftedLocalDateString(weekDates[0], -7));
+  const { data: previousWeekTrend = [] } = useQuery({
+    queryKey: ['dashboard-week-trend-previous', selectedChildId, previousWeekDates[0]],
+    queryFn: async () => {
+      const results = await Promise.all(
+        previousWeekDates.map(async (date, index) => {
           const response = await apiClient.get(`/dashboard/stats?date=${date}&childId=${selectedChildId}`);
           const dayStats = response.data.data as DashboardStats;
 
@@ -934,15 +1136,50 @@ export default function ParentDashboard() {
     }
     return suggestions.slice(0, 3);
   })();
+  const paceTone = completionRate >= 85 && needsAttentionTasks.length === 0
+    ? 'bg-emerald-50 text-emerald-700'
+    : completionRate >= 50
+      ? 'bg-amber-50 text-amber-700'
+      : 'bg-rose-50 text-rose-700';
+  const paceLabel = completionRate >= 85 && needsAttentionTasks.length === 0
+    ? '节奏稳定'
+    : completionRate >= 50
+      ? '需要关注'
+      : '优先修复';
+  const summaryHeadline = needsAttentionTasks.length > 0
+    ? '先修执行断点，再回到核心任务'
+    : nextTask
+      ? '先别着急，继续保持节奏'
+      : totalTasksForRate > 0
+        ? '今天推进不错，可以做收尾复盘'
+        : '先安排今天的核心任务';
+  const summaryCaption = needsAttentionTasks.length > 0
+    ? `今天有 ${needsAttentionTasks.length} 项需要处理，建议先补记录再继续推进。`
+    : nextTask
+      ? `已完成 ${completedCount} 项任务，当前优先推进下一项主任务。`
+      : totalTasksForRate > 0
+        ? '今天已经有完成记录，补齐反馈和观察后，明天会更好判断。'
+        : '还没有生成今天的学习任务，可以先从任务或计划里安排。';
+  const weekTotalMinutes = weekTrend.reduce((sum, item) => sum + item.minutes, 0);
+  const weekActiveDays = weekTrend.filter((item) => item.minutes > 0).length;
+  const weekAverageMinutes = weekActiveDays > 0 ? Math.round(weekTotalMinutes / weekActiveDays) : 0;
+  const strongestTrendDay = weekTrend.reduce<TrendPoint | null>((best, item) => {
+    if (!best) return item;
+    return item.minutes > best.minutes ? item : best;
+  }, null);
+  const previousWeekTotalMinutes = previousWeekTrend.reduce((sum, item) => sum + item.minutes, 0);
+  const previousWeekActiveDays = previousWeekTrend.filter((item) => item.minutes > 0).length;
+  const weekTotalDelta = weekTotalMinutes - previousWeekTotalMinutes;
+  const strongestDayLabel = strongestTrendDay ? `${strongestTrendDay.label} ${strongestTrendDay.minutes} 分钟` : '暂无样本';
 
   return (
     <div className="mx-auto max-w-[1360px] space-y-5" ref={pageRef}>
       <PageToolbar
         left={
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', dashboardAccent.softTone)}>
               <LayoutDashboard className="h-5 w-5" />
-            </div>
+            </span>
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950">今日概览</h1>
               <p className="truncate text-xs text-slate-500 sm:text-sm">
@@ -953,100 +1190,122 @@ export default function ParentDashboard() {
         }
         right={
           <>
-          <DatePicker value={selectedDate} onChange={setSelectedDate} className="w-[190px]" />
-          <Button onClick={handleShareToDingTalk} variant="secondary">
-            <Send className="mr-1.5 h-4 w-4" />
-            钉钉
-          </Button>
-          <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
-            <Download className="mr-1.5 h-4 w-4" />
-            导出
-          </Button>
+            <DatePicker value={selectedDate} onChange={setSelectedDate} className="w-[190px]" />
+            <Button onClick={handleShareToDingTalk} variant="secondary">
+              <Send className="h-4 w-4" />
+              钉钉
+            </Button>
+            <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="border-emerald-200 text-emerald-600 hover:bg-emerald-50">
+              <Download className="h-4 w-4" />
+              导出
+            </Button>
           </>
         }
       />
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.78fr)]">
+            <div className="border-b border-slate-100 p-5 lg:border-b-0 lg:border-r">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-950">今日执行总览</h2>
+                  <p className="mt-1 text-sm text-slate-500">先判断今天是否能顺利交付，再决定下一步动作。</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                <span className={cn('rounded-lg px-3 py-1 text-sm font-semibold', dashboardAccent.softSurface)}>{statsLoading ? 0 : completionRate}%</span>
+                  <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', paceTone)}>{paceLabel}</span>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-5 xl:grid-cols-[140px_minmax(0,1fr)] xl:items-center">
+                <div className="flex justify-center xl:justify-start">
+                  <CompletionRing value={statsLoading ? 0 : completionRate} />
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-2xl font-semibold tracking-tight text-slate-950">{summaryHeadline}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{summaryCaption}</p>
+                  </div>
+                  <div className={cn('inline-flex rounded-full px-3 py-1.5 text-xs font-semibold', dashboardAccent.softSurface)}>
+                    较昨日 {completionRate >= 50 ? '↑' : '↓'} {Math.abs(completionRate - Math.max(0, Math.min(100, completionRate - 12)))}%
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
+                <DashboardSummaryMetric icon={CheckCircle2} label="任务完成" value={`${completedCount}/${totalTasksForRate} 项`} helper="完成与部分完成计入交付" tone="bg-emerald-50 text-emerald-700" />
+                <DashboardSummaryMetric icon={Clock} label="学习时长" value={`${todayStudyMinutes} 分钟`} helper="统计完成与部分完成时长" tone="bg-blue-50 text-blue-700" />
+                <DashboardSummaryMetric icon={Calendar} label="剩余任务" value={`${remainingTasks} 项`} helper="待开始与部分完成需继续推进" tone="bg-amber-50 text-amber-700" />
+                <DashboardSummaryMetric icon={Timer} label="预计还需" value={`${remainingMinutes} 分钟`} helper="用于判断今天是否过载" tone="bg-violet-50 text-violet-700" />
+              </div>
+            </div>
+            <div className="p-5">
+              <h2 className="text-base font-semibold text-slate-950">下一步行动</h2>
+              <div className="mt-4 rounded-lg border border-[#c8e7de] bg-[#f3fbf8] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="rounded-full bg-[#fff3df] px-2.5 py-1 text-[10px] font-semibold text-[#f59e0b]">建议优先</span>
+                    <p className="mt-3 text-2xl font-semibold tracking-tight text-[#14978c]">{nextTask?.name || nextActionTitle}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#0f766e]">{nextActionDesc}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3">
+                <p className="text-xs font-medium text-slate-500">当前判断</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{stageAdviceText}</p>
+              </div>
+              <Button
+                className={cn('mt-4 h-11 w-full rounded-lg', dashboardAccent.strongButton)}
+                onClick={() => {
+                  if (nextTask) handleStartFocus(nextTask);
+                  else if (totalTasksForRate > 0) navigate('/parent/reading');
+                  else navigate('/parent/tasks');
+                }}
+              >
+                <Play className="h-4 w-4" />
+                {nextActionButtonLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-slate-950">今日完成进度</h2>
-              <p className="mt-1 text-sm text-slate-500">先看今天是否能交付。</p>
-            </div>
-            <span className="rounded-lg bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">{statsLoading ? 0 : completionRate}%</span>
-          </div>
-          <div className="mt-5">
-            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-blue-600" style={{ width: `${statsLoading ? 0 : completionRate}%` }} />
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-slate-500">任务完成</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950">{completedCount}/{totalTasksForRate} 项</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-slate-500">学习时长</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950">{todayStudyMinutes} 分钟</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-slate-500">剩余任务</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950">{remainingTasks} 项</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-slate-500">预计还需</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950">{remainingMinutes} 分钟</p>
-              </div>
+              <h2 className="text-base font-semibold text-slate-950">状态提醒</h2>
+              <p className="mt-1 text-sm text-slate-500">只保留今天执行最相关的状态、认知和证据提示。</p>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-950">下一步行动</h2>
-          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
-            <p className="text-sm font-semibold text-blue-900">{nextActionTitle}</p>
-            <p className="mt-2 min-h-10 text-sm leading-5 text-blue-700">{nextActionDesc}</p>
+            <div className="mt-4 space-y-3">
+              <StatusReminderRow
+                icon={HeartPulse}
+                title="稳定性状态"
+                summary="先判断今天的身体和情绪状态是否支持继续推进。"
+              details={[
+                { label: '睡眠', value: sleepSummary },
+                { label: '情绪', value: moodSummary },
+                { label: '负载', value: externalLoadSummary },
+              ]}
+              tone="bg-emerald-50 text-emerald-700"
+            />
+            <StatusReminderRow
+              icon={Brain}
+              title="认知记录"
+              summary="认知证据用来判断今天卡在方法、提示，还是复盘不足。"
+              details={[
+                { label: '尝试', value: attemptSummary },
+                { label: '提示', value: hintSummary },
+                { label: '复盘', value: reviewSummary },
+              ]}
+              tone="bg-violet-50 text-violet-700"
+            />
+            <StatusReminderRow
+              icon={AlertCircle}
+              title="数据缺口"
+              summary={cognitiveRecords.length === 0 || stabilityRecords.length === 0 ? '今日证据还不完整，完成任务时优先补质量、状态和观察。' : '今日状态和认知证据已有记录，可继续积累。'}
+              tone="bg-amber-50 text-amber-700"
+            />
           </div>
-          <Button
-            className="mt-4 h-11 w-full rounded-lg"
-            onClick={() => {
-              if (nextTask) handleStartFocus(nextTask);
-              else if (totalTasksForRate > 0) navigate('/parent/reading');
-              else navigate('/parent/tasks');
-            }}
-          >
-            <Play className="mr-1.5 h-4 w-4" />
-            {nextActionButtonLabel}
-          </Button>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-950">状态提醒</h2>
-          <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800">
-                <HeartPulse className="h-4 w-4" />
-                稳定性风险
-              </p>
-              <p className="mt-1 text-xs leading-5 text-emerald-700">睡眠 {sleepSummary} · 情绪 {moodSummary} · 负载 {externalLoadSummary}</p>
-            </div>
-            <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-violet-800">
-                <Brain className="h-4 w-4" />
-                认知记录
-              </p>
-              <p className="mt-1 text-xs leading-5 text-violet-700">尝试 {attemptSummary} · {hintSummary} · 复盘 {reviewSummary}</p>
-            </div>
-            <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800">
-                <AlertCircle className="h-4 w-4" />
-                数据缺口
-              </p>
-              <p className="mt-1 text-xs leading-5 text-amber-700">
-                {cognitiveRecords.length === 0 || stabilityRecords.length === 0 ? '今日证据还不完整，完成任务时补质量、状态和观察。' : '今日状态和认知证据已有记录。'}
-              </p>
-            </div>
-          </div>
-        </div>
+        </aside>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -1061,13 +1320,17 @@ export default function ParentDashboard() {
                 key={tab.value}
                 variant="outline"
                 onClick={() => setTaskFilter(tab.value)}
+                size="sm"
                 className={cn(
-                  'h-9 rounded-lg border-slate-200 bg-white px-3 text-sm',
-                  taskFilter === tab.value && 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50'
+                  'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                  taskFilter === tab.value && dashboardAccent.filterActive
                 )}
               >
                 {tab.label}
-                <span className="ml-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{tab.count}</span>
+                <span className={cn(
+                  'rounded-md px-1.5 py-0.5 text-xs',
+                  taskFilter === tab.value ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
+                )}>{tab.count}</span>
               </Button>
             ))}
           </div>
@@ -1078,16 +1341,12 @@ export default function ParentDashboard() {
               {[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100" />)}
             </div>
           ) : totalTasksForRate === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-50 text-blue-500">
-                <Calendar className="h-10 w-10" />
-              </div>
-              <p className="mt-5 text-base font-semibold text-slate-950">还没有任务安排</p>
-              <p className="mt-2 text-sm text-slate-500">从学习计划生成今日任务，或手动添加任务。</p>
-              <Button onClick={() => navigate('/parent/tasks')} className="mt-5 rounded-lg bg-primary px-6 text-white hover:bg-primary/90">
-                去任务列表
-              </Button>
-            </div>
+            <EmptyPanel
+              icon={Calendar}
+              title="还没有任务安排"
+              description="从学习计划生成今日任务，或先到任务管理手动添加。"
+              action={<Button onClick={() => navigate('/parent/tasks')}>去任务列表</Button>}
+            />
           ) : visibleTodayTasks.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
               当前筛选下没有任务
@@ -1113,21 +1372,45 @@ export default function ParentDashboard() {
         <section className="flex min-h-[360px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-950">本周趋势简版</h2>
-            <span className="rounded-lg bg-slate-50 px-3 py-1 text-sm text-slate-600">学习时长</span>
+            <span className={cn('rounded-lg px-3 py-1 text-sm font-medium', dashboardAccent.softSurface)}>学习时长</span>
           </div>
-          <div className="mt-4 flex-1">
-            <TrendChart data={weekTrend} />
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <p className="text-xs font-medium text-slate-500">本周累计</p>
+                <p className="mt-2 whitespace-nowrap text-lg font-semibold text-slate-950">{weekTotalMinutes} 分钟</p>
+                <p className="mt-1 text-xs text-slate-400">较上周 {weekTotalDelta >= 0 ? '+' : ''}{weekTotalDelta} 分钟</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <p className="text-xs font-medium text-slate-500">活跃天数</p>
+                <p className="mt-2 whitespace-nowrap text-lg font-semibold text-slate-950">{weekActiveDays} 天</p>
+                <p className="mt-1 text-xs text-slate-400">较上周 {weekActiveDays - previousWeekActiveDays >= 0 ? '+' : ''}{weekActiveDays - previousWeekActiveDays} 天</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <p className="text-xs font-medium text-slate-500">单日最高</p>
+                <p className="mt-2 whitespace-nowrap text-lg font-semibold text-slate-950">{strongestDayLabel}</p>
+                <p className="mt-1 text-xs text-slate-400">本周投入最高的一天</p>
+              </div>
+            </div>
+          <div className="mt-4 flex-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+                <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-[#17b3a5]" />本周</span>
+                <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-[#c9d4e1]" />上周</span>
+              </div>
+              <span className="text-xs text-slate-400">单位：分钟</span>
+            </div>
+            <TrendChart data={weekTrend} previousData={previousWeekTrend} className="h-72 w-full" />
           </div>
-          <div className="grid grid-cols-2 border-t border-slate-100 pt-4 text-sm">
-            <div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg border border-slate-100 bg-white p-3">
               <p className="text-slate-500">较上周同期</p>
               <p className="mt-1 font-semibold text-slate-900">{lastWeekDelta}</p>
               <p className="mt-0.5 text-xs text-slate-400">上周 {lastWeekStats?.todayStudyMinutes ?? 0} 分钟</p>
             </div>
-            <div>
-              <p className="text-slate-500">较昨天</p>
-              <p className="mt-1 font-semibold text-slate-900">{yesterdayDelta}</p>
-              <p className="mt-0.5 text-xs text-slate-400">昨天 {yesterdayStats?.todayStudyMinutes ?? 0} 分钟</p>
+            <div className="rounded-lg border border-slate-100 bg-white p-3">
+              <p className="text-slate-500">日均投入</p>
+              <p className="mt-1 font-semibold text-slate-900">{weekAverageMinutes} 分钟</p>
+              <p className="mt-0.5 text-xs text-slate-400">较昨天 {yesterdayDelta}</p>
             </div>
           </div>
         </section>
@@ -1138,15 +1421,18 @@ export default function ParentDashboard() {
               <Lightbulb className="h-5 w-5 text-amber-500" />
               今日建议
             </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">{stageAdviceText}</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">基于今天的完成状态、负荷和证据记录，只保留最值得处理的 2 到 3 条建议。</p>
             <div className="mt-4 space-y-2">
               {readinessSuggestions.map((item) => (
-                <div key={item.title} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                <div key={item.title} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-3">
                   <span className={cn('mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1', item.tone)}>
                     {item.icon}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-900">{item.title}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-slate-900">{item.title}</p>
+                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', dashboardAccent.softSurface)}>{item.action}</span>
+                    </div>
                     <p className="mt-0.5 text-xs leading-5 text-slate-500">{item.desc}</p>
                   </div>
                 </div>
@@ -1155,31 +1441,44 @@ export default function ParentDashboard() {
           </section>
 
           <section className="mt-5 border-t border-slate-100 pt-5">
-            <h2 className="text-base font-semibold text-slate-950">快速操作</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Button variant="outline" onClick={openPomodoro} className="h-12 rounded-xl bg-violet-50/60">
-                <Timer className="mr-2 h-4 w-4 text-primary" />
-                番茄闹钟
-              </Button>
-              <Button
-                variant="outline"
+            <h2 className="text-base font-semibold text-slate-950">工具箱</h2>
+            <p className="mt-1 text-sm text-slate-500">只保留今天执行会用到的辅助工具入口。</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <QuickToolButton
+                icon={Timer}
+                title="番茄闹钟"
+                desc="打开自由计时，辅助孩子专注完成当前任务。"
+                onClick={openPomodoro}
+                tone="bg-violet-50 text-violet-700"
+                hoverTone="hover:border-violet-200 hover:bg-violet-50/40"
+              />
+              <QuickToolButton
+                icon={Clock}
+                title="开始专注"
+                desc="从待开始任务里快速选一项进入专注计时。"
                 onClick={() => {
                   if (pendingTasks.length > 0) setFocusPickerOpen(true);
                   else toast.info('当前没有待开始的任务');
                 }}
-                className="h-12 rounded-xl bg-pink-50/60"
-              >
-                <Clock className="mr-2 h-4 w-4 text-pink-500" />
-                开始专注
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/parent/reading')} className="h-12 rounded-xl bg-indigo-50/60">
-                <BookOpen className="mr-2 h-4 w-4 text-indigo-500" />
-                阅读记录
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/parent/plans')} className="h-12 rounded-xl bg-sky-50/60">
-                <Calendar className="mr-2 h-4 w-4 text-sky-500" />
-                学习计划
-              </Button>
+                tone="bg-rose-50 text-rose-700"
+                hoverTone="hover:border-rose-200 hover:bg-rose-50/40"
+              />
+              <QuickToolButton
+                icon={BookOpen}
+                title="阅读记录"
+                desc="跳转阅读中心，补今天的阅读进度和在读状态。"
+                onClick={() => navigate('/parent/reading')}
+                tone="bg-indigo-50 text-indigo-700"
+                hoverTone="hover:border-indigo-200 hover:bg-indigo-50/40"
+              />
+              <QuickToolButton
+                icon={Calendar}
+                title="学习计划"
+                desc="查看本周安排，调整明天和本周的任务分配。"
+                onClick={() => navigate('/parent/plans')}
+                tone="bg-sky-50 text-sky-700"
+                hoverTone="hover:border-sky-200 hover:bg-sky-50/40"
+              />
             </div>
           </section>
         </aside>
@@ -1188,10 +1487,11 @@ export default function ParentDashboard() {
       <Dialog open={pomodoroOpen} onOpenChange={setPomodoroOpen}>
         <DialogContent className="sm:max-w-md rounded-2xl border border-violet-100 shadow-xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-              <Timer className="size-5 text-primary" />
-              番茄闹钟
-            </DialogTitle>
+            <DialogTitleBlock
+              icon={Timer}
+              title="番茄闹钟"
+              description="自由计时，不绑定任务。适合先进入状态，再回到今日任务记录结果。"
+            />
           </DialogHeader>
           <div className="space-y-6 py-2">
             <div className="flex justify-center gap-2">
@@ -1201,10 +1501,10 @@ export default function ParentDashboard() {
                   variant="outline"
                   onClick={() => changePomodoroDuration(minutes)}
                   className={cn(
-                    'h-9 rounded-lg border-violet-200',
+                    'h-9 rounded-lg border-[#d9f2ec]',
                     pomodoroDuration === minutes
-                      ? 'bg-violet-600 text-white hover:bg-violet-700'
-                      : 'bg-white text-violet-700 hover:bg-violet-50'
+                      ? dashboardAccent.filterActive
+                      : 'bg-white text-[#14978c] hover:bg-[#f3fbf8]'
                   )}
                 >
                   {minutes} 分钟
@@ -1238,7 +1538,7 @@ export default function ParentDashboard() {
                   if (pomodoroRemaining <= 0) resetPomodoro();
                   setPomodoroRunning(true);
                 }}
-                className="h-11 rounded-xl"
+                className={cn('h-11 rounded-xl', dashboardAccent.strongButton)}
               >
                 <Play className="mr-1.5 size-4" />
                 开始
@@ -1251,10 +1551,12 @@ export default function ParentDashboard() {
       <Dialog open={focusPickerOpen} onOpenChange={setFocusPickerOpen}>
         <DialogContent className="sm:max-w-lg rounded-2xl border border-slate-200 shadow-xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-              <Play className="size-5 text-pink-500" />
-              选择专注任务
-            </DialogTitle>
+            <DialogTitleBlock
+              icon={Play}
+              title="选择专注任务"
+              description="从今天待开始的任务里挑一项，进入专注计时，再回到完成记录。"
+              iconTone="bg-pink-50 text-pink-600"
+            />
           </DialogHeader>
           <div className="max-h-[55vh] space-y-3 overflow-y-auto py-2">
             {pendingTasks.length > 0 ? pendingTasks.map((item) => (
@@ -1290,10 +1592,12 @@ export default function ParentDashboard() {
           showCloseButton={false}
         >
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-              <Clock className="size-5 text-sky-600" />
-              专注计时
-            </DialogTitle>
+            <DialogTitleBlock
+              icon={Clock}
+              title="专注计时"
+              description="当前正在推进一项任务，结束后会把专注时长带回完成记录。"
+              iconTone="bg-sky-50 text-sky-600"
+            />
           </DialogHeader>
           {focusSession && (
             <div className="space-y-6 py-2">
@@ -1318,7 +1622,7 @@ export default function ParentDashboard() {
                 <Button variant="outline" onClick={handleCancelFocus} className="h-11 rounded-xl">
                   放弃计时
                 </Button>
-                <Button onClick={handleStopFocus} className="h-11 rounded-xl">
+                <Button onClick={handleStopFocus} className={cn('h-11 rounded-xl', dashboardAccent.strongButton)}>
                   <Square className="mr-1.5 size-4" />
                   结束并记录
                 </Button>
@@ -1332,10 +1636,11 @@ export default function ParentDashboard() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[86vh] overflow-y-auto rounded-2xl border border-slate-200 shadow-xl sm:max-w-2xl">
           <DialogHeader className="pb-2">
-            <DialogTitle className="text-lg font-semibold text-slate-950 flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-primary" />
-              完成任务
-            </DialogTitle>
+            <DialogTitleBlock
+              icon={CheckCircle2}
+              title="完成任务"
+              description="先记录完成结果，再补孩子反馈和家长观察。1.9 证据作为可选补充。"
+            />
           </DialogHeader>
           {selectedTask && (
             <div className="space-y-4 py-2">
@@ -1566,14 +1871,14 @@ export default function ParentDashboard() {
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-primary" />
+                              <FileText className={cn('w-4 h-4', dashboardAccent.strongText)} />
                               <span className="text-sm text-slate-600">已上传证据</span>
                             </div>
                             <a 
                               href={completionData.evidenceUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-sm text-primary hover:text-primary/80"
+                              className={cn('text-sm hover:opacity-80', dashboardAccent.strongText)}
                             >
                               查看
                             </a>
@@ -1602,7 +1907,7 @@ export default function ParentDashboard() {
                           <label htmlFor="evidence-upload" className="flex-1 cursor-pointer">
                             <Button
                               variant="outline"
-                              className="w-full rounded-lg border-dashed border-2 hover:border-primary hover:bg-primary/5"
+                              className="w-full rounded-lg border-dashed border-2 hover:border-[#0f766e] hover:bg-[#f3fbf8]"
                               asChild
                             >
                               <span>
@@ -1615,10 +1920,10 @@ export default function ParentDashboard() {
                       )}
 
                       {completionData.evidence && (
-                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <div className="rounded-lg border border-[#c8e7de] bg-[#f3fbf8] p-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-primary" />
+                              <FileText className={cn('w-4 h-4', dashboardAccent.strongText)} />
                               <span className="text-sm text-slate-700 truncate max-w-[200px]">
                                 {completionData.evidence.name}
                               </span>
@@ -1660,7 +1965,7 @@ export default function ParentDashboard() {
                 <Button variant="outline" onClick={() => setOpen(false)} className="h-11 rounded-lg px-5">
                   取消
                 </Button>
-                <Button onClick={handleCompleteTask} className="h-11 rounded-lg bg-primary px-6 text-primary-foreground hover:bg-primary/90 shadow-sm">
+                <Button onClick={handleCompleteTask} className={cn('h-11 rounded-lg px-6', dashboardAccent.strongButton)}>
                   保存记录
                 </Button>
               </div>

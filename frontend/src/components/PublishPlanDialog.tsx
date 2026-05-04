@@ -44,6 +44,13 @@ const getWeekNo = (date: Date) => {
   return `${getISOWeekYear(date)}-${String(getISOWeek(date)).padStart(2, '0')}`;
 };
 
+const publishAccent = {
+  strongButton: 'bg-[linear-gradient(135deg,#16b3a5_0%,#12988d_100%)] text-white shadow-[0_14px_28px_rgba(18,152,141,0.18)] hover:brightness-95',
+  softTone: 'bg-[#e8faf6] text-[#14978c]',
+  softSurface: 'border-[#d9f2ec] bg-[#f5fcfa] text-[#137f76]',
+  activeSurface: 'border-[#d9f2ec] bg-[#f3fbf8]',
+};
+
 export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, selectedChildName, onSuccess }: PublishPlanDialogProps) {
   const [step, setStep] = useState(1);
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
@@ -270,26 +277,32 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className='bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden'
+        className='bg-white rounded-[28px] w-full max-w-4xl shadow-2xl overflow-hidden'
       >
         {/* Header */}
-        <div className='border-b border-border px-6 py-5 bg-white flex items-center justify-between'>
-          <div>
-            <h2 className='text-xl font-semibold text-slate-950'>发布下周学习计划</h2>
-            <div className='flex items-center gap-2 mt-2'>
+        <div className='border-b border-slate-100 px-6 py-5 bg-white flex items-start justify-between'>
+          <div className='flex items-start gap-4'>
+            <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', publishAccent.softTone)}>
+              <Send className='w-5 h-5' />
+            </div>
+            <div>
+              <h2 className='text-xl font-semibold tracking-tight text-slate-950'>发布下周学习计划</h2>
+              <p className='mt-1 text-sm text-slate-500'>先选时间，再选任务，最后确认排期预览后发布到当前孩子。</p>
+              <div className='flex items-center gap-2 mt-4'>
               {['选择时间', '选择任务', '预览发布'].map((s, i) => (
                 <div key={i} className='flex items-center'>
                   <div className={cn(
-                    'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                    step > i + 1 ? 'bg-primary text-primary-foreground' : step === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-slate-100 text-slate-500'
+                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium',
+                    step > i + 1 ? publishAccent.strongButton : step === i + 1 ? publishAccent.strongButton : 'bg-slate-100 text-slate-500'
                   )}>
                     {step > i + 1 ? <Check className='w-4 h-4' /> : i + 1}
                   </div>
-                  <span className={cn('ml-1 text-sm', step === i + 1 ? 'font-medium text-primary' : 'text-slate-500')}>{s}</span>
+                  <span className={cn('ml-1.5 text-sm', step === i + 1 ? 'font-medium text-[#14978c]' : 'text-slate-500')}>{s}</span>
                   {i < 2 && <ChevronRight className='w-4 h-4 mx-2 text-slate-300' />}
                 </div>
               ))}
             </div>
+          </div>
           </div>
           <Button variant='ghost' onClick={handleClose} className='text-slate-500 hover:bg-slate-100 hover:text-slate-900'>✕</Button>
         </div>
@@ -305,7 +318,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <button 
                       onClick={() => setSelectedWeek('this')} 
                       className={cn('p-6 rounded-xl border-2 text-left transition-all', 
-                        selectedWeek === 'this' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                        selectedWeek === 'this' ? publishAccent.activeSurface : 'border-gray-200 hover:border-gray-300'
                       )}
                     >
                       <div className='text-3xl mb-2'>📅</div>
@@ -317,7 +330,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <button 
                       onClick={() => setSelectedWeek('next')} 
                       className={cn('p-6 rounded-xl border-2 text-left transition-all', 
-                        selectedWeek === 'next' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                        selectedWeek === 'next' ? publishAccent.activeSurface : 'border-gray-200 hover:border-gray-300'
                       )}
                     >
                       <div className='text-3xl mb-2'>📆</div>
@@ -329,7 +342,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <button 
                       onClick={() => setSelectedWeek('custom')} 
                       className={cn('p-6 rounded-xl border-2 text-left transition-all', 
-                        selectedWeek === 'custom' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                        selectedWeek === 'custom' ? publishAccent.activeSurface : 'border-gray-200 hover:border-gray-300'
                       )}
                     >
                       <div className='text-3xl mb-2'>🗓️</div>
@@ -338,7 +351,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     </button>
                   </div>
                   {selectedWeek === 'custom' && (
-                    <div className='mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200'>
+                    <div className='mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-200'>
                       <label className='block text-sm font-medium text-gray-700 mb-2'>选择周一开始日期</label>
 	                      <DatePicker
 	                        value={format(customWeekStart, 'yyyy-MM-dd')}
@@ -367,8 +380,8 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                     <div className='space-y-2 max-h-[300px] overflow-y-auto'>
                       {tasks.map(task => (
                         <label key={task.id} className={cn(
-                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
-                          selectedTasks.includes(task.id) ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                          'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
+                          selectedTasks.includes(task.id) ? publishAccent.activeSurface : 'border-gray-200 hover:border-gray-300'
                         )}>
                           <Checkbox checked={selectedTasks.includes(task.id)} onCheckedChange={() => toggleTask(task.id)} />
                           <div className='flex-1'>
@@ -398,9 +411,9 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                         </Button>
                       )}
                     </div>
-                    <div className='mb-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3'>
+                    <div className={cn('mb-3 rounded-2xl border px-3 py-3', publishAccent.softSurface)}>
                       <div className='flex items-center gap-2 text-sm font-medium text-gray-900'>
-                        <User className='w-4 h-4 text-primary' />
+                        <User className='w-4 h-4 text-[#14978c]' />
                         发布对象：{selectedChildName || '当前孩子'}
                       </div>
                       <p className='mt-1 text-xs text-gray-500'>计划会直接发布到当前孩子，不需要额外选择。</p>
@@ -432,14 +445,14 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                                 <select 
                                   value={currentRule} 
                                   onChange={(e) => setTaskRules(prev => ({ ...prev, [taskId]: e.target.value }))}
-                                  className='px-2 py-1 border border-gray-200 rounded-lg bg-white text-xs focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none w-full'
+                                  className='px-2 py-1 border border-gray-200 rounded-xl bg-white text-xs focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none w-full'
                                 >
                                   {RULE_OPTIONS.map(r => (
                                     <option key={r.id} value={r.id}>{r.label}</option>
                                   ))}
                                 </select>
                               ) : (
-                                <div className='px-2 py-1 text-xs text-gray-500 bg-gray-100 rounded-lg'>
+                                <div className='px-2 py-1 text-xs text-gray-500 bg-gray-100 rounded-xl'>
                                   默认规则：{ruleLabel}
                                 </div>
                               )}
@@ -468,21 +481,21 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                 </div>
 
                 <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-4'>
-                  <div className='rounded-xl border border-gray-200 bg-gray-50 px-4 py-3'>
+                  <div className='rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3'>
                     <div className='text-xs text-gray-500'>发布对象</div>
                     <div className='mt-1 text-sm font-semibold text-gray-900'>{selectedChildName || '当前孩子'}</div>
                   </div>
-                  <div className='rounded-xl border border-gray-200 bg-gray-50 px-4 py-3'>
+                  <div className='rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3'>
                     <div className='text-xs text-gray-500'>任务总数</div>
                     <div className='mt-1 text-sm font-semibold text-gray-900'>{stats.totalTasks} 项</div>
                   </div>
-                  <div className='rounded-xl border border-gray-200 bg-gray-50 px-4 py-3'>
+                  <div className='rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3'>
                     <div className='text-xs text-gray-500'>总预计时长</div>
                     <div className='mt-1 text-sm font-semibold text-gray-900'>{stats.totalMinutes} 分钟/周</div>
                   </div>
                 </div>
 
-                <div className='mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3'>
+                <div className='mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3'>
                   <label className='flex items-center gap-3 cursor-pointer'>
                     <Checkbox checked={skipHolidays} onCheckedChange={(checked) => setSkipHolidays(Boolean(checked))} />
                     <div>
@@ -495,10 +508,10 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                   </label>
                 </div>
                 
-                <div className='grid grid-cols-7 gap-2'>
+                <div className='grid grid-cols-7 gap-2.5'>
                   {previewSchedule.map((day, i) => (
                     <div key={i} className={cn(
-                      'p-3 rounded-xl border-2 min-h-[120px] transition-all',
+                      'p-3 rounded-2xl border-2 min-h-[120px] transition-all',
                       day.overloaded ? 'border-amber-300 bg-amber-50' : 
                       'border-gray-200'
                     )}>
@@ -513,7 +526,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                       )}
                       <div className='space-y-1'>
                         {day.tasks.slice(0, 3).map((task, j) => (
-                          <div key={j} className='text-xs bg-primary/10 text-primary px-2 py-1 rounded truncate'>{task}</div>
+                          <div key={j} className='text-xs bg-[#e8faf6] text-[#14978c] px-2 py-1 rounded-xl truncate'>{task}</div>
                         ))}
                         {day.tasks.length > 3 && (
                           <div className='text-xs text-gray-400 text-center'>+{day.tasks.length - 3}个</div>
@@ -526,7 +539,7 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
                   ))}
                 </div>
                 
-                <div className='mt-4 p-4 bg-blue-50 rounded-xl flex items-start gap-3'>
+                <div className='mt-4 p-4 bg-blue-50 rounded-2xl flex items-start gap-3'>
                   <Clock className='w-5 h-5 text-blue-500 mt-0.5' />
                   <div className='text-sm text-blue-700'>
                     <p>计划发布后，系统将自动分配至孩子的每日待办列表。</p>
@@ -544,12 +557,12 @@ export function PublishPlanDialog({ open, onOpenChange, tasks, selectedChildId, 
           </Button>
           {step < 3 ? (
             <Button onClick={() => setStep(step + 1)} disabled={!canProceed()}
-              className='rounded-xl px-5'>
+              className={cn('rounded-xl px-5', publishAccent.strongButton)}>
               下一步
             </Button>
           ) : (
             <Button onClick={handlePublish} disabled={publishMutation.isPending}
-              className='rounded-xl px-5'>
+              className={cn('rounded-xl px-5', publishAccent.strongButton)}>
               <Send className='w-4 h-4 mr-2' />
               {publishMutation.isPending ? '发布中...' : '确认发布'}
             </Button>

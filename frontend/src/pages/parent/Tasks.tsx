@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, BookOpen, Calculator, Dumbbell, GraduationCap, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info, ClipboardList, Activity, AlertTriangle, Clock3, BarChart3, CalendarDays, ArrowRight, CheckCircle2, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Calculator, Dumbbell, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info, ClipboardList, Activity, AlertTriangle, Clock3, CalendarDays, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -445,7 +445,7 @@ export default function TasksPage() {
       value: tasks.length,
       helper: '当前孩子任务池',
       icon: ClipboardList,
-      tone: 'bg-indigo-50 text-indigo-600',
+      tone: 'bg-slate-100 text-slate-700',
     },
     {
       label: '任务健康度',
@@ -459,7 +459,7 @@ export default function TasksPage() {
       value: `${Math.round(totalMinutes / 60)}h`,
       helper: `${totalMinutes} 分钟任务池容量`,
       icon: Clock3,
-      tone: 'bg-amber-50 text-amber-600',
+      tone: taskHealthScore >= 70 ? 'bg-slate-100 text-slate-700' : 'bg-amber-50 text-amber-700',
     },
     {
       label: '待关注任务',
@@ -470,17 +470,31 @@ export default function TasksPage() {
     },
   ];
 
-  const trendPoints = [56, 63, 59, 68, 72, 70, Math.max(taskHealthScore, 48)];
-  const trendPath = trendPoints.map((point, index) => {
-    const x = 14 + index * 26;
-    const y = 72 - point * 0.52;
-    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
-
   const layerCounts = readinessLayers.reduce((acc, layer) => {
     acc[layer.id] = tasks.filter(task => getTaskReadinessLayer(task).id === layer.id).length;
     return acc;
   }, {} as Record<ReadinessLayerId, number>);
+  const taskPoolStatus = tasks.length === 0
+    ? {
+        label: '待建立',
+        title: '先创建当前孩子的核心任务',
+        description: '任务池还没有内容，新建任务后再同步学习计划。',
+        tone: 'border-slate-200 bg-slate-50 text-slate-700',
+      }
+    : incompleteConfigTasks.length > 0
+      ? {
+          label: '需处理',
+          title: `有 ${incompleteConfigTasks.length} 个任务需要补配置`,
+          description: '优先补能力点、目标和记录方式，再同步到计划。',
+          tone: 'border-amber-200 bg-amber-50 text-amber-800',
+        }
+      : {
+          label: '可维护',
+          title: '任务池配置基本完整',
+          description: '可以继续新建任务，或同步计划保持本周安排一致。',
+          tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+        };
+  const topAttentionTasks = attentionTasks.filter(task => getTaskConfigIssues(task).length > 0);
   const currentTabCount = (() => {
     if (activeTab === 'readiness') return getReadinessGroups().reduce((sum, group) => sum + group.tasks.length, 0);
     if (activeTab === 'subject') return getSubjectGroups().reduce((sum, group) => sum + group.tasks.length, 0);
@@ -567,14 +581,13 @@ export default function TasksPage() {
                 event.stopPropagation();
                 handlePushTaskToDingtalk(task.id);
               }}
-              className="h-8 rounded-lg bg-white px-2.5 text-xs"
+              className="h-8 rounded-lg bg-white px-2 text-xs text-slate-600"
             >
-              <Send className="mr-1 size-3.5" />
-              钉钉
+              <Send className="size-3.5" />
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant={issues.length > 0 ? 'secondary' : 'outline'}
               size="sm"
               onClick={(event) => {
                 event.stopPropagation();
@@ -582,7 +595,7 @@ export default function TasksPage() {
               }}
               className="h-8 rounded-lg bg-white px-2.5 text-xs"
             >
-              详情
+              {issues.length > 0 ? '补配置' : '详情'}
               <ArrowRight className="ml-1 size-3.5" />
             </Button>
           </div>
@@ -607,140 +620,167 @@ export default function TasksPage() {
         }
         right={
           <>
-            <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="h-11 min-w-28 rounded-xl border-emerald-200 text-emerald-600 hover:bg-emerald-50">
+            <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="h-11 min-w-28 rounded-lg bg-white">
               <Download className="mr-1.5 size-4" />
               导出
             </Button>
-            <Button onClick={() => setUpdatePlanDialogOpen(true)} variant="secondary" className="h-11 min-w-28 rounded-xl">
+            <Button onClick={() => setUpdatePlanDialogOpen(true)} variant="secondary" className="h-11 min-w-28 rounded-lg">
               <RefreshCw className="mr-1.5 size-4" />
               同步计划
             </Button>
-            <Button variant="outline" onClick={() => navigate('/parent/task-templates')} className="h-11 min-w-28 rounded-xl bg-white shadow-sm">
+            <Button variant="outline" onClick={() => navigate('/parent/task-templates')} className="h-11 min-w-28 rounded-lg bg-white">
               <ClipboardList className="mr-1.5 size-4" />
               任务模板
             </Button>
-            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90">
+            <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} className="h-11 min-w-28 rounded-lg">
               <Plus className="mr-1.5 size-4" />
               新建任务
             </Button>
           </>
         }
       />
-	      <section className="space-y-5">
-
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-3">
-            {readinessLayers.map((layer) => {
-              const Icon = layer.icon;
-              return (
-                <button
-                  key={layer.id}
-                  type="button"
-                  onClick={() => setActiveTab('readiness')}
-                  className="rounded-lg border border-slate-100 bg-slate-50/70 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className={cn('flex size-10 items-center justify-center rounded-lg ring-1', layer.softTone)}>
-                      <Icon className="size-5" />
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-slate-950">任务池状态</h2>
+                <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', taskPoolStatus.tone)}>
+                  {taskPoolStatus.label}
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-medium text-slate-700">{taskPoolStatus.title}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{taskPoolStatus.description}</p>
+            </div>
+            <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[520px]">
+              {operationalMetrics.map((metric) => {
+                const Icon = metric.icon;
+                return (
+                  <div key={metric.label} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-500">{metric.label}</p>
+                      <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-md', metric.tone)}>
+                        <Icon className="size-3.5" />
+                      </span>
                     </div>
-                    <span className="text-2xl font-semibold text-slate-950">{layerCounts[layer.id] || 0}</span>
+                    <p className="mt-2 text-xl font-semibold text-slate-950">{metric.value}</p>
+                    <p className="mt-1 truncate text-[11px] text-slate-400">{metric.helper}</p>
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-slate-950">{layer.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">{layer.question}</p>
-                </button>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-4">
-            {operationalMetrics.map((metric) => {
-              const Icon = metric.icon;
-              return (
-                <div key={metric.label} className="rounded-lg bg-slate-50/70 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', metric.tone)}>
-                      <Icon className="size-5" />
-                    </div>
-                  </div>
-                  <p className="mt-4 text-xs font-medium text-slate-500">{metric.label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-950">{metric.value}</p>
-                  <p className="mt-1 text-xs text-slate-400">{metric.helper}</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr] xl:grid-cols-[1.1fr_1fr]">
+            <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-950">任务结构</h3>
+                  <p className="mt-1 text-xs text-slate-500">用于判断任务池是否能支撑计划和记录。</p>
                 </div>
-              );
-            })}
+                <CheckCircle2 className="size-5 text-emerald-600" />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  ['每日任务', dailyTasks.length],
+                  ['智能分配', flexibleTasks.length],
+                  ['精细记录', trackedTasks.length],
+                  ['平均时长', `${tasks.length ? Math.round(totalMinutes / tasks.length) : 0}m`],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-md border border-slate-100 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-500">{label}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-950">三层分布</h3>
+                  <p className="mt-1 text-xs text-slate-500">作为筛选视角，不抢任务列表主线。</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setActiveTab('readiness')} className="h-8 rounded-lg bg-white">
+                  查看
+                </Button>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                {readinessLayers.map((layer) => {
+                  const Icon = layer.icon;
+                  return (
+                    <button
+                      key={layer.id}
+                      type="button"
+                      onClick={() => setActiveTab('readiness')}
+                      className="rounded-md border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-slate-300"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn('flex h-7 w-7 items-center justify-center rounded-md ring-1', layer.softTone)}>
+                          <Icon className="size-3.5" />
+                        </span>
+                        <span className="text-lg font-semibold text-slate-950">{layerCounts[layer.id] || 0}</span>
+                      </div>
+                      <p className="mt-2 truncate text-xs font-semibold text-slate-800">{layer.label}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-950">任务池结构</h2>
-                <p className="mt-1 text-xs text-slate-500">先用配置字段呈现，后续接入计划引用和打卡表现。</p>
-              </div>
-              <CheckCircle2 className="size-5 text-emerald-500" />
+        <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">优先处理</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">先补配置不完整的任务，再做新建和同步。</p>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div className="rounded-md bg-indigo-50 px-3 py-3">
-                <p className="text-xs text-indigo-600">每日任务</p>
-                <p className="mt-1 text-xl font-semibold text-indigo-950">{dailyTasks.length}</p>
-              </div>
-              <div className="rounded-md bg-sky-50 px-3 py-3">
-                <p className="text-xs text-sky-600">智能分配</p>
-                <p className="mt-1 text-xl font-semibold text-sky-950">{flexibleTasks.length}</p>
-              </div>
-              <div className="rounded-md bg-emerald-50 px-3 py-3">
-                <p className="text-xs text-emerald-600">精细记录</p>
-                <p className="mt-1 text-xl font-semibold text-emerald-950">{trackedTasks.length}</p>
-              </div>
-              <div className="rounded-md bg-amber-50 px-3 py-3">
-                <p className="text-xs text-amber-600">平均时长</p>
-                <p className="mt-1 text-xl font-semibold text-amber-950">{tasks.length ? Math.round(totalMinutes / tasks.length) : 0}m</p>
-              </div>
-            </div>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+              <AlertTriangle className="size-4" />
+            </span>
           </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-950">需要关注</h2>
-                <p className="mt-1 text-xs text-slate-500">优先补齐配置不完整的任务。</p>
-              </div>
-              <AlertTriangle className="size-5 text-amber-500" />
-            </div>
-            <div className="mt-4 space-y-2">
-              {attentionTasks.length > 0 ? attentionTasks.map((task) => (
+          <div className="mt-4 space-y-2">
+            {topAttentionTasks.length > 0 ? topAttentionTasks.map((task) => {
+              const issues = getTaskConfigIssues(task);
+              return (
                 <button
                   key={task.id}
                   type="button"
                   onClick={() => navigate(`/parent/tasks/${task.id}`)}
-                  className="flex w-full items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left transition-colors hover:bg-slate-50"
+                  className="flex w-full items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-left transition-colors hover:border-amber-200 hover:bg-amber-50/40"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-xs font-medium text-slate-700">{task.name}</span>
-                    <span className="mt-1 block truncate text-[11px] text-slate-400">
-                      {getTaskConfigIssues(task).slice(0, 2).join(' · ') || '配置完整'}
-                    </span>
+                    <span className="block truncate text-sm font-semibold text-slate-900">{task.name}</span>
+                    <span className="mt-1 block truncate text-xs text-slate-500">{issues.slice(0, 3).join(' · ')}</span>
                   </span>
-                  <span className="shrink-0 text-xs font-semibold text-amber-600">{getOperationalScore(task)}%</span>
+                  <span className="shrink-0 rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                    {getOperationalScore(task)}%
+                  </span>
                 </button>
-              )) : (
-                <div className="rounded-md bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">暂无任务</div>
-              )}
-            </div>
+              );
+            }) : (
+              <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                当前没有高优先级配置问题
+              </div>
+            )}
           </div>
-        </div>
+        </aside>
+      </section>
 
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">任务工作区</h2>
+            <p className="mt-1 text-xs text-slate-500">查看、维护和同步当前孩子的真实任务池。</p>
+          </div>
+          <span className="w-fit rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+            当前 {currentTabCount} / 全部 {tasks.length}
+          </span>
+        </div>
       </section>
 
       <FilterBar
-        actions={
-          <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
-            当前 {currentTabCount} / 全部 {tasks.length}
-          </span>
-        }
       >
             {tabItems.map((item) => (
               <button
@@ -861,23 +901,23 @@ export default function TasksPage() {
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
+        <AlertDialogContent className="rounded-lg border border-slate-200 shadow-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-red-600 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-destructive flex items-center justify-center">
-                <Trash2 className="w-5 h-5 text-white" />
-              </div>
-              确认删除
+            <AlertDialogTitle className="flex items-center gap-3 text-lg font-semibold text-slate-950">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                <Trash2 className="size-5" />
+              </span>
+              删除任务
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-500 ml-[52px]">
+            <AlertDialogDescription className="text-slate-500">
               确定要删除任务「{taskToDelete?.name}」吗？此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-3">
-            <AlertDialogCancel className="rounded-xl h-11 px-6">取消</AlertDialogCancel>
+            <AlertDialogCancel className="h-11 rounded-lg px-6">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => taskToDelete && selectedChildId && deleteMutation.mutate({ id: taskToDelete.id, childId: selectedChildId })}
-              className="rounded-xl h-11 px-6"
+              className="h-11 rounded-lg bg-destructive px-6 text-destructive-foreground hover:bg-destructive/90"
             >
               删除
             </AlertDialogAction>
@@ -887,15 +927,15 @@ export default function TasksPage() {
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[760px] max-h-[86vh] overflow-y-auto rounded-3xl border-0 shadow-2xl">
+        <DialogContent className="max-h-[86vh] overflow-y-auto rounded-lg border border-slate-200 shadow-2xl sm:max-w-[760px]">
           <DialogHeader className="pb-4">
-            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <Plus className="w-5 h-5 text-white" />
-              </div>
+            <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-slate-950">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Plus className="size-5" />
+              </span>
               新建任务
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-slate-500">
               先定义任务怎么安排，再补齐能力点和记录方式。能力点必填，后续会用于能力分析和任务推荐。
             </DialogDescription>
           </DialogHeader>
@@ -915,24 +955,27 @@ export default function TasksPage() {
 
       {/* Update Plan Dialog */}
       <Dialog open={updatePlanDialogOpen} onOpenChange={setUpdatePlanDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-2xl">
+        <DialogContent className="rounded-lg border border-slate-200 shadow-2xl sm:max-w-[500px]">
           <DialogHeader className="pb-4">
-            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <RefreshCw className="w-5 h-5 text-white" />
-              </div>
-              更新计划
+            <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-slate-950">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <RefreshCw className="size-5" />
+              </span>
+              同步计划
             </DialogTitle>
+            <DialogDescription className="text-slate-500">
+              根据当前任务池的分配规则，把学习计划更新到一致状态。
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className='p-4 bg-blue-50 rounded-xl mb-4'>
+            <div className='mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4'>
               <div className='flex items-start gap-3'>
-                <div className='w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0'>
-                  <Info className='w-4 h-4 text-blue-600' />
+                <div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white text-slate-600'>
+                  <Info className='size-4' />
                 </div>
                 <div className='flex-1'>
-                  <div className='text-sm font-medium text-blue-800 mb-1'>提示</div>
-                  <div className='text-xs text-blue-700'>
+                  <div className='mb-1 text-sm font-medium text-slate-900'>同步范围</div>
+                  <div className='text-xs leading-5 text-slate-500'>
                     此操作将根据任务的最新分配规则更新计划，确保计划与任务设置保持一致。
                   </div>
                 </div>
@@ -967,7 +1010,7 @@ export default function TasksPage() {
             </div>
           </div>
           <DialogFooter className="flex gap-3">
-            <Button variant="outline" onClick={() => setUpdatePlanDialogOpen(false)} className="h-11 px-6 rounded-xl">
+            <Button variant="outline" onClick={() => setUpdatePlanDialogOpen(false)} className="h-11 rounded-lg px-6">
               取消
             </Button>
             <Button 
@@ -998,7 +1041,7 @@ export default function TasksPage() {
                   toast.error(getErrorMessage(error));
                 }
               }} 
-              className="h-11 px-6 rounded-xl"
+              className="h-11 rounded-lg px-6"
             >
               同步更新
             </Button>

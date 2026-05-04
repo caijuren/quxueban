@@ -85,6 +85,40 @@ const timeSegmentOrder: Record<string, number> = {
   '睡前': 5,
 };
 
+const planAccent = {
+  strongButton: 'bg-[linear-gradient(135deg,#16b3a5_0%,#12988d_100%)] text-white shadow-[0_14px_28px_rgba(18,152,141,0.18)] hover:brightness-95',
+  softTone: 'bg-[#e8faf6] text-[#14978c]',
+  softSurface: 'border-[#d9f2ec] bg-[#f5fcfa] text-[#137f76]',
+  activeTab: 'bg-[#17b3a5] text-white shadow-sm hover:bg-[#159e92] hover:text-white',
+};
+
+function PlanSummaryMetric({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  icon: React.ElementType;
+  tone: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tone)}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+      </div>
+      <p className="mt-3 whitespace-nowrap text-xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{helper}</p>
+    </div>
+  );
+}
+
 function getTaskStatusOrder(task: TaskAllocation) {
   if (task.progress >= task.target) return 0;
   if (task.progress > 0) return 1;
@@ -108,12 +142,12 @@ function getPlanCellStatus(task: TaskAllocation, dayIndex: number, date: Date, i
 }
 
 function getPlanCellClass(status: string, color: ReturnType<typeof getCategoryStyle>) {
-  if (status === 'completed') return cn(color.bg, 'text-white ring-2 ring-slate-100');
-  if (status === 'partial') return 'border-2 border-orange-300 bg-orange-50 text-orange-500';
+  if (status === 'completed') return cn(color.bg, 'text-white ring-2 ring-white/80 shadow-sm');
+  if (status === 'partial') return 'border-2 border-orange-300 bg-orange-50 text-orange-500 shadow-sm';
   if (status === 'postponed') return 'border-2 border-slate-200 bg-slate-50 text-slate-400';
   if (status === 'not_completed') return 'bg-rose-50 text-rose-500 ring-1 ring-rose-100';
   if (status === 'not_involved') return 'border-2 border-slate-200 bg-slate-100 text-slate-300';
-  return cn('border-[3px] bg-white', color.border);
+  return cn('border-[2.5px] bg-white', color.border);
 }
 
 function PlanCellIcon({ status }: { status: string }) {
@@ -151,6 +185,8 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedMoveDay, setSelectedMoveDay] = useState<number | null>(null);
   const [selectedDayForAction, setSelectedDayForAction] = useState<number | null>(null);
+  const color = getCategoryStyle(task.category);
+  const Icon = color.icon;
 
   // 后端仍然使用 JavaScript 标准索引：0=周日, 1=周一, ..., 6=周六
   // 前端表格按周一到周日展示：0=周一, ..., 5=周六, 6=周日
@@ -261,17 +297,23 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          className='bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden'
+          className='bg-white rounded-[28px] w-full max-w-md shadow-2xl overflow-hidden'
           onClick={e => e.stopPropagation()}
         >
-          {/* 简洁标题栏 */}
-          <div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white'>
-            <div className='flex items-center gap-3'>
-              <h2 className='text-lg font-semibold text-gray-900'>{task.taskName}</h2>
+          {/* 标题栏 */}
+          <div className='px-6 py-5 border-b border-slate-100 flex items-start justify-between bg-white'>
+            <div className='flex items-start gap-4'>
+              <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm', color.bg)}>
+                <Icon className='w-5 h-5' />
+              </div>
+              <div>
+                <h2 className='text-xl font-semibold tracking-tight text-slate-950'>{task.taskName}</h2>
+                <p className='mt-1 text-sm text-slate-500'>{subjectLabel(task.subject)} · {ruleLabel(task.scheduleRule)} · 本周已完成 {task.progress}/{task.target} 次</p>
+              </div>
             </div>
             <button 
               onClick={onClose} 
-              className='w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors'
+              className='w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors'
             >
               <X className='w-5 h-5' />
             </button>
@@ -291,14 +333,17 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
                   {diffLabel(task.difficulty)}
                 </span>
               )}
+              <span className='text-sm px-3 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200'>
+                {task.timeSegment || '放学后'}
+              </span>
 
             </div>
 
             {/* 信息列表 */}
             <div className='space-y-3'>
-              <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-xl'>
-                <div className='w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center'>
-                  <Clock className='w-4 h-4 text-primary' />
+              <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-2xl'>
+                <div className='w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center'>
+                  <Clock className='w-4 h-4 text-slate-700' />
                 </div>
                 <div className='flex-1'>
                   <div className='text-xs text-gray-500'>每次时长</div>
@@ -306,9 +351,9 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
                 </div>
               </div>
               
-              <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-xl'>
-                <div className='w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center'>
-                  <Target className='w-4 h-4 text-primary' />
+              <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-2xl'>
+                <div className='w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center'>
+                  <Target className='w-4 h-4 text-slate-700' />
                 </div>
                 <div className='flex-1'>
                   <div className='text-xs text-gray-500'>分配规则</div>
@@ -316,8 +361,8 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
                 </div>
               </div>
               
-              <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-xl'>
-                <div className='w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center'>
+              <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-2xl'>
+                <div className='w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center'>
                   <BookOpen className='w-4 h-4 text-emerald-600' />
                 </div>
                 <div className='flex-1'>
@@ -373,15 +418,15 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
                 <motion.div
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className='mt-3 p-3 bg-blue-50 rounded-xl border border-blue-100'
+                  className='mt-3 p-3 rounded-2xl border border-[#d9f2ec] bg-[#f5fcfa]'
                 >
-                  <div className='text-sm text-primary mb-2'>
+                  <div className='text-sm text-[#14978c] mb-2'>
                     已选择：<strong>{weekDays[selectedDayForAction]}</strong>（{format(addDays(weekStartDate, selectedDayForAction), 'M月d日')}）
                   </div>
                   <div className='flex gap-2'>
                     <button
                       onClick={() => setShowMoveDialog(true)}
-                      className='flex-1 flex items-center justify-center gap-1.5 py-2 bg-white rounded-lg text-primary text-sm font-medium hover:bg-primary/10 transition-colors border border-primary/20'
+                      className='flex-1 flex items-center justify-center gap-1.5 py-2 bg-white rounded-xl text-[#14978c] text-sm font-medium hover:bg-[#ecfaf7] transition-colors border border-[#d9f2ec]'
                     >
                       <Move className='w-4 h-4' />
                       移动到其他日期
@@ -415,7 +460,7 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className='bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden'
+              className='bg-white rounded-[28px] w-full max-w-sm shadow-2xl overflow-hidden'
               onClick={e => e.stopPropagation()}
             >
               <div className='p-6'>
@@ -461,19 +506,19 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className='bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden'
+              className='bg-white rounded-[28px] w-full max-w-sm shadow-2xl overflow-hidden'
               onClick={e => e.stopPropagation()}
             >
               <div className='px-5 py-4 border-b border-gray-100'>
                 <h3 className='text-base font-semibold text-gray-900 flex items-center gap-2'>
-                  <CalendarDays className='w-5 h-5 text-blue-500' />
+                  <CalendarDays className='w-5 h-5 text-[#14978c]' />
                   移动到其他日期
                 </h3>
               </div>
               
               <div className='p-5'>
                 <p className='text-sm text-gray-600 mb-4'>
-                  将 <strong className='text-primary'>{weekDays[selectedDayForAction!]}</strong> 的任务移动到：
+                  将 <strong className='text-[#14978c]'>{weekDays[selectedDayForAction!]}</strong> 的任务移动到：
                 </p>
                 
                 {/* 周历选择器 */}
@@ -493,12 +538,12 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
                           isFromDay 
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                             : isSelected 
-                              ? 'bg-blue-500 text-white shadow-lg scale-105' 
-                              : 'bg-gray-50 text-gray-700 hover:bg-primary/10 hover:text-primary'
+                              ? 'bg-[#14978c] text-white shadow-lg scale-105'
+                              : 'bg-gray-50 text-gray-700 hover:bg-[#ecfaf7] hover:text-[#14978c]'
                         )}
                       >
                         <span className='text-xs font-medium'>{d}</span>
-                        <span className={cn('text-[10px]', isSelected ? 'text-blue-100' : 'text-gray-400')}>
+                        <span className={cn('text-[10px]', isSelected ? 'text-white/80' : 'text-gray-400')}>
                           {dateStr}
                         </span>
                       </button>
@@ -507,8 +552,8 @@ function TaskDetailModal({ task, childId, weekStartDate, onClose, onRefresh }: T
                 </div>
                 
                 {selectedMoveDay !== null && (
-                  <div className='text-sm text-center text-gray-600 mb-4 p-2 bg-blue-50 rounded-lg'>
-                    → 移动到 <strong className='text-primary'>{weekDays[selectedMoveDay]}</strong>
+                  <div className='text-sm text-center text-gray-600 mb-4 p-2 rounded-xl bg-[#f5fcfa]'>
+                    → 移动到 <strong className='text-[#14978c]'>{weekDays[selectedMoveDay]}</strong>
                   </div>
                 )}
   
@@ -729,17 +774,17 @@ export default function PlansPage() {
             )}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="h-11 gap-2 rounded-xl bg-white">
                   <span className="text-sm font-semibold text-slate-900">{weekLabel}</span>
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 border border-border shadow-md rounded-lg" align="end">
+              <PopoverContent className="w-auto rounded-2xl border border-slate-200 p-0 shadow-xl" align="end">
                 <div className="p-3 border-b border-border">
                   <div className="flex gap-2">
-                    <button onClick={() => goToCurrentWeek()} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isCurrentWeek ? "bg-primary text-white" : "text-foreground hover:bg-muted")}>本周</button>
-                    <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))} className={cn("flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors", isNextWeek ? "bg-primary text-white" : "text-foreground hover:bg-muted")}>下周</button>
-                    <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, -1))} className="flex-1 text-center py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted">上周</button>
+                    <button onClick={() => goToCurrentWeek()} className={cn("flex-1 text-center py-2 rounded-xl text-sm font-medium transition-colors", isCurrentWeek ? "bg-primary text-white" : "text-foreground hover:bg-muted")}>本周</button>
+                    <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))} className={cn("flex-1 text-center py-2 rounded-xl text-sm font-medium transition-colors", isNextWeek ? "bg-primary text-white" : "text-foreground hover:bg-muted")}>下周</button>
+                    <button onClick={() => setCurrentWeekStart(prev => addWeeks(prev, -1))} className="flex-1 text-center py-2 rounded-xl text-sm font-medium text-foreground hover:bg-muted">上周</button>
                   </div>
                 </div>
                 <DayPickerCalendar
@@ -756,9 +801,9 @@ export default function PlansPage() {
                   }}
                   className="rounded-lg p-3"
                   classNames={{
-                    day_selected: "bg-primary text-white hover:bg-primary/90 rounded-lg",
-                    day_today: "bg-primary/10 text-primary font-bold rounded-lg",
-                    nav_button: "h-8 w-8 rounded-lg hover:bg-muted",
+                    day_selected: "bg-primary text-white hover:bg-primary/90 rounded-xl",
+                    day_today: "bg-primary/10 text-primary font-bold rounded-xl",
+                    nav_button: "h-8 w-8 rounded-xl hover:bg-muted",
                     caption: "flex justify-center pt-1 relative items-center w-full",
                   }}
                 />
@@ -776,6 +821,7 @@ export default function PlansPage() {
             </Button>
             <Button
               onClick={() => setPublishDialogOpen(true)}
+              className={cn('rounded-xl px-5', planAccent.strongButton)}
             >
               <Plus className="size-4 mr-1.5" />
               <span className="text-sm">发布计划</span>
@@ -784,48 +830,52 @@ export default function PlansPage() {
         }
       />
 
-      <FilterBar>
-        {categories.map((category) => (
-          <Button
-            key={category.value}
-            variant={selectedCategory === category.value ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedCategory(category.value)}
-          >
-            {category.label}
-          </Button>
-        ))}
-      </FilterBar>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-slate-950">本周计划摘要</h2>
-            <p className="mt-1 text-xs text-slate-500">用于快速判断任务量、时长和每日负荷，1.8 再接入阶段适配阈值。</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
-            {[
-              ['任务项', `${weeklySummary.uniqueTaskCount} 项`],
-              ['安排次数', `${weeklySummary.totalScheduledCount} 次`],
-              ['预计时长', `${weeklySummary.totalMinutes} 分钟`],
-              ['已完成', `${weeklySummary.completedCount} 项`],
-              ['待推进', `${weeklySummary.remainingCount} 项`],
-              ['今日安排', `${weeklySummary.todayTaskCount} 项`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="mt-1 font-semibold text-slate-950">{value}</p>
-              </div>
-            ))}
+            <h2 className="text-base font-semibold text-slate-950">本周计划摘要</h2>
+            <p className="mt-1 text-sm text-slate-500">先看这周总量和今天负荷，再进入计划网格做查看、调整和发布。</p>
           </div>
         </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <PlanSummaryMetric label="任务项" value={`${weeklySummary.uniqueTaskCount} 项`} helper="本周涉及的唯一任务数" icon={ClipboardCheck} tone="bg-emerald-50 text-emerald-700" />
+          <PlanSummaryMetric label="安排次数" value={`${weeklySummary.totalScheduledCount} 次`} helper="包含同一任务多日分配" icon={Shapes} tone="bg-sky-50 text-sky-700" />
+          <PlanSummaryMetric label="预计时长" value={`${weeklySummary.totalMinutes} 分钟`} helper="全周总投入预估" icon={Clock} tone="bg-violet-50 text-violet-700" />
+          <PlanSummaryMetric label="已完成" value={`${weeklySummary.completedCount} 项`} helper="本周目标已完成的任务" icon={Check} tone="bg-teal-50 text-teal-700" />
+          <PlanSummaryMetric label="待推进" value={`${weeklySummary.remainingCount} 项`} helper="尚未完成或仍需推进" icon={Target} tone="bg-amber-50 text-amber-700" />
+          <PlanSummaryMetric label="今日安排" value={`${weeklySummary.todayTaskCount} 项`} helper="今天落在计划里的任务" icon={CalendarDays} tone="bg-orange-50 text-orange-700" />
+        </div>
         {weeklySummary.attentionCount > 0 && (
-          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-700">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <span>本周有 {weeklySummary.attentionCount} 个任务出现部分完成、推迟或未完成，建议在周末复盘时优先调整。</span>
           </div>
         )}
       </section>
+
+      <FilterBar
+        actions={
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+            当前筛选：
+            <span className="ml-1 font-semibold text-slate-900">{categories.find((item) => item.value === selectedCategory)?.label || '全部'}</span>
+          </div>
+        }
+      >
+        {categories.map((category) => (
+          <Button
+            key={category.value}
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedCategory(category.value)}
+            className={cn(
+              'rounded-xl border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+              selectedCategory === category.value && planAccent.activeTab
+            )}
+          >
+            {category.label}
+          </Button>
+        ))}
+      </FilterBar>
 
       {/* Calendar View */}
       {plansLoading ? (
@@ -844,12 +894,12 @@ export default function PlansPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1, duration: 0.5, ease: "easeOut" }}
             >
-              <Card className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:shadow-md">
-                <CardContent className="p-5">
+              <Card className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:shadow-md">
+                <CardContent className="p-6">
                   <div className="overflow-x-auto">
-                    <div className="min-w-[1180px]">
+                    <div className="min-w-[1220px]">
                       {/* Day headers */}
-                      <div className="mb-2 grid grid-cols-[250px_repeat(7,minmax(112px,1fr))] gap-2">
+                      <div className="mb-3 grid grid-cols-[268px_repeat(7,minmax(116px,1fr))] gap-2.5">
                         <div className="p-2"></div>
                         {weekDays.map((day, i) => {
                           const date = weekDates[i];
@@ -860,7 +910,7 @@ export default function PlansPage() {
                             <div
                               key={day}
                               className={cn(
-                                'rounded-lg px-3 py-2 text-center transition-all duration-300',
+                                'rounded-2xl px-3 py-3 text-center transition-all duration-300',
                                 isTodayDate
                                   ? 'bg-primary text-primary-foreground shadow-sm'
                                   : isHoliday
@@ -868,15 +918,15 @@ export default function PlansPage() {
                                     : 'bg-slate-50 text-slate-900 hover:bg-slate-100'
                               )}
                             >
-                              <div className="text-sm font-bold">
+                              <div className="text-sm font-semibold tracking-tight">
                                 {day} {format(date, 'M/d')}
                               </div>
-                              <div className={cn('mt-1 text-xs font-semibold', isTodayDate ? 'text-white/80' : 'text-slate-500')}>
+                              <div className={cn('mt-1 text-xs font-medium', isTodayDate ? 'text-white/80' : 'text-slate-500')}>
                                 {isHoliday ? '劳动节' : `${dayLoad.taskCount}项 · ${dayLoad.minutes}分钟`}
                               </div>
                               {!isHoliday && (
                                 <span className={cn(
-                                  'mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                                  'mt-1.5 inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold',
                                   isTodayDate ? 'border-white/30 bg-white/15 text-white' : dayLoad.load.className
                                 )}>
                                   {dayLoad.load.label}
@@ -934,26 +984,26 @@ export default function PlansPage() {
                           return (
                             <motion.div 
                               key={taskItem.taskId} 
-                              className="group/row mb-2 grid grid-cols-[250px_repeat(7,minmax(112px,1fr))] gap-2"
+                              className="group/row mb-2.5 grid grid-cols-[268px_repeat(7,minmax(116px,1fr))] gap-2.5"
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ duration: 0.3, ease: "easeOut" }}
-                              whileHover={{ backgroundColor: 'rgba(249, 250, 251, 0.5)' }}
+                              whileHover={{ backgroundColor: 'rgba(248, 250, 252, 0.7)' }}
                             >
-                              <div className="flex min-h-[64px] items-center gap-3 rounded-lg px-3 py-2 transition-all duration-300 hover:bg-slate-50" title={taskItem.taskName}>
-                                <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm', color.bg)}>
+                              <div className="flex min-h-[72px] items-center gap-3 rounded-2xl px-3 py-2.5 transition-all duration-300 hover:bg-slate-50" title={taskItem.taskName}>
+                                <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm', color.bg)}>
                                   <Icon className="h-5 w-5" />
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center justify-between gap-2">
-                                    <p className={cn('truncate text-sm font-bold text-slate-950', !hasAssignedDays && 'text-slate-400')}>
+                                    <p className={cn('truncate text-[15px] font-semibold tracking-tight text-slate-950', !hasAssignedDays && 'text-slate-400')}>
                                       {taskItem.taskName}
                                     </p>
-                                    <span className="shrink-0 text-xs font-semibold text-slate-600">{taskItem.progress}/{taskItem.target}</span>
+                                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{taskItem.progress}/{taskItem.target}</span>
                                   </div>
                                   <p className="mt-1 text-xs font-medium text-slate-500">{stageSummary}</p>
                                   <p className="mt-1 text-[11px] font-medium text-slate-400">{taskItem.timeSegment || '放学后'}</p>
-                                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
                                     <div className={cn('h-full rounded-full', color.bg)} style={{ width: `${progressPercent}%` }} />
                                   </div>
                                 </div>
@@ -966,7 +1016,7 @@ export default function PlansPage() {
                                   <div
                                     key={i}
                                     className={cn(
-                                      'flex min-h-[64px] items-center justify-center rounded-lg border border-slate-100 bg-white p-1 transition-all duration-300',
+                                      'flex min-h-[72px] items-center justify-center rounded-2xl border border-slate-100 bg-white p-1 transition-all duration-300',
                                       isToday(weekDates[i]) && 'border-indigo-100 bg-indigo-50/40',
                                       isHoliday && 'border-rose-50 bg-rose-50/50'
                                     )}
@@ -976,17 +1026,17 @@ export default function PlansPage() {
                                         <motion.button 
                                           onClick={() => setSelectedTask(taskItem)} 
                                           className={cn(
-                                            'flex h-6 w-6 cursor-pointer items-center justify-center rounded-md shadow-sm transition-all',
+                                            'flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl shadow-sm transition-all',
                                             getPlanCellClass(cellStatus, color)
                                           )}
                                           title={`${taskItem.taskName} - 点击查看详情`}
-                                          whileHover={{ scale: 1.15, boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                                          whileHover={{ scale: 1.12, boxShadow: '0 8px 16px rgba(15, 23, 42, 0.12)' }}
                                           whileTap={{ scale: 0.95 }}
                                         >
                                           <PlanCellIcon status={cellStatus} />
                                         </motion.button>
                                       ) : (
-                                        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-300">−</div>
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-300">−</div>
                                       )}
                                     </div>
                                   </div>
@@ -1001,10 +1051,10 @@ export default function PlansPage() {
                       )}
                       {plan.allocations.length > 0 && (
                         <div className="mt-5 flex w-max min-w-full flex-wrap items-center gap-x-8 gap-y-3 border-t border-slate-100 pt-4 text-sm">
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500 text-white"><Check className="h-3.5 w-3.5" /></i> 已完成</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="h-6 w-6 rounded-md border-2 border-slate-200 bg-white" /> 未开始</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-slate-200 bg-slate-50 text-slate-400"><Clock className="h-3.5 w-3.5" /></i> 延期</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 text-rose-500 ring-1 ring-rose-100"><X className="h-3.5 w-3.5" /></i> 未完成</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500 text-white"><Check className="h-3.5 w-3.5" /></i> 已完成</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="h-6 w-6 rounded-lg border-2 border-slate-200 bg-white" /> 未开始</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-slate-400"><Clock className="h-3.5 w-3.5" /></i> 延期</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap text-slate-600"><i className="flex h-6 w-6 items-center justify-center rounded-lg bg-rose-50 text-rose-500 ring-1 ring-rose-100"><X className="h-3.5 w-3.5" /></i> 未完成</span>
                           <span className="whitespace-nowrap text-slate-500">
                             计划 {plan.allocations.length} 项 · 已完成 {plan.allocations.filter((item) => item.progress >= item.target).length} · 剩余 {plan.allocations.filter((item) => item.progress < item.target).length}
                           </span>

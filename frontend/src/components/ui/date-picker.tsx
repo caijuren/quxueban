@@ -35,7 +35,7 @@ export function DatePicker({ value, onChange, placeholder = '选择日期', clas
         <button
           type="button"
           className={cn(
-            'flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition-all duration-200 hover:shadow',
+            'flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition-all duration-200 hover:shadow',
             !selectedDate && 'text-slate-500',
             className
           )}
