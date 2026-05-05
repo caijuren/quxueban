@@ -82,15 +82,16 @@ FRONTEND_URL=http://127.0.0.1:5176 python3 test_1_9_2_screenshots.py
 
 ## 生产复查
 
-待生产发布后执行。
+已完成，2026-05-05。
 
-需要复查：
+结果：
 
-- `/api/health` 不触发 429。
-- `/api/version` 不触发 429。
-- `/api/login` 正常登录不被普通业务限流影响。
-- `/api/children` 正常页面加载不被登录限流影响。
-- `scripts/check-production.sh` 连续执行不把生产 API 打入不可登录状态。
+- 生产已部署到提交 `bd5fe75`。
+- `/api/health` 返回 `200 OK`，无 `RateLimit-*` 响应头，不进入业务限流。
+- `/api/version` 返回 `200 OK`，版本为 `1.9.0`，无 `RateLimit-*` 响应头，不进入业务限流。
+- `/api/login` 返回 `200 OK`，登录成功，响应头 `RateLimit-Limit: 20`，使用独立登录限流。
+- `/api/children` 返回 `200 OK`，正常返回孩子列表，响应头 `RateLimit-Limit: 2000`，使用普通业务限流。
+- 连续执行 5 次 `scripts/check-production.sh` 未出现 `429` 或 `Too Many Requests`，PM2 `study-planner-api` 持续 `online`。
 
 ## 不纳入本版本
 
@@ -102,5 +103,4 @@ FRONTEND_URL=http://127.0.0.1:5176 python3 test_1_9_2_screenshots.py
 
 ## 下一步
 
-1. 确认 1.9.2 发布记录。
-2. 发布后复查生产限流护栏。
+1. 进入 `1.9.3 数据治理闭环版`。

@@ -1,6 +1,6 @@
 # 趣学伴 1.9.2 三层准备度内核定型版发布记录
 
-发布日期：待定
+发布日期：2026-05-05
 
 ## 版本定位
 
@@ -76,13 +76,14 @@ FRONTEND_URL=http://127.0.0.1:5176 python3 test_1_9_2_screenshots.py
 
 ## 发布后复查
 
-发布后需要确认：
+已完成，2026-05-05：
 
-- `/api/health` 正常返回且不触发 429。
-- `/api/version` 正常返回且不触发 429。
-- 正常登录不触发 429。
-- `/api/children` 正常加载不被登录限流影响。
-- 连续运行 `scripts/check-production.sh` 不导致生产 API 不可登录。
+- 生产已部署到提交 `bd5fe75`。
+- `/api/health` 正常返回，且不带 `RateLimit-*` 响应头。
+- `/api/version` 正常返回 `1.9.0`，且不带 `RateLimit-*` 响应头。
+- `/api/login` 正常登录，使用独立登录限流，`RateLimit-Limit: 20`。
+- `/api/children` 正常返回孩子列表，使用普通业务限流，`RateLimit-Limit: 2000`。
+- 连续运行 5 次 `scripts/check-production.sh` 未出现 `429` 或 `Too Many Requests`。
 
 ## 后续计划
 
