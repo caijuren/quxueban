@@ -1,17 +1,19 @@
 # 趣学伴当前进度盘点
 
-更新时间：2026-05-04
+更新时间：2026-05-05
 
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：`1.9.1 UI 架构升级版` 桌面端发版候选已通过本地验收
-- 工作区状态：1.9.1 UI 架构升级版已完成桌面端 smoke 和截图走查，待提交/发布
+- 当前阶段：`1.9.2 三层准备度内核定型版` 本地收口完成，待发布和生产复查
+- 工作区状态：1.9.2 三层准备度内核、目标管理承接和生产限流护栏已完成本地验证，当前待整理提交、发布后复查
 - 文档索引：`docs/README.md`
 - 当前总 ToDo：`docs/todo-master.md`
 - 当前版本路线图：`docs/version-roadmap.md`
 - 协作与发布规范：`docs/workflow-conventions.md`
 - 阶段化能力模型：`docs/features/feature-1.8-education-stage-model.md`
+- 1.9.2 检查记录：`docs/checks/regression-1.9.2.md`
+- 1.9.2 发布记录草稿：`docs/releases/release-1.9.2.md`
 - 历史发布记录和旧路线图：`docs/releases/`、`docs/roadmaps/`
 
 ## 最近已经完成
@@ -112,12 +114,36 @@
 - `frontend pnpm lint`：通过。
 - `backend pnpm build`：通过。
 - `backend pnpm lint`：通过。
+- `pnpm --filter quxueban-backend test -- rate-limit.test.ts`：通过，验证生产限流下 `/api/health`、`/api/version` 不进入业务限流，登录使用独立限流，`/api/children` 使用普通业务限流，2026-05-05。
+- `pnpm --filter quxueban-backend lint`：通过，2026-05-05。
+- `pnpm --filter quxueban-backend build`：通过，2026-05-05。
+- `pnpm --filter frontend lint`：通过，2026-05-05。
+- `pnpm --filter frontend build`：通过，2026-05-05。
+- `pnpm --filter frontend lint`：通过，目标管理承接三层模型首版后，2026-05-05。
+- `pnpm --filter frontend build`：通过，目标管理承接三层模型首版后，2026-05-05。
+- `pnpm --filter frontend lint`：通过，目标方向兼容旧目标和缺口主动作收口后，2026-05-05。
+- `pnpm --filter frontend build`：通过，目标方向兼容旧目标和缺口主动作收口后，2026-05-05。
+- `pnpm --filter frontend lint`：通过，三层准备度页接入关联目标/任务统计后，2026-05-05。
+- `pnpm --filter frontend build`：通过，三层准备度页接入关联目标/任务统计后，2026-05-05。
+- `pnpm --filter frontend lint`：通过，目标配置器新增保存并关联任务路径后，2026-05-05。
+- `pnpm --filter frontend build`：通过，目标配置器新增保存并关联任务路径后，2026-05-05。
+- `pnpm --filter frontend lint`：通过，能力点带参创建目标/任务的一次性弹窗处理后，2026-05-05。
+- `pnpm --filter frontend build`：通过，能力点带参创建目标/任务的一次性弹窗处理后，2026-05-05。
+- `pnpm --filter frontend test -- readiness-goals.test.ts --run`：通过，覆盖目标方向推断、旧目标兼容、目标缺口动作和能力点关联统计，2026-05-05。
+- `pnpm --filter frontend lint`：通过，抽取三层目标规则模块并补测试后，2026-05-05。
+- `pnpm --filter frontend build`：通过，抽取三层目标规则模块并补测试后，2026-05-05。
+- `pnpm --filter quxueban-backend test -- rate-limit.test.ts`：通过，1.9.2 收口复测，2026-05-05。
+- `pnpm --filter quxueban-backend lint`：通过，1.9.2 收口复测，2026-05-05。
+- `pnpm --filter quxueban-backend build`：通过，1.9.2 收口复测，2026-05-05。
+- `pnpm run check:versions`：通过，1.9.2 收口复测，2026-05-05。
+- `FRONTEND_URL=http://127.0.0.1:5176 python3 test_1_9_2_screenshots.py`：通过，21 项通过、0 失败、0 警告，覆盖三层准备度、目标管理、目标配置器和任务创建器，2026-05-05。
 
 历史发布记录、旧路线图、旧检查记录和旧 ToDo 已按类型归档到 `docs/releases/`、`docs/roadmaps/`、`docs/checks/`、`docs/todos/`。
 
 ## 建议下一步
 
-1. 提交并发布 `1.9.1 UI 架构升级版`。
-2. 进入 `1.9.2 数据治理闭环版`，把数据体检从发现问题升级为定位、修复、复查闭环。
-3. 进入 `1.9.3 规则诊断增强版`，完善置信度、Velocity、余力指数和跨学科交叉验证。
-4. 在 `1.9.5` 前完成规则版报告和学习事件日志，再进入 `2.0 AI 驱动版`。
+1. 确认 `1.9.2 三层准备度内核定型版` 发布记录，整理并提交当前改动。
+2. 发布 1.9.2 后复查生产限流护栏：`/api/health`、`/api/version`、正常登录、`/api/children` 和连续 `scripts/check-production.sh`。
+3. `1.9.3` 再进入数据治理闭环，把数据体检从发现问题升级为定位、修复、复查闭环。
+4. `1.9.4` 再进入规则诊断增强，完善置信度、Velocity、余力指数和跨学科交叉验证。
+5. `1.9.6` 前完成规则版报告和学习事件日志，再进入 `2.0 AI 驱动版`。

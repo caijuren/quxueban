@@ -12,4 +12,5 @@
 - `feature-1.8-ability-model-draft.md`：1.8 能力模型草案，已被 1.9 三层准备度模型吸收。
 - `feature-1.8-education-stage-model.md`：1.8 小学/初中阶段模型。
 - `feature-1.9-readiness-goal-engine.md`：1.9 三层准备度模型、目标引擎和诊断引擎。
+- `feature-1.9.2-readiness-goals.md`：1.9.2 三层准备度内核定型迭代计划。
 - `feature-reading-data-flow.md`：图书馆与阅读数据闭环。

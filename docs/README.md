@@ -1,6 +1,6 @@
 # 趣学伴文档索引
 
-更新时间：2026-05-04
+更新时间：2026-05-05
 
 ## 当前主文档
 
@@ -12,15 +12,18 @@
 - `ui-comprehensive-upgrade-plan.md`：当前 UI 全面提升总方案与逐页改版策略。
 - `features/feature-1.8-education-stage-model.md`：小学/初中阶段化设计。
 - `features/feature-1.9-readiness-goal-engine.md`：1.9 三层准备度模型与诊断引擎设计方案。
+- `features/feature-1.9.2-readiness-goals.md`：1.9.2 三层准备度内核定型迭代计划。
 - `features/feature-reading-data-flow.md`：图书馆和阅读数据闭环。
 - `workflow-conventions.md`：协作和发布规范。
 - `production-release-checklist.md`：生产发布检查清单。
 - `deployment.md`：生产部署流程。
 - `checks/regression-1.9-ui.md`：1.9 UI 首轮回归记录。
 - `checks/regression-1.9.1-ui.md`：1.9.1 UI 架构升级走查记录。
+- `checks/regression-1.9.2.md`：1.9.2 三层准备度内核定型走查记录。
 - `releases/release-1.9.0.md`：1.9.0 发布记录。
 - `releases/release-1.9.1.md`：1.9.1 技术债务清理版发布记录。
 - `releases/release-1.9.1-ui.md`：1.9.1 UI 架构升级版发布记录。
+- `releases/release-1.9.2.md`：1.9.2 三层准备度内核定型版发布记录。
 
 ## 产品背景
 

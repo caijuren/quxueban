@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, BookOpen, Calculator, Dumbbell, Languages, BookMarked, Users, Star, ListTodo, Download, Send, RefreshCw, Info, ClipboardList, Activity, AlertTriangle, Clock3, CalendarDays, ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -175,6 +175,8 @@ async function pushTaskToDingtalk(taskId: number, childId: number): Promise<void
 
 export default function TasksPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const handledAbilityCreateKeyRef = useRef<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -204,6 +206,24 @@ export default function TasksPage() {
   useEffect(() => {
     setFormData((current) => normalizeTaskEditorFormForStage(current, selectedEducationStage));
   }, [selectedEducationStage]);
+
+  useEffect(() => {
+    const category = searchParams.get('category');
+    const point = searchParams.get('point');
+    if (!category || !point) return;
+    const key = `${category}::${point}`;
+    if (handledAbilityCreateKeyRef.current === key) return;
+    handledAbilityCreateKeyRef.current = key;
+
+    setFormData({
+      ...createDefaultTaskEditorFormData(selectedEducationStage),
+      name: `${point}练习`,
+      abilityCategory: category,
+      abilityPoint: point,
+    });
+    setActiveTab('readiness');
+    setCreateDialogOpen(true);
+  }, [searchParams, selectedEducationStage]);
   const { data: tasks = [], isLoading } = useQuery({ 
     queryKey: ['tasks', selectedChildId], 
     queryFn: () => fetchTasks(selectedChildId || undefined),

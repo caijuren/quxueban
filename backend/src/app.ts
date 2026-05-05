@@ -33,6 +33,10 @@ import { uploadRouter } from './modules/upload'
 export const createApp = (): Application => {
   const app = express()
 
+  // nginx terminates public requests and forwards the real client IP.
+  // Without this, production rate limits group every request under 127.0.0.1.
+  app.set('trust proxy', 'loopback')
+
   // Security headers
   app.use(helmet({
     contentSecurityPolicy: {
@@ -63,16 +67,24 @@ export const createApp = (): Application => {
   app.use(express.urlencoded({ extended: true, limit: '5mb' }))
   app.use(compression())
 
+  // API routes - System & Health
+  // Keep operational checks outside business rate limits so deploy verification
+  // and health probes cannot lock users out of the app.
+  app.use(env.API_PREFIX, systemRouter)
+
   // Rate limiting - skip in development
   if (env.NODE_ENV === 'production') {
+    // Single-page app pages can trigger many parallel data requests. Use a
+    // production floor even if an old .env still carries the previous low value.
+    const businessRateLimitMax = Math.max(env.RATE_LIMIT_MAX_REQUESTS, 2000)
     const limiter = rateLimit({
       windowMs: env.RATE_LIMIT_WINDOW_MS,
-      max: env.RATE_LIMIT_MAX_REQUESTS,
+      max: businessRateLimitMax,
+      skip: req => req.path === `${env.API_PREFIX}/login` || req.path === `${env.API_PREFIX}/register`,
       message: { status: 'error', message: '请求过于频繁，请稍后再试' },
       standardHeaders: true,
       legacyHeaders: false,
     })
-    app.use(limiter)
 
     // Stricter rate limiting for auth endpoints
     const authLimiter = rateLimit({
@@ -82,13 +94,12 @@ export const createApp = (): Application => {
       standardHeaders: true,
       legacyHeaders: false,
     })
-    app.use(env.API_PREFIX, authLimiter, authRouter)
-  } else {
-    app.use(env.API_PREFIX, authRouter)
+    app.use(`${env.API_PREFIX}/login`, authLimiter)
+    app.use(`${env.API_PREFIX}/register`, authLimiter)
+    app.use(limiter)
   }
 
-  // API routes - System & Health
-  app.use(env.API_PREFIX, systemRouter)
+  app.use(env.API_PREFIX, authRouter)
 
   // ============================================
   // Domain module routes

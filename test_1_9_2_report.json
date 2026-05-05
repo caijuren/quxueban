@@ -1,0 +1,136 @@
+{
+  "summary": {
+    "total": 21,
+    "passed": 21,
+    "failed": 0,
+    "warnings": 0
+  },
+  "tests": [
+    {
+      "name": "临时账号注册",
+      "status": "PASS",
+      "details": "使用临时账号 shot-1777946458 完成截图登录",
+      "screenshot": null
+    },
+    {
+      "name": "登录",
+      "status": "PASS",
+      "details": "已进入家长端",
+      "screenshot": null
+    },
+    {
+      "name": "三层准备度-页面标题",
+      "status": "PASS",
+      "details": "页面标题正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "三层准备度-默认模板",
+      "status": "PASS",
+      "details": "默认模板正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "三层准备度-观察指标列",
+      "status": "PASS",
+      "details": "观察指标列正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "三层准备度-数据来源列",
+      "status": "PASS",
+      "details": "数据来源列正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "三层准备度-目标关联",
+      "status": "PASS",
+      "details": "目标关联正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "三层准备度-任务关联",
+      "status": "PASS",
+      "details": "任务关联正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标管理-页面标题",
+      "status": "PASS",
+      "details": "页面标题正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标管理-目标方向区",
+      "status": "PASS",
+      "details": "目标方向区正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标管理-三层覆盖区",
+      "status": "PASS",
+      "details": "三层覆盖区正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标管理-下一步动作区",
+      "status": "PASS",
+      "details": "下一步动作区正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标配置器-创建目标标题",
+      "status": "PASS",
+      "details": "创建目标标题正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标配置器-目标方向字段",
+      "status": "PASS",
+      "details": "目标方向字段正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标配置器-所属层级字段",
+      "status": "PASS",
+      "details": "所属层级字段正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标配置器-能力点字段",
+      "status": "PASS",
+      "details": "能力点字段正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标配置器-完成标准字段",
+      "status": "PASS",
+      "details": "完成标准字段正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "目标配置器-保存并关联任务按钮",
+      "status": "PASS",
+      "details": "保存并关联任务按钮正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "任务创建器-新建任务标题",
+      "status": "PASS",
+      "details": "新建任务标题正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "任务创建器-三层归属区域",
+      "status": "PASS",
+      "details": "三层归属区域正常显示",
+      "screenshot": null
+    },
+    {
+      "name": "任务创建器-预填能力点",
+      "status": "PASS",
+      "details": "预填能力点正常显示",
+      "screenshot": null
+    }
+  ]
+}

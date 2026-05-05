@@ -38,8 +38,24 @@ export type ReadinessAbilityPoint = {
   desc: string;
   indicators: string[];
   tasks: string[];
+  dataSources: string[];
   status: 'mastered' | 'progressing' | 'pending';
   mastery: number;
+};
+
+export type ReadinessTemplate = {
+  id: string;
+  name: string;
+  status: 'active' | 'reserved';
+  description: string;
+  layerIds: ReadinessLayerId[];
+};
+
+export type GoalDirection = {
+  id: string;
+  name: string;
+  status: 'default' | 'reserved';
+  description: string;
 };
 
 export const readinessLayers: ReadinessLayer[] = [
@@ -93,6 +109,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '面向原版阅读、听说表达、词汇积累和结构化输出。',
       indicators: ['分级阅读持续推进', '听说表达稳定输出', '阅读后能复述关键信息'],
       tasks: ['RAZ 听读与复述', '英语结构化表达', '词汇与句法切片'],
+      dataSources: ['任务完成记录', '阅读记录', '打卡质量反馈', '家长观察'],
       status: 'progressing',
       mastery: 64,
     },
@@ -104,6 +121,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '关注数学思维、快速规则学习、空间想象和稳定解题。',
       indicators: ['新规则题能理解并应用', '限时题组正确率稳定', '能讲清解题路径'],
       tasks: ['新规则题', '变式迁移题', '讲题复盘'],
+      dataSources: ['任务完成记录', '错因记录', '认知层打卡 metadata', '目标复盘'],
       status: 'progressing',
       mastery: 58,
     },
@@ -115,6 +133,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '覆盖中文阅读、古文国学、百科文史和表达写作。',
       indicators: ['每周中文阅读稳定', '能提取人物和情节线索', '能组织观点和依据'],
       tasks: ['章节精读', '人物分析', '三句话复述'],
+      dataSources: ['阅读记录', '阅读成长档案', '任务完成记录', '家长观察'],
       status: 'progressing',
       mastery: 62,
     },
@@ -126,6 +145,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '沉淀校内荣誉、活动经历、作品项目和可展示材料。',
       indicators: ['有阶段性作品', '能说明项目过程', '材料可进入简历证据'],
       tasks: ['项目记录', '作品整理', '活动复盘'],
+      dataSources: ['目标记录', '任务附件或说明', '活动复盘', '家长观察'],
       status: 'pending',
       mastery: 34,
     },
@@ -137,6 +157,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '面谈表达、现场推理、抗压专注和综合沟通。',
       indicators: ['能听清问题并回应', '能给出理由', '遇到追问不明显慌乱'],
       tasks: ['面谈问答', '现场推理', '表达复盘'],
+      dataSources: ['表达类任务', '复盘记录', '家长观察', '稳定性记录'],
       status: 'pending',
       mastery: 38,
     },
@@ -150,6 +171,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '单位时间内理解、筛选、作答和修正信息的效率。',
       indicators: ['限时任务正确率', '跳题率和回看率', '单位时间有效产出'],
       tasks: ['限时小题组', '快速阅读定位', '口算速度训练'],
+      dataSources: ['限时任务记录', '任务实际用时', '完成质量反馈'],
       status: 'progressing',
       mastery: 56,
     },
@@ -161,6 +183,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '面对新规则、新定义题时，能否从理解走向稳定应用。',
       indicators: ['第几次尝试后正确', '提示后能否迁移', '同类错误是否重复'],
       tasks: ['新规则题', '反例构造', '规则复述'],
+      dataSources: ['认知层打卡 metadata', '错因记录', '讲题复盘'],
       status: 'progressing',
       mastery: 52,
     },
@@ -172,6 +195,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '答案是否有条件、步骤、依据、反例和完整推理链。',
       indicators: ['能说明条件', '能解释步骤依据', '能发现明显漏洞'],
       tasks: ['讲题复盘', '推理链补全', '错因分类'],
+      dataSources: ['讲题复盘', '错因记录', '家长观察', '任务完成质量'],
       status: 'progressing',
       mastery: 55,
     },
@@ -183,6 +207,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '能识别材料、题干或观点中的前提、漏洞和替代解释。',
       indicators: ['能提出追问', '能区分事实和观点', '能给出不同解释'],
       tasks: ['观点辨析', '材料质疑', '反方表达'],
+      dataSources: ['表达类任务', '阅读复盘', '家长观察'],
       status: 'pending',
       mastery: 32,
     },
@@ -194,6 +219,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '能否把一个学科中的方法迁移到新题型或其他学科任务。',
       indicators: ['变式题成功率', '跨学科调用能力', '能总结通用方法'],
       tasks: ['变式迁移题', '跨学科问题', '方法总结卡'],
+      dataSources: ['变式任务记录', '跨学科任务', '目标复盘', '错因记录'],
       status: 'progressing',
       mastery: 48,
     },
@@ -207,6 +233,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '作息稳定度决定第二天的信息处理和情绪恢复。',
       indicators: ['睡眠时长达标', '晚睡次数下降', '早晨状态稳定'],
       tasks: ['睡前整理清单', '早睡打卡', '晚间减负'],
+      dataSources: ['稳定性打卡 metadata', '家长观察', '任务启动状态'],
       status: 'progressing',
       mastery: 62,
     },
@@ -218,6 +245,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '通过体能和户外活动维持长期学习耐力。',
       indicators: ['每周运动次数', '单次运动时长', '疲劳恢复速度'],
       tasks: ['跳绳训练', '户外快走', '核心动作'],
+      dataSources: ['运动任务记录', '稳定性打卡 metadata', '家长观察'],
       status: 'mastered',
       mastery: 72,
     },
@@ -229,6 +257,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '遇到挫折后能表达、恢复并回到任务中。',
       indicators: ['能说明情绪原因', '能接受短暂休息', '能回到任务'],
       tasks: ['情绪温度计', '挫折复盘', '亲子沟通'],
+      dataSources: ['稳定性打卡 metadata', '负向原因记录', '家长观察'],
       status: 'progressing',
       mastery: 56,
     },
@@ -240,6 +269,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '任务能否持续完成，是判断计划是否可运行的基础。',
       indicators: ['每日完成率', '连续完成天数', '任务启动成本'],
       tasks: ['每日任务清单', '固定开始时间', '完成后反馈'],
+      dataSources: ['任务完成记录', '学习计划', '今日概览'],
       status: 'mastered',
       mastery: 78,
     },
@@ -251,6 +281,7 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '延期率升高通常意味着任务负荷、情绪或时间安排出现问题。',
       indicators: ['延期任务数量', '连续延期天数', '延期原因分布'],
       tasks: ['任务减量', '时间块调整', '原因记录'],
+      dataSources: ['任务状态', '计划调整记录', '负向原因记录'],
       status: 'progressing',
       mastery: 54,
     },
@@ -262,11 +293,56 @@ export const readinessAbilityPoints: Record<ReadinessLayerId, ReadinessAbilityPo
       desc: '复盘是交付层增长和认知层内化之间的关键连接。',
       indicators: ['每周复盘次数', '错因记录质量', '下次是否避免同类错误'],
       tasks: ['错因记录', '讲题复盘', '周末复盘'],
+      dataSources: ['目标复盘', '错因记录', '任务完成反馈'],
       status: 'progressing',
       mastery: 50,
     },
   ],
 };
+
+export const readinessTemplates: ReadinessTemplate[] = [
+  {
+    id: 'sangong-basic',
+    name: '三公基础模板',
+    status: 'active',
+    description: '当前默认模板，先固定三层结构、能力点、观察指标、推荐任务和数据来源。',
+    layerIds: ['delivery', 'cognition', 'stability'],
+  },
+  {
+    id: 'shangshi',
+    name: '上实方向',
+    status: 'reserved',
+    description: '预留目标方向，不在本版本输出适配分或录取概率。',
+    layerIds: ['delivery', 'cognition', 'stability'],
+  },
+  {
+    id: 'sfls',
+    name: '上外方向',
+    status: 'reserved',
+    description: '预留目标方向，不在本版本输出适配分或录取概率。',
+    layerIds: ['delivery', 'cognition', 'stability'],
+  },
+  {
+    id: 'pudong-foreign-language',
+    name: '浦外方向',
+    status: 'reserved',
+    description: '预留目标方向，不在本版本输出适配分或录取概率。',
+    layerIds: ['delivery', 'cognition', 'stability'],
+  },
+];
+
+export const defaultReadinessTemplate = readinessTemplates[0];
+
+export const goalDirections: GoalDirection[] = [
+  { id: 'sangong-basic', name: '三公基础', status: 'default', description: '默认方向，围绕三层准备度建立目标和任务支撑。' },
+  { id: 'english-strengthening', name: '英语强化', status: 'default', description: '聚焦原版阅读、听说表达、词汇句法和结构化输出。' },
+  { id: 'math-logic', name: '数理逻辑', status: 'default', description: '聚焦新规则题、逻辑推理、空间想象和稳定解题。' },
+  { id: 'reading-expression', name: '阅读表达', status: 'default', description: '聚焦中文阅读、百科文史、观点表达和复述输出。' },
+  { id: 'stable-execution', name: '稳定执行', status: 'default', description: '聚焦完成率、延期率、作息情绪和复盘节奏。' },
+  { id: 'shangshi', name: '上实方向', status: 'reserved', description: '预留方向，等待目标权重版本再启用。' },
+  { id: 'sfls', name: '上外方向', status: 'reserved', description: '预留方向，等待目标权重版本再启用。' },
+  { id: 'pudong-foreign-language', name: '浦外方向', status: 'reserved', description: '预留方向，等待目标权重版本再启用。' },
+];
 
 const deliveryKeywords = ['交付层', 'Delivery', '输出', '英语', '数理', '数学', '语文', '阅读', '项目', '面谈', '临场', '表达', '学科', '校内'];
 const cognitionKeywords = ['认知层', 'Cognition', '倍率', '规则', '迁移', '逻辑', '思维', '速度', '批判', '错因', '复盘', '推理'];

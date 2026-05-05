@@ -7,6 +7,7 @@ import {
   Dumbbell,
   HeartPulse,
   Lightbulb,
+  ArrowRight,
   PencilLine,
   RefreshCw,
   Trash2,
@@ -16,8 +17,8 @@ import {
   X,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +37,18 @@ import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiClient, getErrorMessage } from '@/lib/api-client';
-import { getReadinessLayerByText } from '@/lib/readiness-model';
+import { defaultReadinessTemplate, getReadinessLayerByText, readinessLayers } from '@/lib/readiness-model';
+import {
+  defaultGoalDirection,
+  getGoalGaps,
+  getGoalNextAction,
+  getGoalReadinessState,
+  goalDirectionOptions,
+  inferGoalDirection,
+  inferGoalType,
+  normalizeReadinessGoal,
+} from '@/lib/readiness-goals';
+import type { GoalGap, GoalReadinessState } from '@/lib/readiness-goals';
 
 type GoalStatus = 'on-track' | 'attention' | 'strong';
 
@@ -47,6 +59,7 @@ type GoalItem = {
   level: string;
   abilityCategory: string;
   abilityPoint: string;
+  goalDirection?: string;
   goalType?: string;
   goalCycle?: string;
   successCriteria?: string;
@@ -335,6 +348,7 @@ function buildGoalFromAbility(option: AbilityOption): GoalDraft {
     level: 'L3 三年级',
     abilityCategory: option.categoryLabel,
     abilityPoint: option.point,
+    goalDirection: inferGoalDirection(option.categoryLabel, option.point),
     goalType: '能力提升目标',
     goalCycle: '四周周期',
     successCriteria: `连续执行 ${firstTask}，并能看到该能力点有稳定推进。`,
@@ -354,6 +368,7 @@ function buildGoalFromTemplate(template: GoalItem): GoalDraft {
     ...template,
     id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     source: 'ability-model',
+    goalDirection: template.goalDirection || inferGoalDirection(template.abilityCategory, template.abilityPoint),
     goalType: template.goalType || inferGoalType(template),
     goalCycle: template.goalCycle || '四周周期',
     successCriteria: template.successCriteria || template.target,
@@ -373,6 +388,7 @@ function buildBlankGoal(): GoalDraft {
     level: 'L3 三年级',
     abilityCategory: '',
     abilityPoint: '',
+    goalDirection: defaultGoalDirection,
     goalType: '能力提升目标',
     goalCycle: '四周周期',
     successCriteria: '',
@@ -387,12 +403,8 @@ function buildBlankGoal(): GoalDraft {
   };
 }
 
-function inferGoalType(goal: GoalItem) {
-  if (goal.abilityCategory === '体育与健康') return '体育健康目标';
-  if (goal.abilityPoint.includes('阅读')) return '阅读目标';
-  if (goal.abilityCategory === '学习习惯') return '习惯养成目标';
-  if (goal.abilityCategory === '学科能力') return '学科训练目标';
-  return '能力提升目标';
+function normalizeGoalDraft(goal: GoalDraft): GoalDraft {
+  return normalizeReadinessGoal(goal) as GoalDraft;
 }
 
 async function getAbilityModel(): Promise<AbilityModel | null> {
@@ -402,7 +414,8 @@ async function getAbilityModel(): Promise<AbilityModel | null> {
 
 async function getGoals(childId: number): Promise<GoalDraft[]> {
   const response = await apiClient.get('/settings/goals', { params: { childId } });
-  return response.data.data || [];
+  const goals = response.data.data || [];
+  return Array.isArray(goals) ? goals.map(normalizeGoalDraft) : [];
 }
 
 async function saveGoals({ childId, goals }: { childId: number; goals: GoalDraft[] }): Promise<GoalDraft[]> {
@@ -576,28 +589,67 @@ function GoalCard({
   const readinessLayer = getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description);
   const visibleTasks = goal.linkedTasks.slice(0, 3);
   const hiddenTaskCount = Math.max(0, goal.linkedTasks.length - visibleTasks.length);
+  const gaps = getGoalGaps(goal);
+  const readinessState = getGoalReadinessState(goal);
+  const nextAction = getGoalNextAction(goal);
+  const linkedTaskTotal = (goal.linkedTaskIds || []).length;
+  const handlePrimaryAction = () => {
+    if (nextAction === '关联任务') {
+      onManageTasks?.(goal);
+      return;
+    }
+    if (nextAction === '做一次复盘' || nextAction === '记录复盘') {
+      onReview?.(goal);
+      return;
+    }
+    if (nextAction === '保持节奏') {
+      onViewReadiness?.(goal);
+      return;
+    }
+    onEdit?.(goal);
+  };
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_250px] lg:items-center">
         <div className="min-w-0 space-y-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-slate-950">{goal.title}</h3>
             <Badge variant="outline" className={cn('shrink-0 rounded-md px-2 py-0 text-[11px]', status.className)}>
               {status.label}
             </Badge>
-            <span className="shrink-0 rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">{goal.level}</span>
+            <span className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-100">{goal.goalDirection || defaultGoalDirection}</span>
             <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1', readinessLayer.softTone)}>{readinessLayer.label}</span>
+            <span className="shrink-0 rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">{readinessState}</span>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-            <span className="truncate">{goal.abilityPoint}</span>
+            <span className="truncate font-medium text-slate-700">{goal.abilityPoint || '未设置能力点'}</span>
             {goal.goalType ? <span>{goal.goalType}</span> : null}
             {goal.goalCycle ? <span>{goal.goalCycle}</span> : null}
             <span>{goal.reviewCadence}</span>
-            <span>{goal.target}</span>
+            <span>支撑任务 {linkedTaskTotal} 个</span>
             {latestReview ? <span>最近复盘 {latestReview.date}</span> : null}
           </div>
-          <p className="line-clamp-1 text-xs leading-5 text-slate-500">{goal.successCriteria || goal.suggestion || goal.description}</p>
+          <div className="grid gap-2 text-xs leading-5 text-slate-600 sm:grid-cols-2">
+            <p className="rounded-md bg-slate-50 px-2 py-1 ring-1 ring-slate-100">成功标准：{goal.successCriteria || goal.target || '未设置'}</p>
+            <button
+              type="button"
+              onClick={handlePrimaryAction}
+              disabled={!goal.id}
+              className="rounded-md bg-teal-50 px-2 py-1 text-left font-semibold text-teal-700 ring-1 ring-teal-100 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              下一步：{nextAction}
+            </button>
+          </div>
+          {gaps.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {gaps.slice(0, 4).map((gap) => (
+                <span key={gap.label} className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-100">
+                  {gap.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="flex min-w-0 flex-wrap gap-1.5">
             {visibleTasks.map((task) => (
               <span key={task} className="max-w-[160px] truncate rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
@@ -625,7 +677,7 @@ function GoalCard({
               复盘
             </Button>
             <Button variant="outline" size="sm" onClick={() => onManageTasks?.(goal)} disabled={!onManageTasks} className="h-7 rounded-md bg-white px-2 text-xs">
-              任务
+              关联任务
             </Button>
             <Button variant="outline" size="sm" onClick={() => onViewReadiness?.(goal)} disabled={!onViewReadiness} className="h-7 rounded-md bg-white px-2 text-xs">
               准备
@@ -733,8 +785,10 @@ function GoalStatusSummaryCard({ summary }: { summary: GoalStatusSummary }) {
 }
 export default function GoalsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { selectedChild } = useSelectedChild();
   const queryClient = useQueryClient();
+  const handledAbilityCreateKeyRef = useRef<string | null>(null);
   const [selectedAbility, setSelectedAbility] = useState<AbilityOption | null>(null);
   const [draftForm, setDraftForm] = useState<GoalDraft | null>(null);
   const [taskManageGoal, setTaskManageGoal] = useState<GoalItem | null>(null);
@@ -820,6 +874,38 @@ export default function GoalsPage() {
     attention: allGoals.filter(goal => goal.status === 'attention').length,
     linked: allGoals.filter(goal => (goal.linkedTaskIds || []).length > 0).length,
   }), [allGoals]);
+  const directionSummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    allGoals.forEach(goal => {
+      const direction = goal.goalDirection || defaultGoalDirection;
+      counts.set(direction, (counts.get(direction) || 0) + 1);
+    });
+    return goalDirectionOptions.map(direction => ({
+      direction,
+      count: counts.get(direction) || 0,
+    }));
+  }, [allGoals]);
+  const readinessCoverage = useMemo(() => readinessLayers.map((layer) => {
+    const goals = allGoals.filter(goal => getReadinessLayerByText(goal.abilityCategory, goal.abilityPoint, goal.title, goal.description).id === layer.id);
+    return {
+      layer,
+      goals,
+      linkedCount: goals.filter(goal => (goal.linkedTaskIds || []).length > 0).length,
+    };
+  }), [allGoals]);
+  const goalsMissingSuccessCriteria = allGoals.filter(goal => !goal.successCriteria?.trim() && !goal.target?.trim()).length;
+  const goalsMissingAbility = allGoals.filter(goal => !goal.abilityCategory || !goal.abilityPoint).length;
+  const primaryGap = allGoals.length === 0
+    ? '先创建目标'
+    : goalsMissingAbility > 0
+      ? '补能力点'
+      : goalsMissingSuccessCriteria > 0
+        ? '补成功标准'
+        : statusSummary.linked < statusSummary.total
+          ? '关联任务'
+          : statusSummary.attention > 0
+            ? '复盘需关注目标'
+            : '保持节奏';
   const stableProgressCount = allGoals.filter(goal => goal.status !== 'attention' && goal.progress > 0).length;
   const stabilityLabel = allGoals.length === 0
     ? '待建立'
@@ -867,6 +953,23 @@ export default function GoalsPage() {
     setDraftForm(buildBlankGoal());
     setEditingGoalId(null);
   };
+
+  useEffect(() => {
+    const category = searchParams.get('category');
+    const point = searchParams.get('point');
+    if (!category || !point || draftForm) return;
+    const key = `${category}::${point}`;
+    if (handledAbilityCreateKeyRef.current === key) return;
+    handledAbilityCreateKeyRef.current = key;
+
+    openCreateGoal({
+      categoryId: category,
+      categoryLabel: category,
+      point,
+      desc: '',
+      tasks: [`${point}练习`],
+    });
+  }, [searchParams, draftForm]);
 
   const openCreateGoal = (option: AbilityOption) => {
     const nextGoal = buildGoalFromAbility(option);
@@ -927,7 +1030,7 @@ export default function GoalsPage() {
     setSelectedTaskIds(goal.linkedTaskIds || []);
   };
 
-  const saveDraftGoal = () => {
+  const saveDraftGoal = ({ manageTasksAfterSave = false }: { manageTasksAfterSave?: boolean } = {}) => {
     if (!draftForm) return;
     if (!selectedChild?.id) {
       toast.error('请先选择孩子');
@@ -937,13 +1040,18 @@ export default function GoalsPage() {
       toast.error('请填写目标名称');
       return;
     }
+    const normalizedDraft = normalizeGoalDraft(draftForm);
     const nextDrafts = editingGoalId
-      ? goalDrafts.map(goal => goal.id === editingGoalId ? { ...draftForm, id: editingGoalId } : goal)
-      : [...goalDrafts, draftForm];
+      ? goalDrafts.map(goal => goal.id === editingGoalId ? { ...normalizedDraft, id: editingGoalId } : goal)
+      : [...goalDrafts, normalizedDraft];
     saveGoalsMutation.mutate(
       { childId: selectedChild.id, goals: nextDrafts },
       {
         onSuccess: () => {
+          if (manageTasksAfterSave) {
+            setTaskManageGoal(normalizedDraft);
+            setSelectedTaskIds(normalizedDraft.linkedTaskIds || []);
+          }
           setDraftForm(null);
           setSelectedAbility(null);
           setEditingGoalId(null);
@@ -1080,9 +1188,9 @@ export default function GoalsPage() {
               <Target className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-slate-950">目标管理</h1>
+              <h1 className="truncate text-base font-semibold text-slate-950">目标准备工作台</h1>
               <p className="truncate text-xs text-slate-500 sm:text-sm">
-                {selectedChild?.name || '当前孩子'}的交付、认知、稳定性目标，关联任务、阶段进度和复盘建议
+                {selectedChild?.name || '当前孩子'}的目标方向、三层能力点、支撑任务和下一步动作
               </p>
             </div>
           </div>
@@ -1108,6 +1216,55 @@ export default function GoalsPage() {
           </div>
         }
       />
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <Panel className="p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-semibold text-teal-700">当前目标方向</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-950">{defaultReadinessTemplate.name}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                目标管理只承接方向、能力点、支撑任务和下一步动作，不输出录取概率、排名或目标校适配分。
+              </p>
+            </div>
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-100">
+              主要缺口：{primaryGap}
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-5">
+            {directionSummary.map((item) => (
+              <div key={item.direction} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="truncate text-sm font-semibold text-slate-900">{item.direction}</p>
+                <p className="mt-1 text-xs text-slate-500">{item.count} 个目标</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel className="p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-teal-700">三层覆盖</p>
+              <h2 className="mt-1 text-base font-semibold text-slate-950">目标是否支撑三层模型</h2>
+            </div>
+            <Button variant="outline" className="h-9 rounded-lg bg-white" onClick={() => navigate('/parent/ability-model')}>
+              三层准备度
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {readinessCoverage.map(({ layer, goals, linkedCount }) => (
+              <div key={layer.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold ring-1', layer.softTone)}>{layer.label}</span>
+                  <span className="text-xs font-semibold text-slate-700">{goals.length} 个目标 · {linkedCount} 个有任务</span>
+                </div>
+                <p className="mt-1 line-clamp-1 text-xs text-slate-500">{layer.question}：{layer.description}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </section>
 
       <div className="grid gap-3 md:grid-cols-4">
         {[
@@ -1168,7 +1325,7 @@ export default function GoalsPage() {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold text-slate-950">创建辅助</h2>
-                  <p className="truncate text-xs text-slate-500">从能力点或模板生成目标</p>
+                  <p className="truncate text-xs text-slate-500">从三层能力点或模板生成目标</p>
                 </div>
               </div>
               <Badge variant="outline" className="rounded-md bg-white px-2 py-0 text-[11px] text-slate-600">
@@ -1178,7 +1335,7 @@ export default function GoalsPage() {
             {showCreateAssist && (
             <div className="mt-3 space-y-3">
               <div>
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">能力模型承接</p>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">三层能力点承接</p>
                 <div className="max-h-40 space-y-1.5 overflow-auto pr-1">
               {abilityOptions.slice(0, 12).map((option) => (
                 <button
@@ -1279,7 +1436,7 @@ export default function GoalsPage() {
             <div className="space-y-2">
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-semibold text-slate-900">进度来源</p>
-                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">只统计目标已关联任务的近 28 天打卡记录。</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">只统计目标已关联任务的近 28 天打卡记录，并保留目标方向、层级和能力点。</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-semibold text-slate-900">完成计分</p>
@@ -1287,7 +1444,7 @@ export default function GoalsPage() {
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-semibold text-slate-900">后续扩展</p>
-                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">阅读、运动和报告复盘数据后续接入。</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">阅读、运动和报告复盘数据后续作为证据来源接入，不输出目标校适配分。</p>
               </div>
             </div>
           </Panel>
@@ -1314,6 +1471,16 @@ export default function GoalsPage() {
               </label>
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">目标方向</span>
+                  <select
+                    value={draftForm.goalDirection || defaultGoalDirection}
+                    onChange={(event) => setDraftForm({ ...draftForm, goalDirection: event.target.value })}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  >
+                    {goalDirectionOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>
+                <label className="block">
                   <span className="text-sm font-semibold text-slate-700">目标类型</span>
                   <select
                     value={draftForm.goalType || goalTypeOptions[0]}
@@ -1334,24 +1501,33 @@ export default function GoalsPage() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-sm font-semibold text-slate-700">关联能力点</span>
+                  <span className="text-sm font-semibold text-slate-700">所属层级</span>
+                  <select
+                    value={draftForm.abilityCategory || '交付层'}
+                    onChange={(event) => setDraftForm({
+                      ...draftForm,
+                      abilityCategory: event.target.value,
+                      goalDirection: draftForm.goalDirection || inferGoalDirection(event.target.value, draftForm.abilityPoint),
+                    })}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                  >
+                    {readinessLayers.map((layer) => <option key={layer.id} value={layer.label}>{layer.label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">能力点</span>
                   <input
                     value={draftForm.abilityPoint}
-                    onChange={(event) => setDraftForm({ ...draftForm, abilityPoint: event.target.value })}
+                    onChange={(event) => setDraftForm({
+                      ...draftForm,
+                      abilityPoint: event.target.value,
+                      goalDirection: draftForm.goalDirection || inferGoalDirection(draftForm.abilityCategory, event.target.value),
+                    })}
                     className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                   />
                 </label>
-              </div>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">目标描述</span>
-                <textarea
-                  value={draftForm.description}
-                  onChange={(event) => setDraftForm({ ...draftForm, description: event.target.value })}
-                  rows={3}
-                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-                />
-              </label>
-              <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="text-sm font-semibold text-slate-700">阶段目标</span>
                   <input
@@ -1369,6 +1545,15 @@ export default function GoalsPage() {
                   />
                 </label>
               </div>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">目标描述</span>
+                <textarea
+                  value={draftForm.description}
+                  onChange={(event) => setDraftForm({ ...draftForm, description: event.target.value })}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                />
+              </label>
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">完成标准</span>
                 <textarea
@@ -1390,7 +1575,10 @@ export default function GoalsPage() {
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
               <Button variant="outline" onClick={() => { setDraftForm(null); setSelectedAbility(null); setEditingGoalId(null); }} className="rounded-lg bg-white">取消</Button>
-              <Button onClick={saveDraftGoal} disabled={saveGoalsMutation.isPending}>
+              <Button variant="outline" onClick={() => saveDraftGoal({ manageTasksAfterSave: true })} disabled={saveGoalsMutation.isPending || !selectedChild?.id} className="rounded-lg bg-white">
+                {saveGoalsMutation.isPending ? '保存中...' : '保存并关联任务'}
+              </Button>
+              <Button onClick={() => saveDraftGoal()} disabled={saveGoalsMutation.isPending}>
                 {saveGoalsMutation.isPending ? '保存中...' : editingGoalId ? '保存修改' : '保存目标'}
               </Button>
             </div>
